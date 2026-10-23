@@ -32,9 +32,8 @@ In both cases they get exactly the shipped skill and nothing internal to the rep
 - [ ] Listing this repo's skills with the pinned `npx skills`, without naming a skill, shows only shipped skills. Installing all of them installs only shipped skills.
   - If the dev skill's placement from ticket 01 makes this fail, change the placement here, keep ticket 01's discovery working, and record why in an ADR.
   - Don't rely on the installer's internal-skill flag. It needs a non-string metadata value, which the validator rejects.
-  - Codex and Pi find project skills only in the shared folder the installer also scans, so there may be no placement that satisfies both. If so, the ADR records which way out was taken, and the test asserts that behaviour. The two candidates are:
-    - linked skill folders that the installer turns out to skip (not yet tested)
-    - a dev skill that stays listed but is plainly marked repo-internal
+  - Codex and Pi find project skills only in the shared folder the installer also scans, so there may be no placement that satisfies both. The only candidate way out is linked skill folders that the installer turns out to skip (not yet tested), or any other placement that passes both the listing and the install assertions.
+  - If no placement satisfies both ticket 01's discovery and the listing assertion, this criterion stays **open**. Stop and ask the user; do not weaken the assertion. The ADR records what was tried, and ticket 12 lists the criterion as open.
 - [ ] Credentials:
   - If the round trip needs no agent credentials, it runs in `just check` and in PR CI.
   - If any part needs credentials, that part has its own recipe and the reason is documented.

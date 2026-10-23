@@ -18,7 +18,7 @@ Grading output follows skill-creator's shapes, described in the research notes (
 **Trials and baselines:**
 
 - [ ] `just eval` accepts a trial count and a baseline switch. A dry-run mode prints the planned number of agent and grader calls before anything is spent.
-- [ ] A baseline run uses the same isolation as a with-skill run but installs no skill. The contamination check proves no skill was visible.
+- [ ] A baseline run uses the same isolation as a with-skill run but installs no skill. The contamination check proves no skill was visible apart from the pinned agent's built-in skills, using the same recorded allowlist as the with-skill arm (ticket 05).
 
 **Grader:**
 

@@ -16,8 +16,8 @@ The skill encodes this protocol, and this text stays its source of truth:
    - A Claude Code implementer asks Codex, using model `gpt-6-astra`, a read-only sandbox, and an ephemeral session.
    - A Codex implementer asks Claude Code, using Opus 5.5 (`claude-opus-5-5`) with read-only tools only.
    - A Pi implementer, or any other agent, picks the reviewer by the model family it is actually running: Codex (Astra) when it runs a Claude model, Claude Code (Opus 5.5) when it runs an OpenAI model, and Codex otherwise. It records the model it was running in the completion notes.
-   - If the preferred reviewer is unavailable (CLI missing, not authenticated, model refused), fall back to the other one and say so in the completion notes.
-   - If neither is available, stop and report. Never quietly review your own work instead.
+   - If the preferred reviewer is unavailable (CLI missing, not authenticated, model refused), fall back to the other reviewer only if its model family differs from the one the implementer is running, and say so in the completion notes. Otherwise treat cross-model review as unavailable.
+   - If no reviewer from a different model family is available, stop and report. Never quietly review your own work, or use a same-family reviewer, instead.
 2. **A reviewer subagent runs the external review.**
    - Its brief covers the ticket's acceptance criteria, the diff or design proposal under review, and an adversarial stance: find what is wrong, missing, unverifiable or unsafe, and do not summarise what is fine.
    - Each finding has a severity, a location, the claim, and evidence.
@@ -43,7 +43,7 @@ The skill encodes this protocol, and this text stays its source of truth:
 - [ ] The skill has one source of content. It is made visible to every agent's discovery location without duplicating that content.
 - [ ] The skill's frontmatter follows the Agent Skills spec. Its name and description are narrow enough that it triggers for review requests and not for ordinary coding.
 - [ ] The skill is clearly marked repo-internal, and the agent instructions say that dev skills must be excluded from distribution (ticket 04) and from eval workspaces (ticket 05). Choose where the dev skill lives with ticket 04 in mind: `npx skills` scans this repo's agent skill folders (see the research notes), so the placement must let ticket 04 prove the dev skill is not offered.
-- [ ] Reviewer selection follows the rule above. It is shown working when the preferred reviewer is unavailable (for example with the reviewer CLI hidden from `PATH`), and the fallback is reported.
+- [ ] Reviewer selection follows the rule above. It is shown working when the preferred reviewer is unavailable (for example with the reviewer CLI hidden from `PATH`), and the fallback is reported, and a same-family fallback is refused and reported.
 - [ ] The reviewer cannot modify the worktree. Its read-only mode is set by the CLI's flags, not by the prompt. A review run leaves the worktree's contents unchanged apart from the scratch folder, compared by content rather than by `git status` alone.
 - [ ] The scratch folder is gitignored.
 - [ ] The repo's agent instructions summarise the protocol in a few lines and point to the skill.
