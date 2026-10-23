@@ -1,11 +1,11 @@
 # The fast subset of `just check`, run by `just lint` over every file and by
 # the pre-commit hook over the staged ones. mypy and pytest stay in `just check`.
 #
-# Every hook is `repo: local` or `repo: builtin`. A remote hook repository would
-# be cloned into prek's cache, and a Git hook does not see the Justfile's
-# PREK_HOME, so that cache would land in the user's home directory. The local
-# hooks call tools that `just initialize` already installed into .venv/ and
-# node_modules/. See docs/adr/0003-project-local-toolchain.md.
+# Every hook is `repo: local` or `repo: builtin`, calling tools pinned in
+# uv.lock and package-lock.json. A remote hook repository would bring a second
+# set of pins, outside both lockfiles, and a network clone on first use. The
+# Git hook runs `just pre-commit`, so these run with the Justfile's environment.
+# See docs/adr/0003-project-local-toolchain.md.
 exclude: >-
   (?x)^(
     \.tools/|

@@ -12,6 +12,7 @@ Every tool the gate runs is pinned to an exact version, locked in a committed lo
 
 ## Consequences
 
-- **Hooks do not see the Justfile's environment.** Git starts a pre-commit hook, not just, so a hook gets the user's environment. The hooks therefore call only tools that are already installed (`uv run --frozen …` and `./node_modules/.bin/…`), and no hook names a remote repository, which prek would clone into a cache in the user's home. The residual: `uv run` inside a hook uses uv's default cache in the user's home. This only happens on the commit path, and the commit path is outside `just`.
+- **Tools run through `just`.** The environment above lives in the Justfile, so a tool started any other way does not see it. A bare `uv run` cannot find the interpreter in `.tools/python`, downloads a second one into the user's home and rebuilds `.venv/` against it, and a bare agent CLI writes to the user's agent home. `just run <command>` is the way to run a one-off command.
+- **The pre-commit hook runs `just pre-commit`.** Git starts a hook with the user's environment, not the Justfile's. prek's own hook shim was rejected for that reason: tested from a fresh clone with an empty home, a commit through it downloaded Python into `~/.local/share/uv`, rebuilt `.venv/`, and filled `~/.cache/uv` and `~/.cache/prek`. The hook `just install-hooks` writes names no path, so it works in every worktree. It does need `just` on the `PATH` of whatever runs `git commit`.
 - **Untracked files are not linted.** prek reads the files Git tracks, so `just lint` skips a new file until it is staged. CI checks a clean clone, where every file is tracked.
 - **Host prerequisites.** just, uv and Node stay on the host, at the versions the README lists. CI pins the same versions.

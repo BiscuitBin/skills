@@ -11,7 +11,7 @@ It is at the foundation stage: the toolchain, docs and decision records are in p
 | Tool | Tested version | Notes |
 | --- | --- | --- |
 | [Git](https://git-scm.com/) | any recent | |
-| [just](https://just.systems/) | 1.51.0 | CI uses the same version. |
+| [just](https://just.systems/) | 1.51.0 | CI uses the same version. The pre-commit hook runs `just`, so it must be on the `PATH` of whatever runs `git commit`, including an editor's Git client. |
 | [uv](https://docs.astral.sh/uv/) | 0.13.4 | Required exactly: `pyproject.toml` sets `required-version`. |
 | [Node.js](https://nodejs.org/) | 26.5.1, with npm 11.17.0 | Required exactly: `.node-version` and `engines`, enforced by `engine-strict`. |
 
