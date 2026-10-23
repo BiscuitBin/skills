@@ -17,7 +17,7 @@ Pins are exact, in both manifests. `just sync` and `just initialize` install onl
 
 Every tool, cache, agent home and scratch file lives inside this directory, and Git ignores all of them. The Justfile's environment is what keeps them there, so every tool runs through `just`: a recipe, or `just run <command>` for a one-off (`just run uv add --dev <package>`, `just run ./node_modules/.bin/claude …`). A bare `uv`, `npm` or agent CLI call misses that environment and writes into the user's home. When a task needs a new tool, add it as a pinned dev dependency.
 
-- `.tools/`: the pinned Python, the uv, npm and prek caches, and the agent CLIs' homes (`.tools/agent-homes/`).
+- `.tools/`: the pinned Python, the uv, npm and prek caches, temporary files (`.tools/tmp/`, the recipes' `TMPDIR`), and the agent CLIs' homes (`.tools/agent-homes/`).
 - `ai_tmp/`: agent scratch output, such as review findings, triage notes and logs.
 - `.eval-workspaces/` and `eval-results/`: eval trial workspaces and their results.
 

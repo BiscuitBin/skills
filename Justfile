@@ -15,6 +15,10 @@ export npm_config_update_notifier := "false"
 export npm_config_fund := "false"
 export npm_config_audit := "false"
 export PREK_HOME := tools / "cache/prek"
+# Node, uv and the agent CLIs put temporary files here rather than in the
+# system temporary directory. Node uses TMPDIR whether or not it exists, so
+# the backtick creates it before any recipe runs.
+export TMPDIR := `mkdir -p .tools/tmp && cd .tools/tmp && pwd -P`
 
 # The agent CLIs keep their state in an isolated home each, so a recipe never
 # reads or writes the user's ~/.claude, ~/.codex or ~/.pi.
@@ -39,7 +43,7 @@ initialize:
 [doc('Install exactly what the lockfiles say. Fails rather than relocks on drift.')]
 sync:
     uv python install --no-bin
-    uv sync --frozen
+    uv sync --locked
     npm ci
 
 [doc('Rewrite both lockfiles from the manifests. Review the diff before committing.')]
@@ -54,14 +58,24 @@ lock-check:
 
 # prek's own shim would run prek without this file's environment, so the hook
 # runs `just pre-commit` instead. Git starts a hook at the root of the worktree
-# being committed, so the hook names no path.
+# being committed, so the hook names no path. It refuses a core.hooksPath,
+# which usually names a hooks directory shared with other repositories, and a
+# pre-commit hook it did not write itself.
 [doc('Install the pre-commit hook, which runs `just pre-commit`.')]
 install-hooks:
+    @if hooks_path="$(git config --get core.hooksPath)"; then \
+        printf '%s\n' "core.hooksPath is set to $hooks_path; not installing a hook there." >&2; \
+        exit 1; \
+    fi; \
     hook="$(git rev-parse --git-path hooks)/pre-commit"; \
-        mkdir -p "$(dirname "$hook")"; \
-        printf '%s\n' '#!/bin/sh' '# Written by `just install-hooks`.' 'exec just pre-commit' >"$hook"; \
-        chmod +x "$hook"; \
-        printf 'Installed %s\n' "$hook"
+    if [ -e "$hook" ] && ! grep -qF '# Written by `just install-hooks`.' "$hook"; then \
+        printf '%s\n' "$hook exists and was not written by just install-hooks; move it aside first." >&2; \
+        exit 1; \
+    fi; \
+    mkdir -p "$(dirname "$hook")"; \
+    printf '%s\n' '#!/bin/sh' '# Written by `just install-hooks`.' 'exec just pre-commit' >"$hook"; \
+    chmod +x "$hook"; \
+    printf 'Installed %s\n' "$hook"
 
 [doc('Run a one-off command with the project environment: `just run uv add --dev <pkg>`.')]
 run +command:
@@ -78,10 +92,19 @@ format:
 
 # ------------------------------------------------------------------ check ---
 
-# prek reads the files Git tracks, so a new file is linted once it is staged.
-[doc('Run every pre-commit hook over every tracked file.')]
+# prek's --all-files means tracked files only, so the list comes from git:
+# tracked files that still exist, plus untracked ones that are not ignored.
+# Each step is its own command rather than a pipeline, so a failing `git` fails
+# the recipe instead of handing prek an empty list. SKIP and PREK_SKIP are
+# cleared because either one would drop hooks from the gate; a deliberate skip
+# still works on `git commit`.
+[doc('Run every pre-commit hook over every file that is not gitignored.')]
 lint:
-    uv run --frozen prek run --all-files
+    @listed="$TMPDIR/lint-listed"; present="$TMPDIR/lint-present"; \
+    git ls-files -z --cached --others --exclude-standard --deduplicate >"$listed"; \
+    xargs -0 sh -c 'for f; do [ ! -e "$f" ] || printf "%s\0" "$f"; done' sh <"$listed" >"$present"; \
+    test -s "$present" || { printf '%s\n' 'lint: git listed no files to check.' >&2; exit 1; }; \
+    xargs -0 env -u SKIP -u PREK_SKIP uv run --frozen prek run --files <"$present"
 
 [doc('What the pre-commit hook runs: the same hooks over the staged files.')]
 pre-commit:

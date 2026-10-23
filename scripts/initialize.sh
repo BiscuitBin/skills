@@ -8,9 +8,20 @@ cd "$project_root"
 
 git rev-parse --is-inside-work-tree >/dev/null
 
+# uv and Node check their own versions (`required-version` in pyproject.toml,
+# `engine-strict` in .npmrc). Nothing checks just, so this does. CI installs the
+# same version.
+required_just='just 1.51.0'
+found_just=$(just --version)
+if [ "$found_just" != "$required_just" ]; then
+    printf '%s\n' "$required_just is required; found $found_just." >&2
+    exit 1
+fi
+
 # Installs exactly what the lockfiles say: the pinned Python into .tools/python,
-# then .venv/ and node_modules/. Nothing here relocks or reformats, so a drifted
-# lockfile or an unformatted file is left for `just check` to report.
+# then .venv/ and node_modules/. It fails on a lockfile that disagrees with its
+# manifest, and never relocks or reformats: an unformatted file is left for
+# `just check` to report.
 just sync
 
 # Hooks are installed only from the primary checkout. Every worktree of this
