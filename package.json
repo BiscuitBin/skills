@@ -9,11 +9,6 @@
     "node": "26.5.1",
     "npm": "11.17.0"
   },
-  "scripts": {
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint:md": "markdownlint-cli2"
-  },
   "devDependencies": {
     "@anthropic-ai/claude-code": "2.1.309",
     "@earendil-works/pi-coding-agent": "1.4.0",

@@ -1,9 +1,4 @@
-.tools
-.venv
-node_modules
-ai_tmp
-.eval-workspaces
-eval-results
+# Prettier also skips everything .gitignore lists.
 
 # Both lockfiles are written by their package managers, never by hand.
 package-lock.json

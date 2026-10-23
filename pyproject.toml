@@ -27,6 +27,8 @@ build-backend = "uv_build"
 python-preference = "only-managed"
 python-downloads = "automatic"
 required-version = "==0.13.4"
+# `uv add` writes an exact pin, as every other dependency here is.
+add-bounds = "exact"
 
 [tool.ruff]
 line-length = 99

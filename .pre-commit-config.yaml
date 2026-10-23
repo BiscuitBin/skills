@@ -6,15 +6,9 @@
 # set of pins, outside both lockfiles, and a network clone on first use. The
 # Git hook runs `just pre-commit`, so these run with the Justfile's environment.
 # See docs/adr/0003-project-local-toolchain.md.
-exclude: >-
-  (?x)^(
-    \.tools/|
-    \.venv/|
-    node_modules/|
-    ai_tmp/|
-    uv\.lock$|
-    package-lock\.json$
-  )
+# Both runs pass only files Git does not ignore, so .gitignore covers the
+# tool directories. The lockfiles are written by their package managers.
+exclude: ^(uv\.lock|package-lock\.json)$
 repos:
   - repo: local
     hooks:
@@ -30,13 +24,10 @@ repos:
         language: system
         types_or: [python, pyi]
 
-      # The config's globs and ignores choose the files, so the hook passes
-      # none of its own.
       - id: markdownlint
         name: markdownlint
         entry: ./node_modules/.bin/markdownlint-cli2
         language: system
-        pass_filenames: false
         types: [markdown]
 
       # Markdown belongs to markdownlint; .prettierignore says so.
@@ -48,12 +39,15 @@ repos:
 
   - repo: builtin
     hooks:
+      # Both checks act only on a commit by default, so `just lint` and CI
+      # would check nothing. These flags make them check every file given.
       - id: check-added-large-files
-        args: [--maxkb=768]
+        args: [--maxkb=768, --enforce-all]
       - id: check-case-conflict
       - id: check-executables-have-shebangs
       - id: check-json
       - id: check-merge-conflict
+        args: [--assume-in-merge]
       - id: check-shebang-scripts-are-executable
       - id: check-toml
       - id: check-yaml

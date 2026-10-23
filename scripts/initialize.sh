@@ -29,7 +29,10 @@ just sync
 # worktree would change what a commit runs in every other checkout too. The
 # test is the one git itself uses: in a secondary worktree the common directory
 # and the git directory differ.
-if [ "$(git rev-parse --git-common-dir)" = "$(git rev-parse --git-dir)" ]; then
+if hooks_path=$(git config --get core.hooksPath); then
+    printf '%s\n' "core.hooksPath is set to $hooks_path: skipping install-hooks." >&2
+    printf '%s\n' 'Commits will not run the gate. Unset it and run just install-hooks to add the hook.' >&2
+elif [ "$(git rev-parse --git-common-dir)" = "$(git rev-parse --git-dir)" ]; then
     just install-hooks
 else
     printf '%s\n' 'Secondary worktree: skipping install-hooks.' >&2

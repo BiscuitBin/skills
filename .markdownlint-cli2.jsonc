@@ -6,14 +6,10 @@
     // Duplicate headings are legitimate under different parents.
     "MD024": { "siblings_only": true }
   },
-  "globs": ["**/*.md"],
+  // The files come from the command line: prek passes them for `just lint`
+  // and the hook, and `just format` passes its own globs.
+  "gitignore": true,
   "ignores": [
-    "node_modules",
-    ".tools",
-    ".venv",
-    "ai_tmp",
-    ".eval-workspaces",
-    "eval-results",
     // CLAUDE.md is a bare `@AGENTS.md` import and has no heading by design.
     "CLAUDE.md"
   ]

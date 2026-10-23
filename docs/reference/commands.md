@@ -4,14 +4,14 @@ Every command goes through `just`. Run `just` on its own to list the recipes.
 
 | Recipe | What it does |
 | --- | --- |
-| `initialize` | The first-run setup: checks the just version, runs `sync`, then `install-hooks` in the primary checkout only. It never relocks, reformats, stages, commits, tags or pushes. |
+| `initialize` | The first-run setup: checks the just version, runs `sync`, then `install-hooks` in the primary checkout only (skipped, with a warning, when `core.hooksPath` is set). It never relocks, reformats, stages, commits, tags or pushes. |
 | `sync` | Installs the pinned Python into `.tools/python`, then exactly what `uv.lock` and `package-lock.json` say. It fails rather than relocking when a lockfile is out of date. |
 | `lock` | Rewrites both lockfiles from `pyproject.toml` and `package.json`. Run it after changing a pin, then review and commit the lockfile diff. |
-| `lock-check` | Fails when either lockfile disagrees with its manifest. |
+| `lock-check` | Fails when either lockfile disagrees with its manifest. The npm half relocks a temporary copy and compares it with `package-lock.json`. |
 | `install-hooks` | Installs a Git pre-commit hook that runs `just pre-commit`, so commits get the project environment. It refuses when `core.hooksPath` is set or a pre-commit hook it did not write is already there. |
 | `pre-commit` | What the hook runs: the `lint` hooks over the staged files only. |
 | `run <command>` | Runs a one-off command with the project environment, for example `just run uv add --dev <package>`. |
-| `format` | Applies ruff, markdownlint and Prettier fixes. This is the only recipe that rewrites source files. |
+| `format` | Applies ruff, markdownlint and Prettier fixes. This is the only recipe that rewrites source files. It leaves the tickets in `.scratch/` alone. |
 | `lint` | Runs every pre-commit hook over every file that is not gitignored, untracked ones included: ruff lint and format check, markdownlint, Prettier and the builtin file checks. prek's `SKIP` and `PREK_SKIP` are ignored here. |
 | `typecheck` | Runs mypy in strict mode over `src/` and `tests/`. |
 | `test` | Runs pytest. |
