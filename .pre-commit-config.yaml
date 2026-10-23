@@ -1,0 +1,63 @@
+# The fast subset of `just check`, run by `just lint` over every file and by
+# the pre-commit hook over the staged ones. mypy and pytest stay in `just check`.
+#
+# Every hook is `repo: local` or `repo: builtin`. A remote hook repository would
+# be cloned into prek's cache, and a Git hook does not see the Justfile's
+# PREK_HOME, so that cache would land in the user's home directory. The local
+# hooks call tools that `just initialize` already installed into .venv/ and
+# node_modules/. See docs/adr/0003-project-local-toolchain.md.
+exclude: >-
+  (?x)^(
+    \.tools/|
+    \.venv/|
+    node_modules/|
+    ai_tmp/|
+    uv\.lock$|
+    package-lock\.json$
+  )
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff lint
+        entry: uv run --frozen ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff-format-check
+        name: Ruff format check
+        entry: uv run --frozen ruff format --check --force-exclude
+        language: system
+        types_or: [python, pyi]
+
+      # The config's globs and ignores choose the files, so the hook passes
+      # none of its own.
+      - id: markdownlint
+        name: markdownlint
+        entry: ./node_modules/.bin/markdownlint-cli2
+        language: system
+        pass_filenames: false
+        types: [markdown]
+
+      # Markdown belongs to markdownlint; .prettierignore says so.
+      - id: prettier
+        name: Prettier check
+        entry: ./node_modules/.bin/prettier --check --ignore-unknown
+        language: system
+        types: [text]
+
+  - repo: builtin
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=768]
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      # No end-of-file-fixer or trailing-whitespace: this is a read-only gate,
+      # so it may report but never repair. Prettier, markdownlint and ruff
+      # report the same defects in the files they own.

@@ -1,0 +1,74 @@
+[project]
+name = "skills-tooling"
+version = "0.1.0"
+description = "Repository tooling for BiscuitBin/skills: the validator, eval harness, graders and reports."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = "==3.14.*"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "mypy==2.4.0",
+  "prek==0.5.7",
+  "pytest==9.1.1",
+  "ruff==0.17.2",
+]
+
+[build-system]
+requires = ["uv_build==0.13.4"]
+build-backend = "uv_build"
+
+[tool.uv]
+# The interpreter is the one .python-version names, downloaded by uv into
+# .tools/python (the Justfile exports UV_PYTHON_INSTALL_DIR). A Python on the
+# host is never used, so two machines cannot resolve different interpreters.
+python-preference = "only-managed"
+python-downloads = "automatic"
+required-version = "==0.13.4"
+
+[tool.ruff]
+line-length = 99
+target-version = "py314"
+unsafe-fixes = false
+src = ["src", "tests"]
+# Ruff formats the Python fences inside Markdown too; Markdown belongs to
+# markdownlint.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = [
+  "A", "ANN", "ARG", "B", "BLE", "C4", "COM", "DTZ", "E",
+  "EM", "EXE", "F", "FA", "FLY", "FURB", "G", "I", "INP", "INT",
+  "ISC", "LOG", "N", "PERF", "PGH", "PIE", "PL", "PTH", "PYI",
+  "Q", "RET", "RSE", "RUF", "S", "SIM", "SLF", "T10", "TC",
+  "TID", "TRY", "UP", "W",
+]
+ignore = ["COM812", "E501", "ISC001"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert and compare against literals.
+"tests/**" = ["INP001", "PLR2004", "S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# No cache directory: the gate must leave the worktree as it found it.
+addopts = "-p no:cacheprovider --strict-markers"
+
+[tool.mypy]
+files = ["src", "tests"]
+strict = true
+python_version = "3.14"
+# No cache directory, for the same reason pytest has none.
+cache_dir = "/dev/null"

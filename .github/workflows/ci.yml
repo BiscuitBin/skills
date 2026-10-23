@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    # Quoted because a branch named `true`, `false`, `null` or `on` is valid to
+    # Git but is not a string to a YAML 1.1 parser.
+    branches: ['main']
+
+# The gate reads the repository and nothing else. It needs no secrets: live
+# evals run from a separate, manual workflow (docs/adr/0004-eval-tiers-and-ci.md).
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: just check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Node is the one runtime the project cannot install for itself. The
+      # version comes from the same file engine-strict checks against.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      # No cache: the Justfile points uv's cache into .tools/, which this
+      # action would neither find nor save.
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.4'
+          enable-cache: false
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.51.0'
+
+      - run: just initialize
+      - run: just check
+
+      # The gate must leave the clone as it found it: nothing written that Git
+      # would track, and no tracked file changed.
+      - name: Worktree is clean
+        run: |
+          git status --porcelain --untracked-files=all
+          test -z "$(git status --porcelain --untracked-files=all)"
+          git diff --exit-code

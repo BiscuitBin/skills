@@ -1,0 +1,25 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# The project-local toolchain: pinned Python, caches, prek's home and the
+# agent CLIs' isolated homes. See docs/adr/0003-project-local-toolchain.md.
+.tools/
+node_modules/
+.venv/
+
+# Python and tool caches.
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+dist/
+
+# Agent scratch output, such as review findings and triage.
+ai_tmp/
+
+# Eval runs: throwaway workspaces and their results.
+.eval-workspaces/
+eval-results/
