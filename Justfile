@@ -47,8 +47,10 @@ default:
 initialize:
     ./scripts/initialize.sh
 
+# lock-check first, because `npm ci` alone misses a dependency removed from
+# package.json.
 [doc('Install exactly what the lockfiles say. Fails rather than relocks on drift.')]
-sync:
+sync: lock-check
     uv python install --no-bin
     uv sync --locked
     npm ci
@@ -88,7 +90,7 @@ install-hooks:
         exit 1; \
     fi; \
     hook="$(git rev-parse --git-path hooks)/pre-commit"; \
-    if [ -e "$hook" ] && ! grep -qF '# Written by `just install-hooks`.' "$hook"; then \
+    if { [ -e "$hook" ] || [ -L "$hook" ]; } && ! grep -qF '# Written by `just install-hooks`.' "$hook" 2>/dev/null; then \
         printf '%s\n' "$hook exists and was not written by just install-hooks; move it aside first." >&2; \
         exit 1; \
     fi; \
@@ -147,5 +149,13 @@ agents-version:
     ./node_modules/.bin/codex --version
     ./node_modules/.bin/pi --version
 
+# uv and Node check their own versions (`required-version` in pyproject.toml,
+# `engine-strict` in .npmrc). Nothing checks just's, so this does. CI installs
+# the same version.
+[doc('Fail unless this is the pinned just.')]
+just-version:
+    @required='just 1.51.0'; found="$("{{ just_executable() }}" --version)"; \
+    [ "$found" = "$required" ] || { printf '%s\n' "$required is required; found $found." >&2; exit 1; }
+
 [doc('The full gate, as CI runs it. Stops at the first recipe that fails.')]
-check: lock-check lint typecheck test agents-version
+check: just-version lock-check lint typecheck test agents-version

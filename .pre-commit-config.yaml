@@ -24,11 +24,15 @@ repos:
         language: system
         types_or: [python, pyi]
 
+      # After `--`, markdownlint-cli2 reads each argument as a literal path
+      # rather than a glob, so `docs/[x].md` is that file. Literal paths skip
+      # the config's ignores, so CLAUDE.md is excluded here.
       - id: markdownlint
         name: markdownlint
-        entry: ./node_modules/.bin/markdownlint-cli2
+        entry: ./node_modules/.bin/markdownlint-cli2 --
         language: system
         types: [markdown]
+        exclude: ^CLAUDE\.md$
 
       # Markdown belongs to markdownlint; .prettierignore says so.
       - id: prettier

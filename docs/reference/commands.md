@@ -5,7 +5,7 @@ Every command goes through `just`. Run `just` on its own to list the recipes.
 | Recipe | What it does |
 | --- | --- |
 | `initialize` | The first-run setup: checks the just version, runs `sync`, then `install-hooks` in the primary checkout only (skipped, with a warning, when `core.hooksPath` is set). It never relocks, reformats, stages, commits, tags or pushes. |
-| `sync` | Installs the pinned Python into `.tools/python`, then exactly what `uv.lock` and `package-lock.json` say. It fails rather than relocking when a lockfile is out of date. |
+| `sync` | Runs `lock-check`, then installs the pinned Python into `.tools/python` and exactly what `uv.lock` and `package-lock.json` say. It fails rather than relocking when a lockfile is out of date. |
 | `lock` | Rewrites both lockfiles from `pyproject.toml` and `package.json`. Run it after changing a pin, then review and commit the lockfile diff. |
 | `lock-check` | Fails when either lockfile disagrees with its manifest. The npm half relocks a temporary copy and compares it with `package-lock.json`. |
 | `install-hooks` | Installs a Git pre-commit hook that runs `just pre-commit`, so commits get the project environment. It refuses when `core.hooksPath` is set or a pre-commit hook it did not write is already there. |
@@ -16,4 +16,5 @@ Every command goes through `just`. Run `just` on its own to list the recipes.
 | `typecheck` | Runs mypy in strict mode over `src/` and `tests/`. |
 | `test` | Runs pytest. |
 | `agents-version` | Prints the version of each pinned agent CLI (Claude Code, Codex and Pi), run from `node_modules/.bin` with isolated homes under `.tools/agent-homes/`. |
-| `check` | The full gate, which CI also runs: `lock-check`, `lint`, `typecheck`, `test`, then `agents-version`. It stops at the first failure. |
+| `just-version` | Fails unless the running just is the pinned version. |
+| `check` | The full gate, which CI also runs: `just-version`, `lock-check`, `lint`, `typecheck`, `test`, then `agents-version`. It stops at the first failure. |
