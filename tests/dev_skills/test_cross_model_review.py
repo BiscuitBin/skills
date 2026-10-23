@@ -11,8 +11,10 @@ import sys
 import tempfile
 import unittest
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "dev-skills" / "cross-model-review" / "scripts" / "review.py"
@@ -159,6 +161,14 @@ class SelectReviewerTest(unittest.TestCase):
         self.assertTrue(selection.fallback_used)
         self.assertIn("codex exited 1", " ".join(selection.notes))
 
+    def test_unrecognised_other_model_never_falls_back(self) -> None:
+        probe = probe_with({"codex": "codex not found on PATH"})
+        with self.assertRaises(review.ReviewUnavailable) as ctx:
+            review.select_reviewer("other", "company-production", probe)
+        message = str(ctx.exception)
+        self.assertIn("codex not found on PATH", message)
+        self.assertIn("'company-production' is not a recognised family", message)
+
 
 class SnapshotTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -216,6 +226,21 @@ class SnapshotTest(unittest.TestCase):
         self.assertTrue(entries["secret.txt"].startswith("error:"))
         self.assertTrue(entries["locked"].startswith("error:"))
 
+    def test_detects_permission_only_changes(self) -> None:
+        script = self.root / "src" / "a.py"
+        script.chmod(0o755)
+        (self.root / "src").chmod(0o755)
+        before = review.snapshot(self.root)
+        script.chmod(0o644)
+        (self.root / "src").chmod(0o700)
+        self.assertEqual(self.changes(before), ["modified: src", "modified: src/a.py"])
+
+    def test_detects_root_permission_change(self) -> None:
+        self.root.chmod(0o755)
+        before = review.snapshot(self.root)
+        self.root.chmod(0o777)
+        self.assertEqual(self.changes(before), ["modified: ."])
+
     def test_scratch_folder_and_git_dir_are_ignored(self) -> None:
         before = review.snapshot(self.root)
         (self.root / "ai_tmp").mkdir()
@@ -223,6 +248,22 @@ class SnapshotTest(unittest.TestCase):
         (self.root / ".git").mkdir()
         (self.root / ".git" / "index").write_text("x\n")
         self.assertEqual(self.changes(before), [])
+
+
+class OutputPathTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, self.root)
+
+    def test_same_second_runs_reserve_distinct_files(self) -> None:
+        frozen = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        with mock.patch.object(review, "datetime") as clock:
+            clock.now.return_value = frozen
+            first = review._output_path(self.root, "review", "codex")
+            second = review._output_path(self.root, "review", "codex")  # before first is written
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.exists())
+        self.assertTrue(second.exists())
 
 
 def contains(args: list[str], flags: list[str]) -> bool:

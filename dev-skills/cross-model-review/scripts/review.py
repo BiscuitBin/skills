@@ -26,6 +26,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
@@ -114,6 +115,11 @@ class Selection:
 _SEP = r"(?:^|[/:.@_-])"
 _ANTHROPIC_MODEL = re.compile(_SEP + r"(?:anthropic|claude|opus|sonnet|haiku|fable)")
 _OPENAI_MODEL = re.compile(_SEP + r"(?:openai|chatgpt|gpt|codex|astra|o\d)")
+# Known third families. An "other" model matching none of the three patterns
+# has an unconfirmed family, so no reviewer can be a confirmed fallback for it.
+_THIRD_FAMILY_MODEL = re.compile(
+    _SEP + r"(?:google|gemini|gemma|llama|mistral|mixtral|qwen|deepseek|grok|xai)"
+)
 
 
 def model_family(model: str) -> Family:
@@ -149,6 +155,9 @@ def select_reviewer(
 ) -> Selection:
     """Apply the cross-model rule. `failed` holds reviewers that already failed at runtime."""
     family = implementer_family(implementer, model)
+    unconfirmed = family == "other" and not _THIRD_FAMILY_MODEL.search(
+        (model or "").strip().lower()
+    )
     preferred = PREFERRED[family]
     candidates: list[Reviewer] = [preferred, *(r for r in REVIEWERS if r != preferred)]
     notes: list[str] = []
@@ -157,6 +166,12 @@ def select_reviewer(
         if spec.family == family:
             notes.append(
                 f"{candidate} ({spec.model}) refused: same model family as the implementer ({family})"
+            )
+            continue
+        if candidate != preferred and unconfirmed:
+            notes.append(
+                f"{candidate} ({spec.model}) refused: model {model!r} is not a recognised "
+                "family, so a different family cannot be confirmed; pass the underlying model ID"
             )
             continue
         reason = (failed or {}).get(candidate) or probe(candidate)
@@ -203,7 +218,8 @@ def default_probe(reviewer: Reviewer) -> str | None:
 
 
 def snapshot(root: Path) -> dict[str, str]:
-    """Map every path under root (except .git/ and ai_tmp/) to a content hash.
+    """Map every path under root (except .git/ and ai_tmp/) to its content hash
+    and permission bits. The root itself is recorded as ".".
 
     Walks the filesystem rather than asking git, so ignored and untracked files
     count too. Symlinks are recorded by target and never followed. Paths that
@@ -211,6 +227,10 @@ def snapshot(root: Path) -> dict[str, str]:
     unreadable shows as modified, and `run` refuses to start if any already is.
     """
     entries: dict[str, str] = {}
+    try:
+        entries["."] = f"dir mode:{stat.S_IMODE(root.stat().st_mode):o}"
+    except OSError as error:
+        entries["."] = f"error:{error.errno}"
 
     def unreadable(error: OSError) -> None:
         if error.filename is not None:
@@ -225,12 +245,14 @@ def snapshot(root: Path) -> dict[str, str]:
             path = here / name
             rel = path.relative_to(root).as_posix()
             try:
-                if path.is_symlink():
+                info = path.lstat()
+                mode = f"mode:{stat.S_IMODE(info.st_mode):o}"
+                if stat.S_ISLNK(info.st_mode):
                     entries[rel] = "link:" + os.readlink(path)
-                elif path.is_file():
-                    entries[rel] = "sha256:" + _file_digest(path)
-                elif path.is_dir():
-                    entries.setdefault(rel, "dir")
+                elif stat.S_ISREG(info.st_mode):
+                    entries[rel] = f"sha256:{_file_digest(path)} {mode}"
+                elif stat.S_ISDIR(info.st_mode):
+                    entries.setdefault(rel, f"dir {mode}")
             except OSError as error:
                 entries[rel] = f"error:{error.errno}"
     return entries
@@ -265,10 +287,13 @@ def _output_path(root: Path, kind: str, reviewer: Reviewer) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     path = scratch / f"{kind}-{stamp}-{reviewer}.md"
     suffix = 1
-    while path.exists():
-        suffix += 1
-        path = scratch / f"{kind}-{stamp}-{reviewer}-{suffix}.md"
-    return path
+    while True:
+        try:
+            path.touch(exist_ok=False)  # reserve atomically; a concurrent run gets the next suffix
+            return path
+        except FileExistsError:
+            suffix += 1
+            path = scratch / f"{kind}-{stamp}-{reviewer}-{suffix}.md"
 
 
 def run_review(

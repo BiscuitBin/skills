@@ -65,9 +65,9 @@ The skill encodes this protocol, and this text stays its source of truth:
 - **`scripts/review.py`** (stdlib, Python 3.9+):
   - `select` applies the cross-model rule. Model families are read from provider-prefixed IDs and aliases too. A known implementer keeps its default family when its model is unrecognised.
   - `run` runs the reviewer with read-only CLI flags. Codex gets `exec -m gpt-6-astra --sandbox read-only --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check`. Claude gets `-p --model claude-opus-5-5 --tools Read,Grep,Glob --restricted --strict-mcp-config --permission-prompts none --no-session-persistence`, and never `--bare`.
-  - `run` snapshots the worktree by sha256 content with a filesystem walk (ignored files included; `.git/` and `ai_tmp/` excluded). It refuses to start if any path is unreadable, and exits 4 if anything changed. In that case the output is kept only as `ai_tmp/rejected-*.md`.
+  - `run` snapshots the worktree by sha256 content and permission bits (the root included) with a filesystem walk (ignored files included; `.git/` and `ai_tmp/` excluded). It refuses to start if any path is unreadable, and exits 4 if anything changed. In that case the output is kept only as `ai_tmp/rejected-*.md`.
   - Exit codes: 0 ok, 1 setup error, 2 usage, 3 unavailable, 4 worktree changed.
-- **Tests:** `tests/dev_skills/test_cross_model_review.py`, 32 stdlib `unittest` tests. Fake `codex`/`claude` shims on a PATH holding nothing else cover selection, fallback, same-family refusal, auth failure, the read-only flags, worktree tampering and setup errors.
+- **Tests:** `tests/dev_skills/test_cross_model_review.py`, 36 stdlib `unittest` tests. Fake `codex`/`claude` shims on a PATH holding nothing else cover selection, fallback, same-family refusal, auth failure, the read-only flags, worktree tampering and setup errors.
 - **Instruction files:** `.gitignore` (`ai_tmp/`, `__pycache__/`), `AGENTS.md` (independent `## Cross-model review` and `## Dev skills` sections, so ticket 02 can add its own), and `CLAUDE.md` (`@AGENTS.md` only).
 
 ### Acceptance evidence (artifacts in `ai_tmp/`, gitignored)
@@ -83,7 +83,7 @@ The skill encodes this protocol, and this text stays its source of truth:
   - With claude on a bare PATH, the auth probe correctly reported `loggedIn: false` (`claude auth status` exits 1 when logged out).
 - **Read-only:** both live review runs left the content snapshot unchanged apart from `ai_tmp/`. `git check-ignore ai_tmp/x` matches `.gitignore:1`.
 - **Checks:**
-  - `python3 -m unittest discover -s tests -t .` passes, 32 tests.
+  - `python3 -m unittest discover -s tests -t .` passes, 36 tests.
   - `uvx mypy --strict dev-skills tests` is clean. This is a pre-ticket-02 compromise: uvx caches mypy outside the project, and ticket 02 replaces it with the pinned toolchain.
   - `just check` does not exist yet.
 
@@ -110,6 +110,17 @@ The skill encodes this protocol, and this text stays its source of truth:
   - Findings: `ai_tmp/review-20261023T051733Z-codex.md` (R1).
   - Triage: `ai_tmp/triage-20261023T0520Z-rereview.md`.
   - Fixed in the final commit.
+- **Round 3 (PR #3 review):**
+  - Reviewers: GitHub Copilot (2 inline comments, CP1–CP2) and Codex `gpt-6-astra`, no fallback (K1–K2).
+  - Reviewed: `6fca094` (`main...6fca094`).
+  - Findings: Copilot threads on PR #3; `ai_tmp/review-20261023T055944Z-codex.md`.
+  - Triage: `ai_tmp/triage-pr3.md`. One fresh agent per finding, then an independent challenger per verdict. All agreed, so no tiebreak.
+- **Round 4 (re-review, since K1 changed reviewer selection):**
+  - Reviewer: Codex `gpt-6-astra`, no fallback.
+  - Reviewed: `6fca094` plus the uncommitted round 3 fixes.
+  - Findings: `ai_tmp/review-20261023T062007Z-codex.md` (K3).
+  - Triage: `ai_tmp/triage-pr3.md` (re-review section).
+  - Rounds 3 and 4 were fixed in the "Apply PR #3 review fixes" commit.
 
 | # | Severity | Finding | Verdict | Action |
 |---|----------|---------|---------|--------|
@@ -129,11 +140,17 @@ The skill encodes this protocol, and this text stays its source of truth:
 | L13 | low | The snapshot read whole files and re-walked on fallback | valid | 1 MiB chunked sha256, and the after-snapshot is reused as the next before-snapshot |
 | L14 | low | The flag test was weak (`-p` substring, missing flags, `!= 0`) | valid | Whole-argument flag assertions for every read-only flag. Asserts `EXIT_MODIFIED`. |
 | R1 | medium | Unreadable paths compared equal (`error:13 == error:13`), so verification passed open | valid | `run` refuses before any probe or reviewer runs when a path is unreadable. Test added. |
+| CP1 | — | The snapshot ignored permission bits, so a chmod-only change (0755 → 0644) passed | valid | File and directory entries record `stat.S_IMODE` from `lstat` (`sha256:<hex> mode:<octal>`, `dir mode:<octal>`). Symlinks stay `link:<target>`. Test added. |
+| CP2 | — | `_output_path` checked `exists()` and the caller wrote later, so same-second runs overwrote each other's report | valid | The name is reserved with `touch(exist_ok=False)` (O_EXCL), and `-<n>` is retried on `FileExistsError`. Test with a frozen clock added. |
+| K1 | medium | An unrecognised `other` model was treated as a confirmed third family, so a same-family Claude fallback could get through | valid | A fallback needs a recognised family (`_THIRD_FAMILY_MODEL` allow-list). An unconfirmed model is refused with a note, giving exit 3. SKILL.md updated. Test added. |
+| K2 | medium | `npx skills`' fallback scan still finds `dev-skills/` and ignores our markers | out of scope | Duplicate of L6, owned by ticket 04 (04:32–36). `metadata.internal` is ruled out by 04:34. Follow-up below. |
+| K3 | medium | The CP1 fix did not record the worktree root's own mode | valid | The root is recorded as `.` using `root.stat()`. An unreadable root is still `error:<errno>`. Test added. |
 
-All new regression tests from round 1 fail against `7b5e84a` and pass after the fixes (checked by swapping in the old script). The R1 test fails on `d764a7e` (checked by triage in a scratch export).
+All new regression tests from round 1 fail against `7b5e84a` and pass after the fixes (checked by swapping in the old script). The R1 test fails on `d764a7e` (checked by triage in a scratch export). The four round 3–4 tests (CP1, CP2, K1, K3) fail against `6fca094` and pass after the fixes (checked in a `git archive 6fca094` export with the new test file).
 
 **Follow-ups:**
 
+- K2 (ticket 04): with zero shipped skills, or with `--full-depth`, `discoverSkills` falls back to `findSkillDirs` (`skills.ts:310` at `a80e4c9`) and reaches `dev-skills/cross-model-review/SKILL.md`. Once ticket 04 ships skills, the default listing stops reaching that fallback, but `--full-depth` still does, so always assert `--full-depth`. Test the zero-skill listing in a fixture repo.
 - L12: snapshot `git rev-parse --git-path hooks` and `--git-path config` (and `config.worktree`) with a `git:` prefix.
-- Residual risk: a model the classifier does not recognise is family "other", which the rule routes to Codex with Claude as an allowed fallback. A misclassified Anthropic model could therefore still reach Claude when Codex is down.
+- Residual risk (narrowed by K1): an `other` implementer whose model the classifier does not recognise still goes to Codex first under "Codex otherwise", so an unrecognised OpenAI alias could get a same-family Codex review. It no longer gets a Claude fallback. The third-family allow-list (`_THIRD_FAMILY_MODEL`) is a heuristic: a wrapper name containing e.g. `gemini` is trusted as a third family.
 - `codex exec` blocks when stdin is inherited and left open. `review.py` always passes the brief on stdin, but agents running `codex exec` by hand should pass `</dev/null`.
