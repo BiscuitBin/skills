@@ -1,0 +1,17 @@
+{
+  "config": {
+    "default": true,
+    // Prose is wrapped by the author, not by a column limit.
+    "MD013": false,
+    // Duplicate headings are legitimate under different parents.
+    "MD024": { "siblings_only": true }
+  },
+  // The files come from the command line. prek passes literal paths for
+  // `just lint` and the hook; `just format` passes globs, which these two
+  // settings filter.
+  "gitignore": true,
+  "ignores": [
+    // CLAUDE.md is a bare `@AGENTS.md` import and has no heading by design.
+    "CLAUDE.md"
+  ]
+}

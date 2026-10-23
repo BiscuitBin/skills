@@ -1,0 +1,61 @@
+# The fast subset of `just check`, run by `just lint` over every file and by
+# the pre-commit hook over the staged ones. mypy and pytest stay in `just check`.
+#
+# Every hook is `repo: local` or `repo: builtin`, calling tools pinned in
+# uv.lock and package-lock.json. A remote hook repository would bring a second
+# set of pins, outside both lockfiles, and a network clone on first use. The
+# Git hook runs `just pre-commit`, so these run with the Justfile's environment.
+# See docs/adr/0003-project-local-toolchain.md.
+# Both runs pass only files Git does not ignore, so .gitignore covers the
+# tool directories. The lockfiles are written by their package managers.
+exclude: ^(uv\.lock|package-lock\.json)$
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff lint
+        entry: uv run --frozen ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff-format-check
+        name: Ruff format check
+        entry: uv run --frozen ruff format --check --force-exclude
+        language: system
+        types_or: [python, pyi]
+
+      # After `--`, markdownlint-cli2 reads each argument as a literal path
+      # rather than a glob, so `docs/[x].md` is that file. Literal paths skip
+      # the config's ignores, so CLAUDE.md is excluded here.
+      - id: markdownlint
+        name: markdownlint
+        entry: ./node_modules/.bin/markdownlint-cli2 --
+        language: system
+        types: [markdown]
+        exclude: ^CLAUDE\.md$
+
+      # Markdown belongs to markdownlint; .prettierignore says so.
+      - id: prettier
+        name: Prettier check
+        entry: ./node_modules/.bin/prettier --check --ignore-unknown
+        language: system
+        types: [text]
+
+  - repo: builtin
+    hooks:
+      # Both checks act only on a commit by default, so `just lint` and CI
+      # would check nothing. These flags make them check every file given.
+      - id: check-added-large-files
+        args: [--maxkb=768, --enforce-all]
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-json
+      - id: check-merge-conflict
+        args: [--assume-in-merge]
+      - id: check-shebang-scripts-are-executable
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      # No end-of-file-fixer or trailing-whitespace: this is a read-only gate,
+      # so it may report but never repair. Prettier, markdownlint and ruff
+      # report the same defects in the files they own.

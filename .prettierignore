@@ -1,0 +1,9 @@
+# Prettier also skips everything .gitignore lists.
+
+# Both lockfiles are written by their package managers, never by hand.
+package-lock.json
+uv.lock
+
+# Markdown belongs to markdownlint-cli2. Two formatters over the same files
+# disagree eventually.
+*.md
