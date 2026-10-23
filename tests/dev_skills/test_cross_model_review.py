@@ -44,16 +44,34 @@ ALL_AVAILABLE = probe_with({})
 
 class ModelFamilyTest(unittest.TestCase):
     def test_claude_models_are_anthropic(self) -> None:
-        self.assertEqual(review.model_family("claude-opus-5-5"), "anthropic")
-        self.assertEqual(review.model_family("Claude-Sonnet-5-5"), "anthropic")
+        for model in (
+            "claude-opus-5-5",
+            "Claude-Sonnet-5-5",
+            "anthropic/claude-opus-5-5",
+            "us.anthropic.claude-opus-5-5",
+            "global.anthropic.claude-opus-5-5",
+            "openrouter/anthropic/claude-opus-5-5",
+            "bedrock-claude-x",
+            "opus",
+        ):
+            with self.subTest(model=model):
+                self.assertEqual(review.model_family(model), "anthropic")
 
     def test_openai_models(self) -> None:
-        for model in ("gpt-6-astra", "o4-mini", "codex-mini-latest"):
+        for model in (
+            "gpt-6-astra",
+            "o4-mini",
+            "codex-mini-latest",
+            "openai/gpt-6-astra",
+            "azure/gpt-5",
+            "chatgpt-4o-latest",
+            "openrouter/openai/o3",
+        ):
             with self.subTest(model=model):
                 self.assertEqual(review.model_family(model), "openai")
 
     def test_anything_else_is_other(self) -> None:
-        for model in ("gemini-3-pro", "llama-4", "opus", "o"):
+        for model in ("gemini-3-pro", "google/gemini-2.0-flash", "llama-4", "ollama:llama4", "o"):
             with self.subTest(model=model):
                 self.assertEqual(review.model_family(model), "other")
 
@@ -116,6 +134,23 @@ class SelectReviewerTest(unittest.TestCase):
         selection = review.select_reviewer("claude-code", "gpt-6-astra", ALL_AVAILABLE)
         self.assertEqual(selection.reviewer, "claude")
 
+    def test_provider_prefixed_model_never_gets_same_family_reviewer(self) -> None:
+        with self.assertRaises(review.ReviewUnavailable) as ctx:
+            review.select_reviewer(
+                "other", "anthropic/claude-opus-5-5", ALL_AVAILABLE, failed={"codex": "x"}
+            )
+        self.assertIn(
+            "claude (claude-opus-5-5) refused: same model family as the implementer (anthropic)",
+            str(ctx.exception),
+        )
+        selection = review.select_reviewer("other", "openai/gpt-6-astra", ALL_AVAILABLE)
+        self.assertEqual(selection.reviewer, "claude")
+
+    def test_known_implementer_keeps_its_family_for_unrecognised_model(self) -> None:
+        with self.assertRaises(review.ReviewUnavailable):
+            review.select_reviewer("claude-code", "mystery-1", ALL_AVAILABLE, failed={"codex": "x"})
+        self.assertEqual(review.select_reviewer("codex", "mystery-1", ALL_AVAILABLE).reviewer, "claude")
+
     def test_excluded_reviewer_is_skipped_with_its_reason(self) -> None:
         selection = review.select_reviewer(
             "other", "gemini-3-pro", ALL_AVAILABLE, failed={"codex": "codex exited 1"}
@@ -165,6 +200,22 @@ class SnapshotTest(unittest.TestCase):
         (self.root / "link").symlink_to("elsewhere")
         self.assertEqual(self.changes(before), ["modified: link"])
 
+    @unittest.skipIf(os.geteuid() == 0, "root can read anything")
+    def test_unreadable_paths_are_recorded_not_fatal(self) -> None:
+        (self.root / "locked").mkdir()
+        (self.root / "locked" / "inner.txt").write_text("x\n")
+        secret = self.root / "secret.txt"
+        secret.write_text("x\n")
+        secret.chmod(0)
+        (self.root / "locked").chmod(0)
+        try:
+            entries = review.snapshot(self.root)
+        finally:
+            (self.root / "locked").chmod(0o755)
+            secret.chmod(0o644)
+        self.assertTrue(entries["secret.txt"].startswith("error:"))
+        self.assertTrue(entries["locked"].startswith("error:"))
+
     def test_scratch_folder_and_git_dir_are_ignored(self) -> None:
         before = review.snapshot(self.root)
         (self.root / "ai_tmp").mkdir()
@@ -172,6 +223,11 @@ class SnapshotTest(unittest.TestCase):
         (self.root / ".git").mkdir()
         (self.root / ".git" / "index").write_text("x\n")
         self.assertEqual(self.changes(before), [])
+
+
+def contains(args: list[str], flags: list[str]) -> bool:
+    """True if `flags` appears as a contiguous run of whole arguments."""
+    return any(args[i : i + len(flags)] == flags for i in range(len(args)))
 
 
 FAKE_REVIEWER = """#!{python}
@@ -267,20 +323,56 @@ class CliTest(unittest.TestCase):
         self.install("codex", "claude")
         self.assertEqual(self.run_review("--implementer", "claude-code").returncode, 0)
         self.assertEqual(self.run_review("--implementer", "codex").returncode, 0)
-        calls = [line for line in self.log.read_text().splitlines() if "status" not in line]
+        calls = [line.split() for line in self.log.read_text().splitlines() if "status" not in line]
         codex_call, claude_call = calls
-        for flag in ("exec", "-m gpt-6-astra", "--sandbox read-only", "--ephemeral"):
-            self.assertIn(flag, codex_call)
-        for flag in ("-p", "--model claude-opus-5-5", "--tools Read,Grep,Glob", "--restricted"):
-            self.assertIn(flag, claude_call)
+        self.assertEqual(codex_call[:2], ["codex", "exec"])
+        for flags in (
+            ["-m", "gpt-6-astra"],
+            ["--sandbox", "read-only"],
+            ["--ephemeral"],
+            ["--ignore-user-config"],
+            ["--ignore-rules"],
+        ):
+            with self.subTest(codex=flags):
+                self.assertTrue(contains(codex_call, flags))
+        self.assertEqual(claude_call[:2], ["claude", "-p"])
+        for flags in (
+            ["--model", "claude-opus-5-5"],
+            ["--tools", "Read,Grep,Glob"],
+            ["--restricted"],
+            ["--strict-mcp-config"],
+            ["--permission-prompts", "none"],
+            ["--no-session-persistence"],
+        ):
+            with self.subTest(claude=flags):
+                self.assertTrue(contains(claude_call, flags))
         self.assertNotIn("--bare", claude_call)
 
     def test_run_fails_loudly_when_reviewer_modifies_worktree(self) -> None:
         self.install("codex", "claude")
         result = self.run_review("--implementer", "claude-code", FAKE_MODE_CODEX="write")
-        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, review.EXIT_MODIFIED, result.stderr)
         self.assertIn("modified: src/a.py", result.stderr)
+        self.assertIn("not a valid review", result.stderr)
         self.assertEqual(list((self.root / "ai_tmp").glob("review-*.md")), [])
+        (rejected,) = (self.root / "ai_tmp").glob("rejected-*-codex.md")
+        self.assertIn("## Findings from codex", rejected.read_text())
+
+    def test_usage_error_is_not_reported_as_unavailable(self) -> None:
+        self.install("codex", "claude")
+        result = self.cli("select", "--implementer", "pi")
+        self.assertEqual(result.returncode, 2)
+        self.assertNotEqual(review.EXIT_UNAVAILABLE, 2)
+
+    def test_missing_brief_is_a_setup_error(self) -> None:
+        self.install("codex", "claude")
+        missing = str(self.bin / "no-such-brief.md")
+        result = self.cli(
+            "run", "--implementer", "claude-code", "--brief", missing, "--root", str(self.root)
+        )
+        self.assertEqual(result.returncode, review.EXIT_ERROR)
+        self.assertIn("cannot read brief", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_run_falls_back_when_preferred_reviewer_fails_at_runtime(self) -> None:
         self.install("codex", "claude")

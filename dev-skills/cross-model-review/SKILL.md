@@ -25,7 +25,8 @@ REVIEW select --implementer other --model <id>     # Pi or any other agent: the 
 - Codex implementer → Claude Code, Opus 5.5 (`claude-opus-5-5`), read-only tools only.
 - Any other agent → by the family of the model it is running: Codex for a Claude model, Claude Code for an OpenAI model, Codex otherwise. Record that model in the completion notes.
 - Preferred reviewer unavailable (CLI missing, not authenticated, model refused): the script falls back to the other reviewer only when its model family differs from yours, and reports it under `fallback_used` and `notes`.
-- Exit code 2 means no reviewer from a different model family is available. **Stop and report it.** Reviewing your own work, or using a same-family reviewer, does not count as a cross-model review.
+- Exit code 3 means no reviewer from a different model family is available. **Stop and report it.** Reviewing your own work, or using a same-family reviewer, does not count as a cross-model review. If a reviewer "failed at runtime" and you are in a sandboxed shell, rerun with network access first.
+- Exit code 2 is a usage error: fix the command and rerun. Exit code 1 means the run could not start (unreadable brief, not in a git repo).
 
 ## 2. Reviewer subagent runs the external review
 
@@ -35,13 +36,15 @@ Dispatch a subagent with the brief below. It writes the review brief to `ai_tmp/
 REVIEW run --implementer <you> [--model <id>] --brief ai_tmp/brief-<topic>.md
 ```
 
-`run` repeats the selection, runs the reviewer with read-only CLI flags (enforced by the flags, not the prompt), saves the reviewer's final output to `ai_tmp/review-<timestamp>-<reviewer>.md` and prints JSON with `findings_path` and `selection`. It snapshots the worktree by content before and after, and exits 1 with the changed paths if anything outside `ai_tmp/` and `.git/` changed. Treat that as a failed review. If the preferred reviewer fails at runtime, `run` tries the allowed fallback itself.
+`run` repeats the selection, runs the reviewer with read-only CLI flags (enforced by the flags, not the prompt), saves the reviewer's final output to `ai_tmp/review-<timestamp>-<reviewer>.md` and prints JSON with `findings_path` and `selection`. It snapshots the worktree by content before and after, and exits 4 with the changed paths if anything outside `ai_tmp/` and `.git/` changed, whether the reviewer or a concurrent process changed it. Treat that as a failed review: the output it keeps as `ai_tmp/rejected-*.md` is for inspection only and is never triaged. Leave the worktree alone while `run` is going, check the listed paths, and rerun. If the preferred reviewer fails at runtime, `run` tries the allowed fallback itself.
+
+A run takes up to `--timeout` seconds (default 1800) per reviewer, twice that with a fallback. Run it in the background or detached rather than under a short shell-tool timeout, and wait for it to exit. The reviewer CLIs need network access and write to their own home folders, so a sandboxed shell (Codex) must run it with escalated permissions.
 
 **Reviewer-runner subagent brief:**
 
 > You run an external review. You are not the reviewer: do not review the code yourself and do not start a review of your own.
-> 1. Write `ai_tmp/brief-<topic>.md` from the review brief template in `dev-skills/cross-model-review/SKILL.md`, filling in the acceptance criteria and the diff (`git diff <base>...HEAD`, plus `git diff` for uncommitted work) or the design proposal under review.
-> 2. Run `python3 dev-skills/cross-model-review/scripts/review.py run --implementer <implementer> [--model <id>] --brief ai_tmp/brief-<topic>.md`.
+> 1. Write `ai_tmp/brief-<topic>.md` from the review brief template in `dev-skills/cross-model-review/SKILL.md`, filling in the acceptance criteria and the work under review: `git diff <base>...HEAD` for commits, `git diff HEAD` for staged and unstaged work, and the full contents of each file listed by `git ls-files --others --exclude-standard`, each headed by its path. For a design review, paste the proposal instead.
+> 2. Run `python3 dev-skills/cross-model-review/scripts/review.py run --implementer <implementer> [--model <id>] --brief ai_tmp/brief-<topic>.md` in the background (it can take 30+ minutes; in a sandboxed shell, with network access) and wait until it exits.
 > 3. Return only the `findings_path` and the `selection` JSON it prints, or its stderr and exit code if it failed. Do not paste the findings.
 
 **Review brief template** (the text the external reviewer receives):
