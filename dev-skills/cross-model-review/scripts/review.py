@@ -13,7 +13,7 @@ Subcommands:
       any file outside ai_tmp/ and .git/ changed during the review, saving
       the output as ai_tmp/rejected-<timestamp>-<reviewer>.md instead.
 
-Exit codes: 0 ok, 1 error before any review ran, 2 usage error (argparse),
+Exit codes: 0 ok, 1 error before any review ran (including unreadable paths), 2 usage error (argparse),
 3 cross-model review unavailable, 4 worktree changed during the review.
 Python 3 standard library only.
 """
@@ -207,7 +207,8 @@ def snapshot(root: Path) -> dict[str, str]:
 
     Walks the filesystem rather than asking git, so ignored and untracked files
     count too. Symlinks are recorded by target and never followed. Paths that
-    cannot be read are recorded as "error:<errno>" so they still compare.
+    cannot be read are recorded as "error:<errno>": a path that becomes
+    unreadable shows as modified, and `run` refuses to start if any already is.
     """
     entries: dict[str, str] = {}
 
@@ -254,6 +255,10 @@ class WorktreeModified(Exception):
     """Files changed during the review, by the reviewer or a concurrent process."""
 
 
+class SetupError(Exception):
+    """The run could not start; no reviewer ran."""
+
+
 def _output_path(root: Path, kind: str, reviewer: Reviewer) -> Path:
     scratch = root / SCRATCH_DIR
     scratch.mkdir(exist_ok=True)
@@ -276,6 +281,12 @@ def run_review(
 ) -> tuple[Path, Selection]:
     failed: dict[Reviewer, str] = {}
     before = snapshot(root)
+    unreadable = sorted(p for p, v in before.items() if v.startswith("error:"))
+    if unreadable:
+        raise SetupError(
+            "cannot verify the review leaves the worktree unchanged; "
+            "make these paths readable or remove them:\n- " + "\n- ".join(unreadable)
+        )
     while True:
         selection = select_reviewer(implementer, model, probe, failed)
         result: subprocess.CompletedProcess[str] | None = None
@@ -315,10 +326,6 @@ def run_review(
     path = _output_path(root, "review", selection.reviewer)
     path.write_text(result.stdout)
     return path, selection
-
-
-class SetupError(Exception):
-    """The run could not start; no reviewer ran."""
 
 
 def _git_root() -> Path:

@@ -52,3 +52,85 @@ The skill encodes this protocol, and this text stays its source of truth:
 ## Review checkpoints
 
 - **Implementation checkpoint:** before marking this done, run the protocol above on this ticket's diff. Use the new skill if it works, or follow the steps by hand if it doesn't. Record the result under Completion notes.
+
+## Completion notes
+
+### What landed
+
+- **Single source:** `dev-skills/cross-model-review/` (`SKILL.md`, `scripts/review.py`). Relative symlinks expose it to discovery: `.claude/skills/cross-model-review` and `.agents/skills/cross-model-review` both point to `../../dev-skills/cross-model-review`.
+- **Frontmatter:** spec fields only (`name`, `description`, `license`, `metadata` with string values `scope: repo-internal`, `distribute: never`).
+- **`scripts/review.py`** (stdlib, Python 3.9+):
+  - `select` applies the cross-model rule. Model families are read from provider-prefixed IDs and aliases too. A known implementer keeps its default family when its model is unrecognised.
+  - `run` runs the reviewer with read-only CLI flags. Codex gets `exec -m gpt-6-astra --sandbox read-only --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check`. Claude gets `-p --model claude-opus-5-5 --tools Read,Grep,Glob --restricted --strict-mcp-config --permission-prompts none --no-session-persistence`, and never `--bare`.
+  - `run` snapshots the worktree by sha256 content with a filesystem walk (ignored files included; `.git/` and `ai_tmp/` excluded). It refuses to start if any path is unreadable, and exits 4 if anything changed. In that case the output is kept only as `ai_tmp/rejected-*.md`.
+  - Exit codes: 0 ok, 1 setup error, 2 usage, 3 unavailable, 4 worktree changed.
+- **Tests:** `tests/dev_skills/test_cross_model_review.py`, 32 stdlib `unittest` tests. Fake `codex`/`claude` shims on a PATH holding nothing else cover selection, fallback, same-family refusal, auth failure, the read-only flags, worktree tampering and setup errors.
+- **Instruction files:** `.gitignore` (`ai_tmp/`, `__pycache__/`), `AGENTS.md` (independent `## Cross-model review` and `## Dev skills` sections, so ticket 02 can add its own), and `CLAUDE.md` (`@AGENTS.md` only).
+
+### Acceptance evidence (artifacts in `ai_tmp/`, gitignored)
+
+- **Claude Code discovery** (2.1.309, started in `.scratch/`):
+  - `system/init` lists `cross-model-review` in `skills` and `slash_commands`. The prompt "Get me an adversarial review of my diff from another model before I mark it done." produced `tool_use Skill {"skill": "cross-model-review"}` (`discovery-claude.jsonl`).
+  - Negative check: an ordinary coding prompt made no `Skill` call (`discovery-claude-negative.jsonl`).
+- **Codex discovery** (0.163.0, started in `.scratch/`): a `command_execution` ran `cat …/.agents/skills/cross-model-review/SKILL.md`, and stderr had no `failed to load skill` (`discovery-codex.jsonl`).
+- **Pi:** not installed, and ticket 02's pinned Pi has not landed. **Gap recorded for ticket 12 to recheck.** Pi needs `--approve` for project skills in JSON mode, according to the research notes.
+- **Fallback demos** (`fallback-demo.txt`, real CLIs, codex hidden from PATH):
+  - `select --implementer claude-code` refuses: codex is not found and claude is the same family.
+  - `select --implementer other --model gemini-3-pro` falls back to claude, with `fallback_used: true` and a note.
+  - With claude on a bare PATH, the auth probe correctly reported `loggedIn: false` (`claude auth status` exits 1 when logged out).
+- **Read-only:** both live review runs left the content snapshot unchanged apart from `ai_tmp/`. `git check-ignore ai_tmp/x` matches `.gitignore:1`.
+- **Checks:**
+  - `python3 -m unittest discover -s tests -t .` passes, 32 tests.
+  - `uvx mypy --strict dev-skills tests` is clean. This is a pre-ticket-02 compromise: uvx caches mypy outside the project, and ticket 02 replaces it with the pinned toolchain.
+  - `just check` does not exist yet.
+
+### Input for ticket 04: does `npx skills` follow symlinked skill folders?
+
+- **Source read:** `vercel-labs/skills` `src/skills.ts` at `main` `a80e4c9`. This is not the pinned version, so recheck against the pin.
+- **Priority walk:** `walkSkillDirs` uses `readdir({withFileTypes: true})` with `entry.isDirectory()`, which is false for symlinks. So the symlinked `.agents/skills` and `.claude/skills` entries are **skipped**.
+- **Leak path:** the fallback `findSkillDirs` runs when no skills are found, or with `--full-depth`. It recurses from the repo root and **does** find the real directory `dev-skills/cross-model-review/`. While the repo has no shipped skills, a listing would therefore offer the dev skill. Ticket 04 must test the default, `--full-depth` and zero-skill listings.
+- **Marker:** `metadata.scope` and `metadata.distribute` are not read by any installer. They mark the skill for humans and our own tooling only.
+
+### Cross-model review
+
+- **Implementer:** Claude Code running `claude-opus-5-5`.
+- **Round 1:**
+  - Reviewer: Codex `gpt-6-astra`, no fallback.
+  - Reviewed: `main...7b5e84a`.
+  - Findings: `ai_tmp/review-20261023T045059Z-codex.md` (C1–C2).
+  - Supplementary same-family review: `ai_tmp/review-local-code-review.md` (L1–L15, Claude `/code-review`). It is not a substitute for the cross-model review, and was triaged in the same pass.
+  - Triage: `ai_tmp/triage-20261023T0510Z.md`. One fresh agent per finding, then an independent challenger per verdict.
+  - Fixes in `d764a7e`.
+- **Round 2 (re-review, since the fixes were substantial):**
+  - Reviewer: Codex `gpt-6-astra`, no fallback.
+  - Reviewed: `7b5e84a..d764a7e`.
+  - Findings: `ai_tmp/review-20261023T051733Z-codex.md` (R1).
+  - Triage: `ai_tmp/triage-20261023T0520Z-rereview.md`.
+  - Fixed in the final commit.
+
+| # | Severity | Finding | Verdict | Action |
+|---|----------|---------|---------|--------|
+| C1 / L1 | high | Provider-prefixed or alias model IDs were classed as "other", so a same-family review could get through | valid | `model_family` matches family markers after `/ : . @ _ -`, plus aliases (opus, sonnet, haiku, fable, astra). Regression tests added. |
+| C2 / L15 | medium | The runner brief's diff missed staged and untracked changes | valid | The brief now uses `git diff <base>...HEAD`, `git diff HEAD`, and the contents of each untracked file headed by its path |
+| L2 | high | Codex execpolicy `.rules` could allow commands outside the sandbox | valid | Added `--ignore-rules`, asserted in the test |
+| L3 | medium | An unrecognised `--model` overrode a known implementer's family | valid | The implementer's default family is kept for unrecognised models. Test added. |
+| L4 | medium | Exit 2 (unavailable) clashed with argparse usage errors | valid | Unavailable is now 3, modified is 4. SKILL.md updated. Test added. |
+| L5 | medium | The snapshot crashed on unreadable paths | valid | Records `error:<errno>` through `onerror` and try/except. Test added. |
+| L6 | medium | The repo-internal marker is not read by installers, and npx-skills' fallback scan finds `dev-skills/` | out of scope | Handed to ticket 04 (see above) |
+| L7 | medium | Concurrent changes discarded the paid output and blamed the reviewer | valid | Output kept as `rejected-*.md` (inspection only). Neutral message. Test asserts this. |
+| L8 | medium | The brief ignored shell timeouts and sandboxed network | valid | SKILL.md: run in the background and wait, escalate the sandbox for network, rerun before reporting unavailable |
+| L9 | low | Claude reviews persisted session transcripts | valid | Added `--no-session-persistence` |
+| L10 | low | Setup errors were tracebacks with an ambiguous exit code | valid | `SetupError` gives exit 1 with a message. Test added. |
+| L11 | low | No `--skip-git-repo-check` despite `--root` | out of scope (triage) | Applied anyway (one flag, safe), so `--root` behaves as documented |
+| L12 | low | Writes to `.git/hooks` and `.git/config` are not snapshotted | out of scope | Follow-up below |
+| L13 | low | The snapshot read whole files and re-walked on fallback | valid | 1 MiB chunked sha256, and the after-snapshot is reused as the next before-snapshot |
+| L14 | low | The flag test was weak (`-p` substring, missing flags, `!= 0`) | valid | Whole-argument flag assertions for every read-only flag. Asserts `EXIT_MODIFIED`. |
+| R1 | medium | Unreadable paths compared equal (`error:13 == error:13`), so verification passed open | valid | `run` refuses before any probe or reviewer runs when a path is unreadable. Test added. |
+
+All new regression tests from round 1 fail against `7b5e84a` and pass after the fixes (checked by swapping in the old script). The R1 test fails on `d764a7e` (checked by triage in a scratch export).
+
+**Follow-ups:**
+
+- L12: snapshot `git rev-parse --git-path hooks` and `--git-path config` (and `config.worktree`) with a `git:` prefix.
+- Residual risk: a model the classifier does not recognise is family "other", which the rule routes to Codex with Claude as an allowed fallback. A misclassified Anthropic model could therefore still reach Claude when Codex is down.
+- `codex exec` blocks when stdin is inherited and left open. `review.py` always passes the brief on stdin, but agents running `codex exec` by hand should pass `</dev/null`.

@@ -26,7 +26,7 @@ REVIEW select --implementer other --model <id>     # Pi or any other agent: the 
 - Any other agent → by the family of the model it is running: Codex for a Claude model, Claude Code for an OpenAI model, Codex otherwise. Record that model in the completion notes.
 - Preferred reviewer unavailable (CLI missing, not authenticated, model refused): the script falls back to the other reviewer only when its model family differs from yours, and reports it under `fallback_used` and `notes`.
 - Exit code 3 means no reviewer from a different model family is available. **Stop and report it.** Reviewing your own work, or using a same-family reviewer, does not count as a cross-model review. If a reviewer "failed at runtime" and you are in a sandboxed shell, rerun with network access first.
-- Exit code 2 is a usage error: fix the command and rerun. Exit code 1 means the run could not start (unreadable brief, not in a git repo).
+- Exit code 2 is a usage error: fix the command and rerun. Exit code 1 means the run could not start (unreadable brief, not in a git repo, or worktree paths it cannot read, which it lists).
 
 ## 2. Reviewer subagent runs the external review
 

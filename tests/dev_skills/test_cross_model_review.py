@@ -364,6 +364,19 @@ class CliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertNotEqual(review.EXIT_UNAVAILABLE, 2)
 
+    @unittest.skipIf(os.geteuid() == 0, "root can read anything")
+    def test_run_refuses_unreadable_paths_before_any_reviewer_runs(self) -> None:
+        self.install("codex", "claude")
+        secret = self.root / "secret.txt"
+        secret.write_text("x\n")
+        secret.chmod(0)
+        self.addCleanup(secret.chmod, 0o644)
+        result = self.run_review("--implementer", "claude-code")
+        self.assertEqual(result.returncode, review.EXIT_ERROR, result.stderr)
+        self.assertIn("secret.txt", result.stderr)
+        self.assertFalse(self.log.exists())
+        self.assertFalse((self.root / "ai_tmp").exists())
+
     def test_missing_brief_is_a_setup_error(self) -> None:
         self.install("codex", "claude")
         missing = str(self.bin / "no-such-brief.md")
