@@ -108,6 +108,7 @@ run +command:
 
 [doc('Apply ruff, markdownlint and Prettier fixes. The only recipe that rewrites sources.')]
 format:
+    uv run --frozen python -m skills_tooling.distribution --write
     uv run --frozen ruff check --fix-only .
     uv run --frozen ruff format .
     ./node_modules/.bin/markdownlint-cli2 --fix '**/*.md' '!.scratch/**'
@@ -145,6 +146,12 @@ test:
 validate-skills:
     uv run --frozen python -m skills_tooling.validator
 
+[doc('Check distribution versions and validate the marketplace and shipped plugins strictly.')]
+validate-distribution:
+    uv run --frozen python -m skills_tooling.distribution
+    ./node_modules/.bin/claude plugin validate . --strict
+    @for skill in skills/*; do ./node_modules/.bin/claude plugin validate "$skill" --strict; done
+
 # Run from node_modules/.bin and never from PATH, so a global install cannot
 # stand in for a broken local one.
 [doc('Print the version of each pinned agent CLI.')]
@@ -162,4 +169,4 @@ just-version:
     [ "$found" = "$required" ] || { printf '%s\n' "$required is required; found $found." >&2; exit 1; }
 
 [doc('The full gate, as CI runs it. Stops at the first recipe that fails.')]
-check: just-version lock-check lint typecheck test validate-skills agents-version
+check: just-version lock-check lint typecheck validate-distribution test validate-skills agents-version
