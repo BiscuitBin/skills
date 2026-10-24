@@ -2,7 +2,39 @@
 
 Agent skills for Claude Code, Codex and Pi, in the [Agent Skills](https://agentskills.io/specification) `SKILL.md` format. This repository is where they are developed, evaluated against all three agents, and distributed.
 
-It is at the foundation stage: the toolchain, docs and decision records are in place, and the first skill, the eval harness and the distribution channels follow. Work is tracked in `.scratch/foundation/issues/`.
+The first shipped skill is `cowsay`, with a bundled Python script. The eval harness is under development. Work is tracked in `.scratch/foundation/issues/`.
+
+## Install cowsay
+
+Python 3 is required to run the bundled script. Run these commands in the project where you want the skill available.
+
+### Claude Code marketplace
+
+```sh
+claude plugin marketplace add BiscuitBin/skills
+claude plugin install cowsay@biscuitbin-skills --scope project
+```
+
+These are shell commands for an installed Claude Code CLI. Contributors verify
+this checkout's pinned CLI with `just test`, which installs into isolated projects.
+Invoke the installed skill with `/cowsay:cowsay Hello there`.
+
+### npx skills
+
+Choose your agent; these commands install every shipped skill in this repo, currently just `cowsay`:
+
+```sh
+npx skills@1.7.4 add BiscuitBin/skills --agent claude-code --yes
+npx skills@1.7.4 add BiscuitBin/skills --agent codex --yes
+npx skills@1.7.4 add BiscuitBin/skills --agent pi --yes
+```
+
+Claude Code discovers the result in `.claude/skills/cowsay`; Codex and Pi use `.agents/skills/cowsay`.
+Invoke it with `/cowsay` in Claude Code, `$cowsay` in Codex, or `/skill:cowsay` in Pi.
+Pi requires project trust before loading project skills.
+List available skills without installing with `npx skills@1.7.4 add BiscuitBin/skills --list`.
+
+The [distribution reference](docs/reference/distribution.md) describes the manifests, version updates and credential-free installation tests.
 
 ## Host prerequisites
 

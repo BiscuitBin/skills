@@ -13,3 +13,4 @@ Each record states one decision that is hard to reverse, would surprise a reader
 | [0007](0007-cross-model-review-routing.md) | Adversarial review always comes from a different model family |
 | [0008](0008-mit-licence.md) | The repository is MIT-licensed |
 | [0009](0009-flat-shipped-skills-layout.md) | Shipped skills use a flat skills directory |
+| [0010](0010-distribution-boundaries.md) | Each shipped skill is its own plugin; dev skills stay behind discovery symlinks |
