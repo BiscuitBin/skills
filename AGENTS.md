@@ -23,6 +23,14 @@ Every tool, cache, agent home and scratch file lives inside this directory, and 
 
 Global installs (`npm install -g`, `uv tool install`, `pip install --user`) and writes to the user's agent homes (`~/.claude`, `~/.codex`, `~/.pi`, `~/.agents`) are outside the project, so do neither. When a tool insists on writing outside the project, stop and record it in the ticket's completion notes.
 
-## Cross-model review (ticket 01)
+## Cross-model review
 
-> **Placeholder.** Ticket 01 replaces this section with a summary of the cross-model review protocol and a pointer to the repo's review dev skill. Until it lands, follow the protocol written out in `.scratch/foundation/issues/01-cross-model-review-dev-skill.md`.
+Every ticket's review checkpoint uses the `cross-model-review` dev skill (`dev-skills/cross-model-review/SKILL.md`):
+
+- A reviewer from a **different model family** reviews the work: Codex (`gpt-6-astra`) for Claude models, Claude Code (`claude-opus-5-5`) for OpenAI models. If none is available, stop and report it; do not review your own work instead.
+- A reviewer subagent runs the read-only external review and saves the findings to `ai_tmp/`. A separate triage subagent marks each finding valid, invalid or out of scope, with evidence.
+- Apply the valid fixes, rerun the checks, and record the reviewer, model, reviewed commit and every finding's verdict and action under **Completion notes** in the ticket.
+
+## Dev skills
+
+Dev skills are repo-internal skills for working on this repo. They live in `dev-skills/<name>/`, and relative symlinks in `.claude/skills/` and `.agents/skills/` make them discoverable. Every dev skill is marked `metadata.scope: repo-internal` and must be excluded from distribution (marketplace, plugin and `npx skills`; ticket 04) and from eval workspaces (ticket 05).
