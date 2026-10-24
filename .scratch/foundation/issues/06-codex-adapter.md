@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Authenticated access to the pinned Codex CLI is required to capture transcripts and pass the live eval; the implementer need not be Codex. Cross-model review is also required.
+
 ## Acceptance criteria
 
 - [ ] The Codex adapter implements the ticket 05 interface without changing the case schema. If the interface has to change, the Claude Code adapter and its tests are updated in the same change.

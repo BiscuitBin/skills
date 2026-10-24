@@ -13,6 +13,8 @@ This ticket defines the case schema and the adapter interface that tickets 06, 0
 
 **Status:** ready-for-agent
 
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Authenticated access to the pinned Claude Code CLI is required to capture transcripts and pass the live eval. Codex and Pi live evals are deferred to tickets 06 and 07. Cross-model review is also required.
+
 ## Acceptance criteria
 
 **Case schema:**

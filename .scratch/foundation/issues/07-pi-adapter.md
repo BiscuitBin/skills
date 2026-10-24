@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Access to the pinned Pi CLI with authenticated access to its selected provider and model is required to capture transcripts, verify dev skill discovery and pass the live eval; the implementer need not be Pi. Cross-model review is also required.
+
 ## Acceptance criteria
 
 - [ ] The Pi adapter implements the ticket 05 interface without changing the case schema. If the interface has to change, every existing adapter and its tests are updated in the same change.

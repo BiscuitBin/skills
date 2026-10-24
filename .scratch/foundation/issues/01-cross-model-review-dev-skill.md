@@ -8,6 +8,8 @@ Read the foundation research notes (`.scratch/foundation/research.md`) first. Th
 
 **Status:** done. One criterion's placement half stays open until ticket 04 runs its listing test (see Completion notes).
 
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Claude Code and Codex access is required for the headless discovery checks and live review checks. Pi discovery may be deferred to ticket 12 as described below. Review requires a reviewer from a different model family, plus separate reviewer and triage subagents.
+
 ## The protocol
 
 The skill encodes this protocol, and this text stays its source of truth:
