@@ -10,14 +10,13 @@ Python 3 is required to run the bundled script. Run these commands in the projec
 
 ### Claude Code marketplace
 
-In Claude Code:
-
-```text
-/plugin marketplace add BiscuitBin/skills
-/plugin install cowsay@biscuitbin-skills --scope project
+```sh
+claude plugin marketplace add BiscuitBin/skills
+claude plugin install cowsay@biscuitbin-skills --scope project
 ```
 
-Or install in one step with `/plugin install cowsay --marketplace BiscuitBin/skills`.
+These are shell commands for an installed Claude Code CLI. Contributors using
+this checkout's pinned CLI run them through `just run ./node_modules/.bin/claude`.
 Invoke the installed skill with `/cowsay:cowsay Hello there`.
 
 ### npx skills

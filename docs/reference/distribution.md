@@ -20,14 +20,16 @@ The single source for the cowsay plugin version is
 `just format`, and commit both manifests. The Python tooling's version and
 the npm development package's version are independent.
 
-`just validate-distribution` rejects version drift, extra/missing plugins and
-sources outside shipped skill directories. It runs the pinned
+`just validate-distribution` rejects version drift, extra/missing plugins,
+sources outside shipped skill directories, and uncommitted changes to install
+sources. It runs the pinned
 `claude plugin validate --strict` for the marketplace and each shipped plugin.
 `just check` includes this recipe.
 
 ## Installation round trips
 
-`just test` includes four installation round trips in `tests/test_distribution.py`;
+`just test` includes the four required installation round trips plus a combined
+Claude Code/Codex install in `tests/test_distribution.py`;
 `just check` and PR CI run the same tests. No agent credentials or published
 GitHub repository are needed. After `just initialize`, installs use only local
 Git sources and the locked tools. The installer is `skills@1.7.4`; the test uses
@@ -35,19 +37,22 @@ Git sources and the locked tools. The installer is `skills@1.7.4`; the test uses
 of `npx skills@1.7.4`.
 
 Each test clones the committed tree. The skills installer accepts its `file://`
-Git URL. Claude rejects that URL form, so its test supplies a reserved
-`https://distribution.invalid/skills.git` source and uses Git's process-local
+Git URL. Claude rejects that URL form, so its test uses the README's
+`BiscuitBin/skills` shorthand and Git's process-local
 `url.<file-url>.insteadOf` configuration to redirect the clone to the local
 source. `GIT_ALLOW_PROTOCOL=file` prevents network transport. This exercises
 Claude's hosted Git-source behavior and installs into its plugin cache;
 the other three installs use the default `skills add --agent <agent> --yes`
 behavior without naming a skill, exercising installation of all shipped skills.
-The listing assertion also names no skill. Symlink and copy installs are both
-accepted, and the observed mode is printed with pytest `-s` and recorded as the
-JUnit property `installation_mode`.
+The listing assertion also names no skill. The per-agent cases exercise copies;
+the combined-agent case exercises a Claude symlink and the shared canonical copy.
+Observed modes are recorded as the JUnit property `installation_mode` in
+`ai_tmp/pytest.xml` and printed in successful-test output in the `just check`
+CI log. `just test` enables both outputs.
 
-The tests check discovery paths and the complete installed file inventory,
-including the bundled script. They remove the source clone and Claude's
+The tests check discovery paths, the complete installed file inventory and all
+paths in the throwaway project (excluding its Git metadata). Only shipped
+payloads and installer lock/settings files are allowed. They remove the source clone and Claude's
 marketplace clone, then execute the installed script. An isolated Python
 subprocess (`-I -S`) with a file-open audit hook permits reads only from the
 installed skill and the pinned Python standard library. This makes source
@@ -61,8 +66,11 @@ user configuration. Local installs need no login; the separate cross-model
 development review still requires an authenticated reviewer.
 
 Because the source is the committed tree, commit distribution changes before
-running the round trips. The live manifest validation also checks the working
-tree. Round trips deliberately do not install uncommitted files.
+running the round trips. Both the tests and `just validate-distribution` enforce
+this for `skills/`, `.claude-plugin/`, `dev-skills/` and the two dev-skill discovery
+directories; unrelated documentation edits remain allowed. The live manifest
+validation also checks the working tree. Round trips deliberately do not install
+uncommitted files.
 
 ## Upstream references
 

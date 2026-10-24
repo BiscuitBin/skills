@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -37,14 +38,44 @@ def check(root: Path, *, write: bool = False) -> None:
         path.write_text(json.dumps(marketplace, indent=2) + "\n")
 
 
+def require_committed(root: Path) -> None:
+    """Reject local source changes that cannot enter committed-tree installs."""
+    status = subprocess.run(
+        [  # noqa: S607 -- git is a documented host prerequisite
+            "git",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--",
+            "skills",
+            ".claude-plugin",
+            "dev-skills",
+            ".agents/skills",
+            ".claude/skills",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if status.stdout:
+        msg = "Commit distribution source changes before install round trips:\n" + status.stdout
+        raise ValueError(msg)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--write", action="store_true", help="Used only by just format.")
+    parser.add_argument(
+        "--committed", action="store_true", help="Require committed install sources."
+    )
     args = parser.parse_args()
     try:
         check(args.root, write=args.write)
-    except (OSError, ValueError, KeyError, TypeError) as error:
+        if args.committed:
+            require_committed(args.root)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         print(f"distribution: {error}", file=sys.stderr)
         sys.exit(1)
     print("Marketplace sources and plugin versions match.")

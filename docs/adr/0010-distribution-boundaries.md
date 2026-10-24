@@ -28,3 +28,9 @@ files merely because they are adjacent to the selected skill. Compared with
 generated release directories, it keeps `npx skills` and the marketplace on
 the same source files. This elaborates ADRs 0005 and 0009 without moving the
 shipped skills.
+
+The shipped `.claude-plugin/plugin.json` is part of the user-facing plugin,
+not repository tooling configuration. Other agents can ignore it. The plugin
+root's `agents/` directory is also Claude's subagent location: future authoring
+work must keep Codex metadata in YAML and avoid unintentionally adding Claude
+subagents through `agents/*.md`.

@@ -39,6 +39,55 @@ def test_version_drift_fails_with_a_repair_hint(tmp_path: Path) -> None:
     assert "just format" in result.stderr
 
 
+def test_uncommitted_distribution_files_fail_before_installing(tmp_path: Path) -> None:
+    env = isolated_environment(tmp_path)
+    project = tmp_path / "repo"
+    project.mkdir()
+    run(["git", "init", "--quiet"], project, env)
+    (project / "skills/cowsay/.claude-plugin").mkdir(parents=True)
+    (project / "skills/cowsay/.claude-plugin/plugin.json").write_text(
+        '{"name":"cowsay","version":"0.1.0"}'
+    )
+    (project / ".claude-plugin").mkdir()
+    (project / ".claude-plugin/marketplace.json").write_text(
+        '{"plugins":[{"name":"cowsay","version":"0.1.0","source":"./skills/cowsay"}]}'
+    )
+    run(["git", "add", "."], project, env)
+    run(
+        [
+            "git",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "Fixture",
+        ],
+        project,
+        env,
+    )
+    (project / "skills/cowsay/evals.json").write_text("{}")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "skills_tooling.distribution",
+            "--root",
+            str(project),
+            "--committed",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "Commit distribution source changes" in result.stderr
+    assert "evals.json" in result.stderr
+
+
 def run(command: list[str], project: Path, env: dict[str, str]) -> str:
     result = subprocess.run(
         command,
@@ -109,9 +158,9 @@ runpy.run_path(str(script), run_name='__main__')
 def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Path:
     cli = str(ROOT / "node_modules/.bin/claude")
     # Claude rejects file:// marketplace URLs. Keep its hosted Git-source
-    # path, but let Git redirect this reserved hostname to our local clone.
+    # path, but let Git redirect the documented GitHub source to our local clone.
     # Only file transport is allowed, so this cannot reach the network.
-    git_url = "https://distribution.invalid/skills.git"
+    git_url = "https://github.com/BiscuitBin/skills.git"
     env.update(
         {
             "GIT_CONFIG_COUNT": "1",
@@ -120,7 +169,7 @@ def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Pat
             "GIT_ALLOW_PROTOCOL": "file",
         }
     )
-    run([cli, "plugin", "marketplace", "add", git_url], project, env)
+    run([cli, "plugin", "marketplace", "add", "BiscuitBin/skills"], project, env)
     run(
         [cli, "plugin", "install", "cowsay@biscuitbin-skills", "--scope", "project"],
         project,
@@ -141,7 +190,9 @@ def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Pat
     return installed
 
 
-def install_skills(source: Path, project: Path, env: dict[str, str], agent: str) -> Path:
+def install_skills(
+    source: Path, project: Path, env: dict[str, str], agents: list[str]
+) -> list[Path]:
     # npm exec is npx's implementation; --prefix selects the locked local
     # binary while cwd remains the throwaway project. Offline forbids fetches.
     npx = ["npm", "exec", "--offline", "--no", "--prefix", str(ROOT), "--", "skills"]
@@ -150,21 +201,27 @@ def install_skills(source: Path, project: Path, env: dict[str, str], agent: str)
     assert "Found 1 skill" in listing
     assert "cowsay" in listing
     assert "cross-model-review" not in listing
-    output = run([*npx, "add", source.as_uri(), "--agent", agent, "--yes", "--json"], project, env)
+    output = run(
+        [*npx, "add", source.as_uri(), "--agent", *agents, "--yes", "--json"], project, env
+    )
     assert "cowsay" in output
-    discovered = ".claude/skills" if agent == "claude-code" else ".agents/skills"
-    directory = project / discovered
-    assert {path.name for path in directory.iterdir()} == {"cowsay"}
-    installed = directory / "cowsay"
-    assert installed.resolve().is_relative_to(project)
-    return installed
+    installs = []
+    for agent in agents:
+        discovered = ".claude/skills" if agent == "claude-code" else ".agents/skills"
+        directory = project / discovered
+        assert {path.name for path in directory.iterdir()} == {"cowsay"}
+        installed = directory / "cowsay"
+        assert installed.resolve().is_relative_to(project)
+        installs.append(installed)
+    return installs
 
 
-@pytest.mark.parametrize("agent", ["marketplace", "claude-code", "codex", "pi"])
+@pytest.mark.parametrize("agent", ["marketplace", "claude-code", "codex", "pi", "shared"])
 def test_committed_install_round_trip(
     tmp_path: Path, agent: str, record_property: Callable[[str, object], None]
 ) -> None:
     env = isolated_environment(tmp_path)
+    run([sys.executable, "-m", "skills_tooling.distribution", "--committed"], ROOT, env)
     project = tmp_path / "project"
     project.mkdir()
     source = tmp_path / "source"
@@ -183,32 +240,60 @@ def test_committed_install_round_trip(
         "agents/openai.yaml",
         ".claude-plugin/plugin.json",
     }
-    installed = (
-        install_marketplace(source, project, env)
+    installs = (
+        [install_marketplace(source, project, env)]
         if agent == "marketplace"
-        else install_skills(source, project, env, agent)
+        else install_skills(
+            source, project, env, ["claude-code", "codex"] if agent == "shared" else [agent]
+        )
     )
 
-    mode = "symlink" if installed.is_symlink() else "copy"
-    record_property("installation_mode", mode)
-    print(f"{agent}: {mode}")
+    modes = ["symlink" if installed.is_symlink() else "copy" for installed in installs]
+    record_property("installation_mode", ",".join(modes))
+    print(f"{agent}: {','.join(modes)}")
+    if agent == "shared":
+        assert modes == ["symlink", "copy"]
     # Remove every installer source/cache except the actual plugin payload.
     # npx's symlinks must point at its project-local canonical copy.
     shutil.rmtree(source)
     marketplace_cache = Path(env["CLAUDE_CONFIG_DIR"]) / "plugins/marketplaces"
     if marketplace_cache.exists():
         shutil.rmtree(marketplace_cache)
-    assert {
-        str(path.relative_to(installed)): path.read_bytes()
-        for path in installed.rglob("*")
-        if path.is_file()
-    } == expected
-    for path in installed.rglob("*"):
-        assert path.resolve().is_relative_to(installed.resolve())
-    rendered = run(
-        [sys.executable, "-I", "-S", "-c", RUN_INSTALLED, str(installed / "scripts/cowsay.py")],
-        project,
-        env,
-    )
-    assert rendered.startswith(" _______\n< hello >\n -------\n")
-    assert "(oo)" in rendered
+    assert_project_inventory(project, expected, marketplace=agent == "marketplace")
+    for installed in installs:
+        assert {
+            str(path.relative_to(installed)): path.read_bytes()
+            for path in installed.rglob("*")
+            if path.is_file()
+        } == expected
+        for path in installed.rglob("*"):
+            assert path.resolve().is_relative_to(installed.resolve())
+        rendered = run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-c",
+                RUN_INSTALLED,
+                str(installed / "scripts/cowsay.py"),
+            ],
+            project,
+            env,
+        )
+        assert rendered.startswith(" _______\n< hello >\n -------\n")
+        assert "(oo)" in rendered
+
+
+def assert_project_inventory(
+    project: Path, payload: dict[str, bytes], *, marketplace: bool
+) -> None:
+    allowed = {Path(".claude/settings.json")} if marketplace else {Path("skills-lock.json")}
+    if not marketplace:
+        for prefix in (".agents/skills/cowsay", ".claude/skills/cowsay"):
+            allowed.update(Path(prefix) / name for name in payload)
+    for path in list(allowed):
+        allowed.update(path.parents)
+    for path in project.rglob("*"):
+        relative = path.relative_to(project)
+        if relative.parts[0] != ".git":
+            assert relative in allowed, f"unexpected installed path: {relative}"

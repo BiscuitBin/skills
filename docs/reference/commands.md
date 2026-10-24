@@ -14,9 +14,9 @@ Every command goes through `just`. Run `just` on its own to list the recipes.
 | `format` | Derives marketplace versions from plugin manifests, then applies ruff, markdownlint and Prettier fixes. This is the only recipe that rewrites source files. It leaves the tickets in `.scratch/` alone. |
 | `lint` | Runs every pre-commit hook over every file that is not gitignored, untracked ones included: ruff lint and format check, markdownlint, Prettier and the builtin file checks. prek's `SKIP` and `PREK_SKIP` are ignored here. |
 | `typecheck` | Runs mypy in strict mode over `src/` and `tests/`. |
-| `test` | Runs pytest. |
+| `test` | Runs pytest, records JUnit results (including installation modes) in `ai_tmp/pytest.xml`, and shows captured output from passing tests in the CI log. |
 | `validate-skills` | Validates every shipped skill and dev skill against the [validator rules](skill-validator.md). Errors fail; warnings pass. |
-| `validate-distribution` | Checks marketplace sources and versions, then runs pinned Claude Code's strict validation on the marketplace and each shipped plugin. See [distribution](distribution.md). |
+| `validate-distribution` | Checks marketplace sources and versions, requires committed install sources, then runs pinned Claude Code's strict validation on the marketplace and each shipped plugin. See [distribution](distribution.md). |
 | `agents-version` | Prints the version of each pinned agent CLI (Claude Code, Codex and Pi), run from `node_modules/.bin` with isolated homes under `.tools/agent-homes/`. |
 | `just-version` | Fails unless the running just is the pinned version. |
 | `check` | The full gate, which CI also runs: `just-version`, `lock-check`, `lint`, `typecheck`, `validate-distribution`, `test` (including credential-free install round trips), `validate-skills`, then `agents-version`. It stops at the first failure. |

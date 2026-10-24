@@ -140,7 +140,7 @@ typecheck:
 
 [doc('Run pytest.')]
 test:
-    uv run --frozen pytest
+    uv run --frozen pytest --junitxml=ai_tmp/pytest.xml -o junit_family=xunit1 -rP
 
 [doc('Validate every shipped skill and dev skill.')]
 validate-skills:
@@ -148,7 +148,7 @@ validate-skills:
 
 [doc('Check distribution versions and validate the marketplace and shipped plugins strictly.')]
 validate-distribution:
-    uv run --frozen python -m skills_tooling.distribution
+    uv run --frozen python -m skills_tooling.distribution --committed
     ./node_modules/.bin/claude plugin validate . --strict
     @for skill in skills/*; do ./node_modules/.bin/claude plugin validate "$skill" --strict; done
 
