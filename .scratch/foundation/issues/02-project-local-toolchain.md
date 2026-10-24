@@ -8,6 +8,8 @@ The repo also gets its agent instructions, a documentation skeleton, the first A
 
 **Status:** done, except the CI criterion, which needs the first run on the PR
 
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). All three pinned agent CLIs must be installed for version checks; authenticated live agent runs are not required outside the cross-model review checkpoint below.
+
 ## Acceptance criteria
 
 - [x] In a fresh clone in a temporary directory, `just initialize` and then `just check` both pass. `just initialize` never stages, commits, tags or pushes. The README states the few host prerequisites `just initialize` relies on (such as just, uv and a Node install), and how the pinned Python and Node versions are obtained.

@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). The secret-present CI demonstration needs credentials for the selected agents and, when grading is enabled, the configured grader. If repository secrets cannot be configured, demonstrate the skip path and record the remaining demonstration for ticket 12 as allowed below. Cross-model review is also required.
+
 ## Acceptance criteria
 
 - [ ] A manually dispatched workflow has these inputs:

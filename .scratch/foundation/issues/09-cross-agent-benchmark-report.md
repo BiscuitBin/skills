@@ -13,6 +13,8 @@ This lets a skill author see at a glance whether a change helped, hurt, or broke
 
 **Status:** ready-for-agent
 
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Report generation itself requires no agent calls. Completion requires results from live cowsay runs on Claude Code, Codex and Pi; authenticated access to each agent and the configured grader is needed if those results must be generated. Cross-model review is also required.
+
 ## Acceptance criteria
 
 - [ ] `just eval-report` builds a static report from stored results, with no network and no agent calls. It can be scoped to one skill.

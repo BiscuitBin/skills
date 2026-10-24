@@ -1,0 +1,3 @@
+interface:
+  display_name: 'Cowsay'
+  short_description: 'Make an ASCII cow say your text'

@@ -13,6 +13,8 @@ Then the whole repo gets a cross-model adversarial review. Valid findings are fi
 
 **Status:** ready-for-agent
 
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). A fresh-context subagent must perform the walkthrough with authenticated access to Claude Code, Codex and Pi, plus the configured grader when grading is enabled. Claude Code is also required for marketplace installation. The full-repo review and fix review require a reviewer from a different model family, plus separate reviewer and triage subagents.
+
 ## Acceptance criteria
 
 **Walkthrough:**
