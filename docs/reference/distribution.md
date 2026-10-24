@@ -36,12 +36,12 @@ Git sources and the locked tools. The installer is `skills@1.7.4`; the test uses
 `npm exec --offline --no --prefix <checkout> -- skills`, the local equivalent
 of `npx skills@1.7.4`.
 
-Each test clones the committed tree. The skills installer accepts its `file://`
-Git URL. Claude rejects that URL form, so its test uses the README's
+Each test clones the committed tree. Both installers use the README's
 `BiscuitBin/skills` shorthand and Git's process-local
 `url.<file-url>.insteadOf` configuration to redirect the clone to the local
-source. `GIT_ALLOW_PROTOCOL=file` prevents network transport. This exercises
-Claude's hosted Git-source behavior and installs into its plugin cache;
+source. `GIT_ALLOW_PROTOCOL=file` prevents network Git transport. This exercises
+the hosted Git-source behavior. Claude installs into its plugin cache and its
+recorded `gitCommitSha` must match the local clone's HEAD;
 the other three installs use the default `skills add --agent <agent> --yes`
 behavior without naming a skill, exercising installation of all shipped skills.
 The listing assertion also names no skill. The per-agent cases exercise copies;
@@ -52,7 +52,9 @@ CI log. `just test` enables both outputs.
 
 The tests check discovery paths, the complete installed file inventory and all
 paths in the throwaway project (excluding its Git metadata). Only shipped
-payloads and installer lock/settings files are allowed. They remove the source clone and Claude's
+payloads and installer lock/settings files are allowed. Every accepted payload
+copy is compared byte for byte, lockfile skill names and sources are checked,
+and only the known Claude-to-shared discovery symlink is permitted. They remove the source clone and Claude's
 marketplace clone, then execute the installed script. An isolated Python
 subprocess (`-I -S`) with a file-open audit hook permits reads only from the
 installed skill and the pinned Python standard library. This makes source
@@ -61,7 +63,9 @@ the project-local Python runtime.
 
 The subprocesses receive a fresh environment with throwaway `HOME`, agent
 homes, XDG folders, npm cache and temporary directory, all beneath the test
-workspace in `.tools/tmp/`. They inherit no agent credentials, Git helpers or
+workspace in `.tools/tmp/`. Dead local HTTP proxies also block direct HTTP
+fetches (including Node fetch via `NODE_USE_ENV_PROXY`); Git transport is
+restricted to files. They inherit no agent credentials, Git helpers or
 user configuration. Local installs need no login; the separate cross-model
 development review still requires an authenticated reviewer.
 

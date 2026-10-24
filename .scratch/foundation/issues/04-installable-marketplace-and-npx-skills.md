@@ -9,16 +9,16 @@ In both cases they get exactly the shipped skill and nothing internal to the rep
 
 **Blocked by:** 03 (Cowsay skill passes a spec validator).
 
-**Status:** in-progress (implementation and checks complete; fixes re-review pending)
+**Status:** done
 
 **Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). The pinned Claude Code CLI is required for plugin validation and marketplace installation. The `npx skills` round trip targets Claude Code, Codex and Pi; this does not require those agents to implement the ticket. Record any installation credential requirement as described below. Cross-model review is also required.
 
 ## Acceptance criteria
 
-- [ ] The repo has a Claude Code marketplace and a plugin manifest. They list shipped skills only, which today means cowsay. Dev skills and eval material are excluded.
-- [ ] The plugin version and the version recorded for the plugin in the marketplace stay in sync from a single source. The reference docs name the exact fields. `just check` fails when they drift. Show this with a deliberate drift, then revert.
-- [ ] `just check` runs `claude plugin validate --strict`, using the pinned Claude Code, and it passes.
-- [ ] A round-trip test installs into a throwaway project without needing the published GitHub repo.
+- [x] The repo has a Claude Code marketplace and a plugin manifest. They list shipped skills only, which today means cowsay. Dev skills and eval material are excluded.
+- [x] The plugin version and the version recorded for the plugin in the marketplace stay in sync from a single source. The reference docs name the exact fields. `just check` fails when they drift. Show this with a deliberate drift, then revert.
+- [x] `just check` runs `claude plugin validate --strict`, using the pinned Claude Code, and it passes.
+- [x] A round-trip test installs into a throwaway project without needing the published GitHub repo.
   - The source is a clean copy of the committed tree, such as a local clone, added as a git source where the channel allows. The plugin is then installed as a cached copy, the way hosted users get it.
   - The installed skill must work with the development checkout out of reach.
   - It covers each of these:
@@ -26,21 +26,21 @@ In both cases they get exactly the shipped skill and nothing internal to the rep
     - `npx skills` for claude-code
     - `npx skills` for codex
     - `npx skills` for pi
-- [ ] For each install, the test asserts:
+- [x] For each install, the test asserts:
   - the cowsay skill landed where that agent discovers it
   - the bundled script is present and runs
   - no repo-internal files came along: no evals, no dev skills, no tests, no tooling config
-- [ ] The round-trip test records whether `npx skills` copies or symlinks, and passes either way.
-- [ ] Listing this repo's skills with the pinned `npx skills`, without naming a skill, shows only shipped skills. Installing all of them installs only shipped skills.
+- [x] The round-trip test records whether `npx skills` copies or symlinks, and passes either way.
+- [x] Listing this repo's skills with the pinned `npx skills`, without naming a skill, shows only shipped skills. Installing all of them installs only shipped skills.
   - If the dev skill's placement from ticket 01 makes this fail, change the placement here, keep ticket 01's discovery working, and record why in an ADR.
   - Don't rely on the installer's internal-skill flag. It needs a non-string metadata value, which the validator rejects.
   - Codex and Pi find project skills only in the shared folder the installer also scans, so there may be no placement that satisfies both. The only candidate way out is linked skill folders that the installer turns out to skip (not yet tested), or any other placement that passes both the listing and the install assertions.
   - If no placement satisfies both ticket 01's discovery and the listing assertion, this criterion stays **open**. Stop and ask the user; do not weaken the assertion. The ADR records what was tried, and ticket 12 lists the criterion as open.
-- [ ] Credentials:
+- [x] Credentials:
   - If the round trip needs no agent credentials, it runs in `just check` and in PR CI.
   - If any part needs credentials, that part has its own recipe and the reason is documented.
-- [ ] The install round trip leaves no files outside the project directory or the throwaway project. In particular, it never writes to the user's real agent homes.
-- [ ] The README has install instructions for each channel and agent, matching what the round-trip test exercises.
+- [x] The install round trip leaves no files outside the project directory or the throwaway project. In particular, it never writes to the user's real agent homes.
+- [x] The README has install instructions for each channel and agent, matching what the round-trip test exercises.
 
 ## Review checkpoints
 
@@ -61,7 +61,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - Version source: `skills/cowsay/.claude-plugin/plugin.json`'s `version`; `just format` derives `plugins[name=cowsay].version` in the marketplace. Deliberately changing the marketplace version to `9.0.0` made `just check` fail with `marketplace version differs from plugin.json; run just format`. `just format` reverted it to `0.1.0`.
 - Pinned Claude Code `2.1.309` validates the marketplace and plugin with `--strict` inside `just check`. The optional directory-listing icon advisory does not affect its successful validation verdict.
 - Pinned `skills@1.7.4` lists only cowsay without a skill filter. Default install-all commands pass for Claude Code, Codex and Pi. Existing dev-skill directory symlinks are skipped by the installer, so their placement and agent discovery configuration remain intact; the placement/listing criterion is closed.
-- Round trips clone committed HEAD into isolated throwaway projects, add Git sources and exercise cached plugin installation. Claude rejects `file://` marketplace sources, so its documented `BiscuitBin/skills` shorthand is redirected by process-local Git `insteadOf` configuration to the local clone, with file-only transport. No published GitHub repository or agent credentials are used.
+- Round trips clone committed HEAD into isolated throwaway projects, add Git sources and exercise cached plugin installation. Both channels use the README's `BiscuitBin/skills` shorthand, redirected by process-local Git `insteadOf` configuration to the local clone, with file-only transport and dead local HTTP proxies. Claude's recorded `gitCommitSha` must equal the local source's HEAD. No published GitHub repository or agent credentials are needed.
 - Every installation checks its discovery path, exact payload bytes and whole-project inventory, then removes the source and marketplace clones. The installed Python script runs with source-file reads denied by an audit hook, allowing only the installed skill and pinned Python runtime. No agent model invocation is required.
 - Per-agent installs use copies. The combined Claude Code/Codex case exercises a Claude symlink and canonical shared copy, and runs the script through both discovery paths. `just test` records modes in `ai_tmp/pytest.xml` and successful-test output in the CI log.
 - HOME, agent homes, XDG state, npm cache and temporary files remain inside the project-local test workspace. The test subprocess environment inherits no agent credentials or user Git helpers. The existing PR CI runs the same credential-free `just check` gate.
@@ -90,3 +90,19 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 | 10 | low | Bare pytest can write outside project | invalid | Supported workflow requires `just`; its TMPDIR and isolated child environment keep all test state local. |
 
 **Follow-ups:** Future skill authoring must extend exact distribution inventories when adding shipped skills and account for Claude's `agents/*.md` convention alongside Codex YAML metadata. Neither is an open criterion for this ticket.
+
+### Focused fixes re-review
+
+- **Reviewer:** Claude Code `claude-opus-5-5` (fallback: no).
+- **Reviewed:** `6175ea5...894e807`, with the original findings and separate triage supplied as context.
+- **Findings:** `ai_tmp/review-20261024T065219Z-claude.md` · **Triage:** `ai_tmp/triage-distribution-fixes.md` (fresh separate subagent).
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | Marketplace does not assert local source provenance | valid verification gap | Compare recorded plugin `gitCommitSha` to the local clone's HEAD; add dead local HTTP proxies and Node proxy support alongside file-only Git transport. No actual non-Git fetch was demonstrated. |
+| 2 | medium | Commit-first guard conflicts with repository workflow | invalid | AGENTS requires checks before calling work done, not before every commit. Dirty dev-skill/discovery sources affect listing assertions. Preserve documented guard and focused development checks. |
+| 3 | low | Contributor just-run advice changes target project | valid | Remove substitution from end-user install flow; contributors use isolated `just test` checks. |
+| 4 | low | npx source parser differs from README | valid in part | Both listing and installation now use documented GitHub shorthand and local Git redirection. Drop the unneeded JSON-output flag. |
+| 5 | low | Allowlist accepts unchecked extra copies and lock entries | valid | Derive allowed roots from requested installs and required canonical targets; byte-check every permitted copy; verify exact lock skill names, source, type and skill path; reject unexpected entry types and all symlinks except Claude's known discovery link. |
+
+**Final verification:** Focused distribution tests pass for the four required channels and the shared symlink case. The final `just check`, including these notes, passes with 178 tests, strict mypy, lint and lock checks, strict marketplace/plugin validation, both source skills with zero diagnostics and all three pinned CLI versions. Install-mode properties are retained in `ai_tmp/pytest.xml` and CI logs. All ticket criteria are closed; there are no credential-dependent installation steps or remaining mandatory review findings.

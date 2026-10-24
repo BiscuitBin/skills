@@ -15,8 +15,8 @@ claude plugin marketplace add BiscuitBin/skills
 claude plugin install cowsay@biscuitbin-skills --scope project
 ```
 
-These are shell commands for an installed Claude Code CLI. Contributors using
-this checkout's pinned CLI run them through `just run ./node_modules/.bin/claude`.
+These are shell commands for an installed Claude Code CLI. Contributors verify
+this checkout's pinned CLI with `just test`, which installs into isolated projects.
 Invoke the installed skill with `/cowsay:cowsay Hello there`.
 
 ### npx skills

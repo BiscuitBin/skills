@@ -131,6 +131,11 @@ def isolated_environment(base: Path) -> dict[str, str]:
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": os.devnull,
         "GIT_TERMINAL_PROMPT": "0",
+        "HTTP_PROXY": "http://127.0.0.1:9",
+        "HTTPS_PROXY": "http://127.0.0.1:9",
+        "ALL_PROXY": "http://127.0.0.1:9",
+        "NO_PROXY": "",
+        "NODE_USE_ENV_PROXY": "1",
     }
     for agent_home in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "PI_CODING_AGENT_DIR"):
         Path(env[agent_home]).mkdir(parents=True)
@@ -155,20 +160,20 @@ runpy.run_path(str(script), run_name='__main__')
 """
 
 
-def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Path:
-    cli = str(ROOT / "node_modules/.bin/claude")
-    # Claude rejects file:// marketplace URLs. Keep its hosted Git-source
-    # path, but let Git redirect the documented GitHub source to our local clone.
-    # Only file transport is allowed, so this cannot reach the network.
-    git_url = "https://github.com/BiscuitBin/skills.git"
+def redirect_git_source(source: Path, env: dict[str, str]) -> None:
+    """Exercise documented source parsing with only local Git transport."""
     env.update(
         {
             "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": f"url.{source.as_uri()}.insteadOf",
-            "GIT_CONFIG_VALUE_0": git_url,
+            "GIT_CONFIG_VALUE_0": "https://github.com/BiscuitBin/skills.git",
             "GIT_ALLOW_PROTOCOL": "file",
         }
     )
+
+
+def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Path:
+    cli = str(ROOT / "node_modules/.bin/claude")
     run([cli, "plugin", "marketplace", "add", "BiscuitBin/skills"], project, env)
     run(
         [cli, "plugin", "install", "cowsay@biscuitbin-skills", "--scope", "project"],
@@ -179,7 +184,9 @@ def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Pat
         (Path(env["CLAUDE_CONFIG_DIR"]) / "plugins/installed_plugins.json").read_text()
     )
     installs = registry["plugins"]["cowsay@biscuitbin-skills"]
+    assert set(registry["plugins"]) == {"cowsay@biscuitbin-skills"}
     assert len(installs) == 1
+    assert installs[0]["gitCommitSha"] == run(["git", "rev-parse", "HEAD"], source, env).strip()
     installed = Path(installs[0]["installPath"])
     assert installed.is_relative_to(Path(env["CLAUDE_CONFIG_DIR"]) / "plugins/cache")
     assert installs[0]["scope"] == "project"
@@ -190,20 +197,16 @@ def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Pat
     return installed
 
 
-def install_skills(
-    source: Path, project: Path, env: dict[str, str], agents: list[str]
-) -> list[Path]:
+def install_skills(project: Path, env: dict[str, str], agents: list[str]) -> list[Path]:
     # npm exec is npx's implementation; --prefix selects the locked local
     # binary while cwd remains the throwaway project. Offline forbids fetches.
     npx = ["npm", "exec", "--offline", "--no", "--prefix", str(ROOT), "--", "skills"]
-    listing = run([*npx, "add", source.as_uri(), "--list"], project, env)
+    listing = run([*npx, "add", "BiscuitBin/skills", "--list"], project, env)
     listing = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", listing)
     assert "Found 1 skill" in listing
     assert "cowsay" in listing
     assert "cross-model-review" not in listing
-    output = run(
-        [*npx, "add", source.as_uri(), "--agent", *agents, "--yes", "--json"], project, env
-    )
+    output = run([*npx, "add", "BiscuitBin/skills", "--agent", *agents, "--yes"], project, env)
     assert "cowsay" in output
     installs = []
     for agent in agents:
@@ -228,6 +231,7 @@ def test_committed_install_round_trip(
     run(["git", "clone", "--no-local", str(ROOT), str(source)], project, env)
     run(["git", "init", "--quiet"], project, env)
     assert run(["git", "status", "--porcelain"], source, env) == ""
+    redirect_git_source(source, env)
     shipped = source / "skills/cowsay"
     expected = {
         str(path.relative_to(shipped)): path.read_bytes()
@@ -244,7 +248,7 @@ def test_committed_install_round_trip(
         [install_marketplace(source, project, env)]
         if agent == "marketplace"
         else install_skills(
-            source, project, env, ["claude-code", "codex"] if agent == "shared" else [agent]
+            project, env, ["claude-code", "codex"] if agent == "shared" else [agent]
         )
     )
 
@@ -259,7 +263,7 @@ def test_committed_install_round_trip(
     marketplace_cache = Path(env["CLAUDE_CONFIG_DIR"]) / "plugins/marketplaces"
     if marketplace_cache.exists():
         shutil.rmtree(marketplace_cache)
-    assert_project_inventory(project, expected, marketplace=agent == "marketplace")
+    assert_project_inventory(project, expected, installs, marketplace=agent == "marketplace")
     for installed in installs:
         assert {
             str(path.relative_to(installed)): path.read_bytes()
@@ -285,15 +289,38 @@ def test_committed_install_round_trip(
 
 
 def assert_project_inventory(
-    project: Path, payload: dict[str, bytes], *, marketplace: bool
+    project: Path, payload: dict[str, bytes], installs: list[Path], *, marketplace: bool
 ) -> None:
-    allowed = {Path(".claude/settings.json")} if marketplace else {Path("skills-lock.json")}
+    files = {Path(".claude/settings.json")} if marketplace else {Path("skills-lock.json")}
+    roots: set[Path] = set()
     if not marketplace:
-        for prefix in (".agents/skills/cowsay", ".claude/skills/cowsay"):
-            allowed.update(Path(prefix) / name for name in payload)
-    for path in list(allowed):
-        allowed.update(path.parents)
+        roots = {path.relative_to(project) for path in installs} | {
+            path.resolve().relative_to(project) for path in installs
+        }
+        assert roots <= {Path(".agents/skills/cowsay"), Path(".claude/skills/cowsay")}
+        for prefix in roots:
+            files.update(prefix / name for name in payload)
+            installed = project / prefix
+            assert {
+                str(path.relative_to(installed)): path.read_bytes()
+                for path in installed.rglob("*")
+                if path.is_file()
+            } == payload
+        lock = json.loads((project / "skills-lock.json").read_text())
+        assert set(lock["skills"]) == {"cowsay"}
+        assert lock["skills"]["cowsay"]["source"] == "BiscuitBin/skills"
+        assert lock["skills"]["cowsay"]["sourceType"] == "github"
+        assert lock["skills"]["cowsay"]["skillPath"] == "skills/cowsay/SKILL.md"
+    directories = {parent for path in files for parent in path.parents}
     for path in project.rglob("*"):
         relative = path.relative_to(project)
-        if relative.parts[0] != ".git":
-            assert relative in allowed, f"unexpected installed path: {relative}"
+        if relative.parts[0] == ".git":
+            continue
+        if path.is_symlink():
+            assert relative in roots
+            assert relative == Path(".claude/skills/cowsay")
+            assert path.resolve() == project / ".agents/skills/cowsay"
+        elif path.is_dir():
+            assert relative in directories, f"unexpected installed directory: {relative}"
+        else:
+            assert path.is_file() and relative in files, f"unexpected installed file: {relative}"
