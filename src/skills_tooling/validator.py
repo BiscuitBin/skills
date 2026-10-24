@@ -208,6 +208,14 @@ class _Validator:
 
     def frontmatter(self, file: Path) -> tuple[dict[str, object], str] | None:
         try:
+            if file.exists() and not _exact_case(file, self.root):
+                self.report(
+                    file,
+                    "frontmatter",
+                    "entrypoint filename must be exactly SKILL.md",
+                    "rename the entrypoint to SKILL.md with this exact capitalization",
+                )
+                return None
             text = file.read_text(encoding="utf-8")
             lines = text.splitlines(keepends=True)
             _shape(bool(lines) and lines[0].strip() == "---", "missing opening YAML delimiter")
@@ -221,8 +229,15 @@ class _Validator:
                 "create SKILL.md in this skill directory",
             )
             return None
+        except OSError as error:
+            self.report(
+                file,
+                "frontmatter",
+                f"cannot read entrypoint or verify filename case: {error}",
+                "make SKILL.md readable and grant read/search access to its skill directory",
+            )
+            return None
         except (
-            OSError,
             UnicodeError,
             ValueError,
             TypeError,

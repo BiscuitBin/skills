@@ -581,3 +581,49 @@ def test_cross_link_between_direct_resources_has_actionable_hint(tmp_path: Path)
     (diagnostic,) = validate_skill(skill)
     assert diagnostic.rule == "reference-chain" and diagnostic.severity == "warning"
     assert "remove unnecessary cross-links" in diagnostic.hint
+
+
+@pytest.mark.parametrize("entrypoint", ["skill.md", "Skill.md"])
+def test_entrypoint_requires_exact_case_in_api_and_discovery(
+    tmp_path: Path, entrypoint: str
+) -> None:
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "dev-skills").mkdir()
+    skill = materialize(tmp_path / "skills", {"yaml": "name: example\ndescription: Example.\n"})
+    temporary = skill / "entrypoint.tmp"
+    (skill / "SKILL.md").rename(temporary)
+    temporary.rename(skill / entrypoint)
+
+    (diagnostic,) = validate_skill(skill)
+    assert diagnostic.rule == "frontmatter" and diagnostic.severity == "error"
+    assert "SKILL.md" in diagnostic.message and "SKILL.md" in diagnostic.hint
+    result = subprocess.run(
+        [sys.executable, "-m", "skills_tooling.validator"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "[frontmatter]" in result.stdout and "SKILL.md" in result.stdout
+    assert "hint:" in result.stdout
+
+
+def test_entrypoint_case_check_permission_error_is_actionable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    skill = materialize(tmp_path, {"yaml": "name: example\ndescription: Example.\n"})
+    original = Path.iterdir
+
+    def deny_root_listing(path: Path) -> Iterator[Path]:
+        if path == skill:
+            message = "cannot list skill directory"
+            raise PermissionError(message)
+        return original(path)
+
+    monkeypatch.setattr(Path, "iterdir", deny_root_listing)
+    assert (skill / "SKILL.md").read_text().startswith("---")
+    (diagnostic,) = validate_skill(skill)
+    assert diagnostic.rule == "frontmatter" and diagnostic.severity == "error"
+    assert "verify filename case" in diagnostic.message
+    assert "read/search access" in diagnostic.hint and "skill directory" in diagnostic.hint

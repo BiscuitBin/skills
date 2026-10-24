@@ -156,3 +156,21 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 | 3 | low | Reference doc retains proposal instructions | valid editorial remainder | Rewrote remaining behavior descriptions, preserving validation policy. |
 
 **Final local verification:** `just check` passes with 168 tests on macOS, strict mypy, all lint and lock checks, both source skills with zero diagnostics and all three pinned CLI version checks. The full gate is rerun after these completion-note edits before commit; final GitHub CI status is reported on PR #4 after pushing. Linux may skip the single filesystem-specific case-alias regression; all portable path regressions run there.
+
+### PR #4 entrypoint-case feedback
+
+- **Implementer:** Codex (OpenAI family; runtime model ID not exposed).
+- **Reviewed commit:** `7377aab64f11ee80690e32993930b6cde0ec6dc9`.
+- **PR finding:** Copilot [review comment 4366078270](https://github.com/BiscuitBin/skills/pull/4#discussion_r4366078270) · **Triage:** `ai_tmp/triage-pr4-entrypoint.md` (separate subagent).
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | Case-insensitive filesystems accept skill.md or Skill.md as the entrypoint | valid | Check actual entrypoint spelling with the existing exact-case helper before reading; document the requirement. API and default-discovery CLI regressions cover both variants. |
+
+**Focused cross-model review:** Claude Code `claude-opus-5-5` (fallback: no) reviewed the working-tree fix against the commit above. Findings: `ai_tmp/review-20261024T052026Z-claude.md`; fresh separate triage: `ai_tmp/triage-pr4-entrypoint-fix.md`.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | low | Directory-listing permission failures receive an unrelated YAML hint | valid | Handle OSError separately with an actionable read/search-permissions hint. Portable regression simulates an unreadable directory while its entrypoint remains readable. |
+
+**Validation:** Both incorrect-case regressions failed before the fix and pass after it. The final `just check` gate, run after these notes, passes locally with 171 tests, strict mypy, lint and lock checks, two source skills with zero diagnostics and all three pinned CLI version checks. Case-insensitive-filesystem-only coverage skips on Linux; portable casing and permission regressions run there. Latest pushed-commit CI and review-thread status are checked on PR #4 before reporting completion.

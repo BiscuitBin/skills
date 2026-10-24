@@ -13,7 +13,7 @@ The CLI exits nonzero if any error occurs; warnings alone pass.
 
 | Rule | Severity | Requirement and rationale |
 | --- | --- | --- |
-| frontmatter | error | UTF-8 SKILL.md with opening and closing YAML delimiters, a mapping, unique string keys and safe YAML values; malformed data cannot be consumed reliably. |
+| frontmatter | error | UTF-8 entrypoint named exactly SKILL.md (case-sensitive on every platform) with opening and closing YAML delimiters, a mapping, unique string keys and safe YAML values; malformed data cannot be consumed reliably. |
 | discovery | error | Source skill directories cannot be listed; run from the repo root or supply explicit skill directories. CLI invocation fixture covers missing roots. |
 | name-format | error | Required string, 1–64 ASCII lowercase letters, digits and hyphens, no edge or consecutive hyphens; portable repo policy. |
 | name-directory | error | Name equals the containing directory basename. |
