@@ -106,6 +106,60 @@ runpy.run_path(str(script), run_name='__main__')
 """
 
 
+def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Path:
+    cli = str(ROOT / "node_modules/.bin/claude")
+    # Claude rejects file:// marketplace URLs. Keep its hosted Git-source
+    # path, but let Git redirect this reserved hostname to our local clone.
+    # Only file transport is allowed, so this cannot reach the network.
+    git_url = "https://distribution.invalid/skills.git"
+    env.update(
+        {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": f"url.{source.as_uri()}.insteadOf",
+            "GIT_CONFIG_VALUE_0": git_url,
+            "GIT_ALLOW_PROTOCOL": "file",
+        }
+    )
+    run([cli, "plugin", "marketplace", "add", git_url], project, env)
+    run(
+        [cli, "plugin", "install", "cowsay@biscuitbin-skills", "--scope", "project"],
+        project,
+        env,
+    )
+    registry = json.loads(
+        (Path(env["CLAUDE_CONFIG_DIR"]) / "plugins/installed_plugins.json").read_text()
+    )
+    installs = registry["plugins"]["cowsay@biscuitbin-skills"]
+    assert len(installs) == 1
+    installed = Path(installs[0]["installPath"])
+    assert installed.is_relative_to(Path(env["CLAUDE_CONFIG_DIR"]) / "plugins/cache")
+    assert installs[0]["scope"] == "project"
+    settings = json.loads((project / ".claude/settings.json").read_text())
+    assert settings["enabledPlugins"] == {"cowsay@biscuitbin-skills": True}
+    manifest = json.loads((installed / ".claude-plugin/plugin.json").read_text())
+    assert manifest["skills"] == ["./"]
+    return installed
+
+
+def install_skills(source: Path, project: Path, env: dict[str, str], agent: str) -> Path:
+    # npm exec is npx's implementation; --prefix selects the locked local
+    # binary while cwd remains the throwaway project. Offline forbids fetches.
+    npx = ["npm", "exec", "--offline", "--no", "--prefix", str(ROOT), "--", "skills"]
+    listing = run([*npx, "add", source.as_uri(), "--list"], project, env)
+    listing = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", listing)
+    assert "Found 1 skill" in listing
+    assert "cowsay" in listing
+    assert "cross-model-review" not in listing
+    output = run([*npx, "add", source.as_uri(), "--agent", agent, "--yes", "--json"], project, env)
+    assert "cowsay" in output
+    discovered = ".claude/skills" if agent == "claude-code" else ".agents/skills"
+    directory = project / discovered
+    assert {path.name for path in directory.iterdir()} == {"cowsay"}
+    installed = directory / "cowsay"
+    assert installed.resolve().is_relative_to(project)
+    return installed
+
+
 @pytest.mark.parametrize("agent", ["marketplace", "claude-code", "codex", "pi"])
 def test_committed_install_round_trip(
     tmp_path: Path, agent: str, record_property: Callable[[str, object], None]
@@ -129,44 +183,11 @@ def test_committed_install_round_trip(
         "agents/openai.yaml",
         ".claude-plugin/plugin.json",
     }
-    if agent == "marketplace":
-        cli = str(ROOT / "node_modules/.bin/claude")
-        run([cli, "plugin", "marketplace", "add", source.as_uri()], project, env)
-        run(
-            [cli, "plugin", "install", "cowsay@biscuitbin-skills", "--scope", "project"],
-            project,
-            env,
-        )
-        registry = json.loads(
-            (Path(env["CLAUDE_CONFIG_DIR"]) / "plugins/installed_plugins.json").read_text()
-        )
-        installs = registry["plugins"]["cowsay@biscuitbin-skills"]
-        assert len(installs) == 1
-        installed = Path(installs[0]["installPath"])
-        assert installed.is_relative_to(Path(env["CLAUDE_CONFIG_DIR"]) / "plugins/cache")
-        assert installs[0]["scope"] == "project"
-        settings = json.loads((project / ".claude/settings.json").read_text())
-        assert settings["enabledPlugins"] == {"cowsay@biscuitbin-skills": True}
-        manifest = json.loads((installed / ".claude-plugin/plugin.json").read_text())
-        assert manifest["skills"] == ["./"]
-    else:
-        # npm exec is npx's implementation; --prefix selects the locked local
-        # binary while cwd remains the throwaway project. Offline forbids fetches.
-        npx = ["npm", "exec", "--offline", "--no", "--prefix", str(ROOT), "--", "skills"]
-        listing = run([*npx, "add", source.as_uri(), "--list"], project, env)
-        listing = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", listing)
-        assert "Found 1 skill" in listing
-        assert "cowsay" in listing
-        assert "cross-model-review" not in listing
-        output = run(
-            [*npx, "add", source.as_uri(), "--agent", agent, "--yes", "--json"], project, env
-        )
-        assert "cowsay" in output
-        discovered = ".claude/skills" if agent == "claude-code" else ".agents/skills"
-        directory = project / discovered
-        assert {path.name for path in directory.iterdir()} == {"cowsay"}
-        installed = directory / "cowsay"
-        assert installed.resolve().is_relative_to(project)
+    installed = (
+        install_marketplace(source, project, env)
+        if agent == "marketplace"
+        else install_skills(source, project, env, agent)
+    )
 
     mode = "symlink" if installed.is_symlink() else "copy"
     record_property("installation_mode", mode)

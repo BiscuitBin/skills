@@ -34,8 +34,12 @@ Git sources and the locked tools. The installer is `skills@1.7.4`; the test uses
 `npm exec --offline --no --prefix <checkout> -- skills`, the local equivalent
 of `npx skills@1.7.4`.
 
-Each test clones the committed tree, then supplies its `file://` Git URL to
-the installer. Claude installs from the marketplace into its plugin cache;
+Each test clones the committed tree. The skills installer accepts its `file://`
+Git URL. Claude rejects that URL form, so its test supplies a reserved
+`https://distribution.invalid/skills.git` source and uses Git's process-local
+`url.<file-url>.insteadOf` configuration to redirect the clone to the local
+source. `GIT_ALLOW_PROTOCOL=file` prevents network transport. This exercises
+Claude's hosted Git-source behavior and installs into its plugin cache;
 the other three installs use the default `skills add --agent <agent> --yes`
 behavior without naming a skill, exercising installation of all shipped skills.
 The listing assertion also names no skill. Symlink and copy installs are both
