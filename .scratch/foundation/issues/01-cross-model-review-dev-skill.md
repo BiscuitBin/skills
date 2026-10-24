@@ -123,7 +123,7 @@ The skill encodes this protocol, and this text stays its source of truth:
   - Rounds 3 and 4 were fixed in the "Apply PR #3 review fixes" commit.
 
 | # | Severity | Finding | Verdict | Action |
-|---|----------|---------|---------|--------|
+| --- | ---------- | --------- | --------- | -------- |
 | C1 / L1 | high | Provider-prefixed or alias model IDs were classed as "other", so a same-family review could get through | valid | `model_family` matches family markers after `/ : . @ _ -`, plus aliases (opus, sonnet, haiku, fable, astra). Regression tests added. |
 | C2 / L15 | medium | The runner brief's diff missed staged and untracked changes | valid | The brief now uses `git diff <base>...HEAD`, `git diff HEAD`, and the contents of each untracked file headed by its path |
 | L2 | high | Codex execpolicy `.rules` could allow commands outside the sandbox | valid | Added `--ignore-rules`, asserted in the test |

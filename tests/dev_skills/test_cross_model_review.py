@@ -10,11 +10,14 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from types import ModuleType
+from typing import TYPE_CHECKING
 from unittest import mock
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "dev-skills" / "cross-model-review" / "scripts" / "review.py"
@@ -100,7 +103,7 @@ class SelectReviewerTest(unittest.TestCase):
                 self.assertEqual(selection.implementer_model, model)
 
     def test_other_implementer_must_state_its_model(self) -> None:
-        with self.assertRaises(review.ReviewUnavailable):
+        with self.assertRaises(review.ReviewUnavailableError):
             review.select_reviewer("other", None, ALL_AVAILABLE)
 
     def test_other_family_falls_back_to_claude_and_reports_it(self) -> None:
@@ -112,7 +115,7 @@ class SelectReviewerTest(unittest.TestCase):
 
     def test_same_family_fallback_is_refused_and_reported(self) -> None:
         probe = probe_with({"codex": "codex not found on PATH"})
-        with self.assertRaises(review.ReviewUnavailable) as ctx:
+        with self.assertRaises(review.ReviewUnavailableError) as ctx:
             review.select_reviewer("claude-code", None, probe)
         message = str(ctx.exception)
         self.assertIn("codex not found on PATH", message)
@@ -120,13 +123,13 @@ class SelectReviewerTest(unittest.TestCase):
 
     def test_codex_implementer_never_falls_back_to_codex(self) -> None:
         probe = probe_with({"claude": "claude is not authenticated"})
-        with self.assertRaises(review.ReviewUnavailable) as ctx:
+        with self.assertRaises(review.ReviewUnavailableError) as ctx:
             review.select_reviewer("codex", None, probe)
         self.assertIn("claude is not authenticated", str(ctx.exception))
 
     def test_no_reviewer_available_refuses(self) -> None:
         probe = probe_with({"codex": "codex missing", "claude": "claude missing"})
-        with self.assertRaises(review.ReviewUnavailable) as ctx:
+        with self.assertRaises(review.ReviewUnavailableError) as ctx:
             review.select_reviewer("other", "gemini-3-pro", probe)
         self.assertIn("codex missing", str(ctx.exception))
         self.assertIn("claude missing", str(ctx.exception))
@@ -137,7 +140,7 @@ class SelectReviewerTest(unittest.TestCase):
         self.assertEqual(selection.reviewer, "claude")
 
     def test_provider_prefixed_model_never_gets_same_family_reviewer(self) -> None:
-        with self.assertRaises(review.ReviewUnavailable) as ctx:
+        with self.assertRaises(review.ReviewUnavailableError) as ctx:
             review.select_reviewer(
                 "other", "anthropic/claude-opus-5-5", ALL_AVAILABLE, failed={"codex": "x"}
             )
@@ -149,9 +152,13 @@ class SelectReviewerTest(unittest.TestCase):
         self.assertEqual(selection.reviewer, "claude")
 
     def test_known_implementer_keeps_its_family_for_unrecognised_model(self) -> None:
-        with self.assertRaises(review.ReviewUnavailable):
-            review.select_reviewer("claude-code", "mystery-1", ALL_AVAILABLE, failed={"codex": "x"})
-        self.assertEqual(review.select_reviewer("codex", "mystery-1", ALL_AVAILABLE).reviewer, "claude")
+        with self.assertRaises(review.ReviewUnavailableError):
+            review.select_reviewer(
+                "claude-code", "mystery-1", ALL_AVAILABLE, failed={"codex": "x"}
+            )
+        self.assertEqual(
+            review.select_reviewer("codex", "mystery-1", ALL_AVAILABLE).reviewer, "claude"
+        )
 
     def test_excluded_reviewer_is_skipped_with_its_reason(self) -> None:
         selection = review.select_reviewer(
@@ -163,7 +170,7 @@ class SelectReviewerTest(unittest.TestCase):
 
     def test_unrecognised_other_model_never_falls_back(self) -> None:
         probe = probe_with({"codex": "codex not found on PATH"})
-        with self.assertRaises(review.ReviewUnavailable) as ctx:
+        with self.assertRaises(review.ReviewUnavailableError) as ctx:
             review.select_reviewer("other", "company-production", probe)
         message = str(ctx.exception)
         self.assertIn("codex not found on PATH", message)
@@ -256,7 +263,7 @@ class OutputPathTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root)
 
     def test_same_second_runs_reserve_distinct_files(self) -> None:
-        frozen = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        frozen = datetime(2026, 1, 1, tzinfo=UTC)
         with mock.patch.object(review, "datetime") as clock:
             clock.now.return_value = frozen
             first = review._output_path(self.root, "review", "codex")
@@ -364,7 +371,9 @@ class CliTest(unittest.TestCase):
         self.install("codex", "claude")
         self.assertEqual(self.run_review("--implementer", "claude-code").returncode, 0)
         self.assertEqual(self.run_review("--implementer", "codex").returncode, 0)
-        calls = [line.split() for line in self.log.read_text().splitlines() if "status" not in line]
+        calls = [
+            line.split() for line in self.log.read_text().splitlines() if "status" not in line
+        ]
         codex_call, claude_call = calls
         self.assertEqual(codex_call[:2], ["codex", "exec"])
         for flags in (

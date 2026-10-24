@@ -31,7 +31,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, get_args
 
@@ -58,7 +58,9 @@ class ReviewerSpec:
 
 REVIEWERS: dict[Reviewer, ReviewerSpec] = {
     "codex": ReviewerSpec(model="gpt-6-astra", family="openai", auth_args=("login", "status")),
-    "claude": ReviewerSpec(model="claude-opus-5-5", family="anthropic", auth_args=("auth", "status")),
+    "claude": ReviewerSpec(
+        model="claude-opus-5-5", family="anthropic", auth_args=("auth", "status")
+    ),
 }
 
 PREFERRED: dict[Family, Reviewer] = {"anthropic": "codex", "openai": "claude", "other": "codex"}
@@ -95,7 +97,7 @@ def reviewer_command(reviewer: Reviewer, root: Path) -> list[str]:
     ]  # fmt: skip
 
 
-class ReviewUnavailable(Exception):
+class ReviewUnavailableError(Exception):
     """No reviewer from a different model family can be used."""
 
 
@@ -141,10 +143,11 @@ def implementer_family(implementer: Implementer, model: str | None) -> Family:
         return IMPLEMENTER_DEFAULT_FAMILY[implementer]
     if family is not None:
         return family
-    raise ReviewUnavailable(
+    message = (
         "cross-model review unavailable: an 'other' implementer must pass --model "
         "with the model it is actually running"
     )
+    raise ReviewUnavailableError(message)
 
 
 def select_reviewer(
@@ -189,7 +192,7 @@ def select_reviewer(
             fallback_used=candidate != preferred,
             notes=notes,
         )
-    raise ReviewUnavailable("cross-model review unavailable:\n- " + "\n- ".join(notes))
+    raise ReviewUnavailableError("cross-model review unavailable:\n- " + "\n- ".join(notes))
 
 
 def default_probe(reviewer: Reviewer) -> str | None:
@@ -248,7 +251,7 @@ def snapshot(root: Path) -> dict[str, str]:
                 info = path.lstat()
                 mode = f"mode:{stat.S_IMODE(info.st_mode):o}"
                 if stat.S_ISLNK(info.st_mode):
-                    entries[rel] = "link:" + os.readlink(path)
+                    entries[rel] = f"link:{path.readlink()}"
                 elif stat.S_ISREG(info.st_mode):
                     entries[rel] = f"sha256:{_file_digest(path)} {mode}"
                 elif stat.S_ISDIR(info.st_mode):
@@ -273,7 +276,7 @@ def diff_snapshots(before: Mapping[str, str], after: Mapping[str, str]) -> list[
     return modified + added + removed
 
 
-class WorktreeModified(Exception):
+class WorktreeModifiedError(Exception):
     """Files changed during the review, by the reviewer or a concurrent process."""
 
 
@@ -284,19 +287,20 @@ class SetupError(Exception):
 def _output_path(root: Path, kind: str, reviewer: Reviewer) -> Path:
     scratch = root / SCRATCH_DIR
     scratch.mkdir(exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     path = scratch / f"{kind}-{stamp}-{reviewer}.md"
     suffix = 1
     while True:
         try:
             path.touch(exist_ok=False)  # reserve atomically; a concurrent run gets the next suffix
-            return path
         except FileExistsError:
             suffix += 1
             path = scratch / f"{kind}-{stamp}-{reviewer}-{suffix}.md"
+        else:
+            return path
 
 
-def run_review(
+def run_review(  # noqa: PLR0913, PLR0917 -- probe and timeout are injected for the tests
     implementer: Implementer,
     model: str | None,
     brief: str,
@@ -308,10 +312,11 @@ def run_review(
     before = snapshot(root)
     unreadable = sorted(p for p, v in before.items() if v.startswith("error:"))
     if unreadable:
-        raise SetupError(
+        message = (
             "cannot verify the review leaves the worktree unchanged; "
             "make these paths readable or remove them:\n- " + "\n- ".join(unreadable)
         )
+        raise SetupError(message)
     while True:
         selection = select_reviewer(implementer, model, probe, failed)
         result: subprocess.CompletedProcess[str] | None = None
@@ -339,18 +344,16 @@ def run_review(
                 rejected = _output_path(root, "rejected", selection.reviewer)
                 rejected.write_text(result.stdout)
                 message += f"\nreviewer output kept for inspection only: {rejected}"
-            raise WorktreeModified(message)
+            raise WorktreeModifiedError(message)
         before = after
         if result is not None:
             if result.returncode == 0 and result.stdout.strip():
-                break
+                path = _output_path(root, "review", selection.reviewer)
+                path.write_text(result.stdout)
+                return path, selection
             stderr_tail = " ".join(result.stderr.strip().splitlines()[-3:])
             failure = f"exited {result.returncode}: {stderr_tail or 'no output'}"
         failed[selection.reviewer] = f"failed at runtime ({failure})"
-    assert result is not None
-    path = _output_path(root, "review", selection.reviewer)
-    path.write_text(result.stdout)
-    return path, selection
 
 
 def _git_root() -> Path:
@@ -358,7 +361,8 @@ def _git_root() -> Path:
         ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False
     )
     if out.returncode != 0:
-        raise SetupError("not inside a git repository; pass --root")
+        message = "not inside a git repository; pass --root"
+        raise SetupError(message)
     return Path(out.stdout.strip())
 
 
@@ -389,17 +393,18 @@ def main(argv: list[str] | None = None) -> int:
         try:
             brief = args.brief.read_text()
         except OSError as error:
-            raise SetupError(f"cannot read brief: {error}") from error
+            message = f"cannot read brief: {error}"
+            raise SetupError(message) from error
         path, selection = run_review(
             args.implementer, args.model, brief, root, default_probe, args.timeout
         )
     except SetupError as error:
         print(f"error: {error}", file=sys.stderr)
         return EXIT_ERROR
-    except ReviewUnavailable as error:
+    except ReviewUnavailableError as error:
         print(error, file=sys.stderr)
         return EXIT_UNAVAILABLE
-    except WorktreeModified as error:
+    except WorktreeModifiedError as error:
         print(error, file=sys.stderr)
         return EXIT_MODIFIED
     print(json.dumps({"findings_path": str(path), "selection": asdict(selection)}, indent=2))

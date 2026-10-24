@@ -43,6 +43,7 @@ A run takes up to `--timeout` seconds (default 1800) per reviewer, twice that wi
 **Reviewer-runner subagent brief:**
 
 > You run an external review. You are not the reviewer: do not review the code yourself and do not start a review of your own.
+>
 > 1. Write `ai_tmp/brief-<topic>.md` from the review brief template in `dev-skills/cross-model-review/SKILL.md`, filling in the acceptance criteria and the work under review: `git diff <base>...HEAD` for commits, `git diff HEAD` for staged and unstaged work, and the full contents of each file listed by `git ls-files --others --exclude-standard`, each headed by its path. For a design review, paste the proposal instead.
 > 2. Run `python3 dev-skills/cross-model-review/scripts/review.py run --implementer <implementer> [--model <id>] --brief ai_tmp/brief-<topic>.md` in the background (it can take 30+ minutes; in a sandboxed shell, with network access) and wait until it exits.
 > 3. Return only the `findings_path` and the `selection` JSON it prints, or its stderr and exit code if it failed. Do not paste the findings.
@@ -59,9 +60,11 @@ A run takes up to `--timeout` seconds (default 1800) per reviewer, twice that wi
 > If you find nothing, say so in one line.
 >
 > ## Acceptance criteria
-> <paste>
+>
+> <the ticket's acceptance criteria>
 >
 > ## Under review
+>
 > <diff or design proposal; base commit and HEAD>
 
 ## 3. Separate triage subagent checks every finding
@@ -71,6 +74,7 @@ Dispatch a **fresh** subagent. It is not the reviewer subagent.
 **Triage subagent brief:**
 
 > You triage findings from a cross-model review. You are not the reviewer: do not start a review of your own or look for new issues.
+>
 > 1. Read the findings file `<findings_path>`.
 > 2. Check each finding against the actual code in this repo. Run read-only commands where they settle it.
 > 3. Give each finding a verdict, **valid**, **invalid** or **out of scope**, with the evidence (file:line, command output).
