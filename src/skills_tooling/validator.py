@@ -168,10 +168,31 @@ def _exact_case(path: Path, root: Path) -> bool:
         if part == "..":
             current = current.parent
         elif part != ".":
-            if part not in {entry.name for entry in current.iterdir()}:
+            if current.is_relative_to(root) and part not in {
+                entry.name for entry in current.iterdir()
+            }:
                 return False
-            current /= part
+            current = (current / part).resolve()
     return True
+
+
+def _root_case_alias(path: Path, root: Path) -> bool:
+    """Recognize an alternate root spelling by filesystem identity, without listing ancestors."""
+    alias = Path(*path.parts[: len(root.parts)])
+    try:
+        return alias != root and alias.samefile(root)
+    except OSError:
+        return False
+
+
+def _reference_path(file: Path, root: Path, target: str, *, skill_relative: bool) -> Path | None:
+    """Interpret inline paths literally and Markdown/HTML destinations as URLs."""
+    if skill_relative:
+        return root / target
+    url = urlsplit(target)
+    if url.scheme or url.netloc or not url.path:
+        return None
+    return file.parent / unquote(url.path)
 
 
 class _Validator:
@@ -363,19 +384,22 @@ class _Validator:
         has_relative = False
         for target, skill_relative in dict.fromkeys(targets):
             try:
-                url = urlsplit(target)
-                if url.scheme or url.netloc or not url.path:
+                literal = _reference_path(file, self.root, target, skill_relative=skill_relative)
+                if literal is None:
                     continue
-                has_relative = True
-                base = self.root if skill_relative else file.parent
-                literal = base / unquote(url.path)
                 path = literal.resolve()
+                has_relative |= path not in {resolved, self.root / "SKILL.md"}
                 if not path.is_relative_to(self.root):
+                    case_alias = _root_case_alias(path, self.root)
                     self.report(
                         file,
-                        "reference-escape",
-                        f"reference {target!r} leaves skill",
-                        "bundle the target inside this skill and use a relative path",
+                        "reference-missing" if case_alias else "reference-escape",
+                        f"reference {target!r} differs in skill-directory case"
+                        if case_alias
+                        else f"reference {target!r} leaves skill",
+                        "correct the reference, including the skill directory's exact case"
+                        if case_alias
+                        else "bundle the target inside this skill and use a relative path",
                     )
                     continue
                 if (
@@ -403,11 +427,11 @@ class _Validator:
                 file,
                 "reference-chain",
                 "referenced file contains further file references",
-                "link needed files directly from SKILL.md to reduce traversal",
+                "remove unnecessary cross-links; link required resources directly from SKILL.md",
                 "warning",
             )
         for path in descendants:
-            if path.suffix.lower() not in {".md", ".markdown", ".txt", ""}:
+            if path.suffix.lower() not in {".md", ".markdown", ".txt"}:
                 continue  # Validate source/binary resources without interpreting code as Markdown.
             try:
                 content = path.read_text(encoding="utf-8")

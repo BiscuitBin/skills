@@ -1,6 +1,6 @@
 # Skill validator
 
-Reviewed rules for ticket 03. Run `just validate-skills` to validate every
+The validator checks portable shipped skills and repo dev skills. Run `just validate-skills` to validate every
 source skill; `just check` and CI include this recipe. For a single skill, run
 `just run uv run --frozen python -m skills_tooling.validator <directory>`.
 Add `--dev` for a dev skill. The public boundaries are a
@@ -26,10 +26,10 @@ The CLI exits nonzero if any error occurs; warnings alone pass.
 | extension-portability | error | Shipped skills cannot use an extension known to fail a target loader; unknown support produces a warning, not an invented rejection. |
 | body-lines | error | Body under 500 lines, repo-enforced context budget. |
 | body-tokens | warning | Approximate tokens = ceiling UTF-8 byte length / 4; warn above 5000, since this is not a tokenizer or spec validity constraint. |
-| reference-missing | error | Relative Markdown links/images, HTML href/src attributes and reference-style links resolve to files. Entire concrete inline-code tokens starting scripts/, references/ or assets/ (optionally ./) are references; commands, patterns, placeholders and directory tokens are examples, not file references. Inline bundled paths are skill-root-relative; Markdown links are relative to the referring file. Plain prose is not parsed. |
-| reference-escape | error | Referenced filenames must match exact case on every platform. Relative paths, including symlinks, remain inside the skill after resolution; URL decoding precedes checking. Ignore external URLs and fragment-only links. |
-| reference-chain | warning | A referenced UTF-8 documentation file (.md, .markdown, .txt or extensionless) contains Markdown references or concrete inline paths to another file. Missing/escaping descendants remain errors at every hop; emit a chain warning and use cycle detection. Skip binary content and source-code formats; linked scripts are checked as files without interpreting code as Markdown. Directory depth itself is unlimited. |
-| openai-shape | error | Optional agents/openai.yaml is a mapping: interface string fields, policy.allow_implicit_invocation boolean and products string-list, dependencies.tools list of mappings with type/value strings and optional description/transport/url/command strings plus oauth_callback_port integer 0–65535. Interface keys: display_name, short_description, icon_small, icon_large, brand_color, default_prompt. Reject wrong types and unknown keys (repo policy to catch typos); interface and all sections are optional. |
+| reference-missing | error | Relative Markdown links/images, HTML href/src attributes and reference-style links resolve to files with exact filename case on every platform. Entire concrete inline-code tokens starting scripts/, references/ or assets/ (optionally ./) are references; commands, patterns, placeholders and directory tokens are examples, not file references. Inline bundled paths are literal skill-root-relative filesystem paths (# and % are filename characters); Markdown links are relative to the referring file. Plain prose is not parsed. |
+| reference-escape | error | Relative paths, including symlinks, remain inside the skill after resolution; URL decoding of Markdown/HTML destinations precedes checking; inline bundled paths remain literal. External URLs and fragment-only links are ignored. |
+| reference-chain | warning | A referenced UTF-8 documentation file (.md, .markdown or .txt) contains Markdown references or concrete inline paths to another file beyond the entrypoint. Links to itself or back to SKILL.md do not deepen the chain. Other document cross-links warn even when SKILL.md also links their targets directly; the hint suggests removing unnecessary cross-links. Missing/escaping descendants remain errors at every hop; the validator warns about deeper chains and detects cycles. Binary content, extensionless resources and source-code formats are not parsed; linked scripts are checked as files without interpreting code as Markdown. Directory depth itself is unlimited. |
+| openai-shape | error | Optional agents/openai.yaml is a mapping: interface string fields, policy.allow_implicit_invocation boolean and products string-list, dependencies.tools list of mappings with type/value strings and optional description/transport/url/command strings plus oauth_callback_port integer 0–65535. Interface keys: display_name, short_description, icon_small, icon_large, brand_color, default_prompt. Reject wrong types and unknown keys (repo policy to catch typos); interface and all sections are optional. Icon values are checked as strings, not as bundled resource references. |
 | claude-description | warning | description plus when_to_use above 1536 characters is truncated by Claude Code. |
 | openai-description | warning | If provided, short_description should be 25–64 characters (UI guidance). |
 
@@ -38,8 +38,7 @@ The CLI exits nonzero if any error occurs; warnings alone pass.
 Supported means documented consumption; ignored means the pinned loader tolerates
 an unknown key, not that the feature works. Shipped skills target Claude Code,
 Codex and Pi. Dev skills may use documented extensions. No current evidence
-establishes a hard loader rejection in these three CLI targets; do not confuse
-Claude's upload/packaging validators with Claude Code's loader.
+establishes a hard loader rejection in these three CLI targets; Claude's upload/packaging validators are separate from Claude Code's loader.
 
 | Fields | Type | Claude Code | Codex | Pi |
 | --- | --- | --- | --- | --- |
@@ -50,21 +49,20 @@ Claude's upload/packaging validators with Claude Code's loader.
 | arguments, paths, disallowed-tools | string or list of strings | supported | ignored | ignored |
 | hooks | mapping | supported | ignored | ignored |
 
-Keep acceptance/rejection status in data separate from type checks. Unsupported or unknown
+Acceptance/rejection status is recorded separately from value type checks. Unsupported or unknown
 semantics for an extension on shipped skills warns and suggests spec fields or
-agents/openai.yaml. New evidence of rejection upgrades this to an error.
+agents/openai.yaml. An extension recorded as rejected by any target produces an error.
 
 ## Discovery, fixtures and reference comparison
 
-Choose flat `skills/<name>/` for shipped skills; grouping can be expressed in
-future distribution manifests without nesting. Record this in a new layout ADR.
-Discover direct child directories under both roots, requiring their SKILL.md.
-Nested SKILL.md assets stay resources. Bucket directories fail with a frontmatter diagnostic naming the missing SKILL.md entrypoint and a creation hint; do not scan tool caches, fixtures or discovery symlinks elsewhere.
+Shipped skills use flat `skills/<name>/` directories, as recorded in [ADR 0009](../adr/0009-flat-shipped-skills-layout.md).
+The validator discovers direct child directories under both roots, requiring their SKILL.md.
+Nested SKILL.md assets stay resources. Bucket directories fail with a frontmatter diagnostic naming the missing SKILL.md entrypoint and a creation hint; tool caches, fixtures and discovery symlinks elsewhere are not scanned.
 
-Use one broken-skill fixture per stable rule and assert its diagnostic via the
-public function. CLI tests assert file/rule/hint output and nonzero status.
-Compare shared-rule fixture verdicts to PyPI skills-ref==0.1.1, locked in uv.lock.
-Document intentional differences: ASCII names (reference accepts Unicode/NFKC
+Broken-skill fixtures assert stable diagnostics via the public function.
+CLI tests cover discovery and file/rule/hint output with nonzero status.
+Shared-rule fixture verdicts are compared to PyPI skills-ref==0.1.1, locked in uv.lock.
+Intentional differences include: ASCII names (reference accepts Unicode/NFKC
 and trims surrounding whitespace); nonempty compatibility (reference accepts
 empty); strict string metadata and scalar types (reference does not enforce
 all types); documented agent extensions and dev allowed-tools lists; safe flow YAML accepted here but rejected by strictyaml in skills-ref. Duplicate keys fail in both parsers. Reference validation
@@ -80,8 +78,7 @@ does not cover budgets, file references or openai.yaml.
 - Pinned Codex [parser.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/parser.rs) ignores unknown fields.
 - Pinned Codex [model.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/model.rs) and [interface.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/interface.rs) define UI metadata.
 
-YAML parsing and reference Markdown parsing should use pinned libraries rather
-than a homegrown YAML parser. The cowsay script itself uses only Python's standard
+YAML and reference Markdown parsing use pinned PyYAML and markdown-it-py libraries. The cowsay script itself uses only Python's standard
 library and accepts text from stdin or one argument, wraps at 40 code points,
 preserves explicit line breaks and emits one deterministic trailing newline.
 
@@ -91,6 +88,6 @@ rejected allowlisted extension. The conditional rejection policy is tested
 with explicitly synthetic agent evidence, not a fictitious real agent claim.
 
 Reference comparison fixtures live in tests/fixtures/validator/: cases.json
-has one broken or warning fixture per diagnostic rule, and reference-cases.json
+covers skill-level diagnostic rules (discovery uses a separate CLI test), and reference-cases.json
 records exact verdicts for shared syntax and intentional parser differences.
 The suite materializes each definition as a real skill directory.

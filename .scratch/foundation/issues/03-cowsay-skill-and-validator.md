@@ -99,7 +99,6 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 
 **Follow-ups:** Optional terminal-cell-aware Unicode rendering; not needed for this ticket. Revised implementation re-review completed below.
 
-
 ### Implementation re-review
 
 - **Reviewer:** Claude Code `claude-opus-5-5` (fallback: no).
@@ -119,3 +118,41 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 **Final validation:** `just check` passed: 156 tests, strict mypy, all lint and lockfile checks, two source skills with zero errors and warnings, and all three pinned CLI version checks. `just format` applied repository formatting. No external tools wrote outside the project.
 
 **Result:** Shipped cowsay skill, dependency-free deterministic script, Codex UI metadata, flat-layout ADR 0009, validator CLI/API and reference documentation, per-rule fixtures and skills-ref differential tests, wired into the full local and CI gate. All acceptance criteria are checked above.
+
+### PR #4 feedback and CI repair
+
+- **Implementer:** Codex (OpenAI family; runtime model ID not exposed).
+- **Reviewer:** Claude Code `claude-opus-5-5` (fallback: no).
+- **Reviewed:** PR diff against origin/main at HEAD `126ae29a52560fb0ae2a74fe490364d3f828108b`.
+- **Findings:** `ai_tmp/review-20261024T040411Z-claude.md` · **Triage:** `ai_tmp/triage-pr4-feedback.md` (fresh separate subagent).
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | Extensionless source parsed as Markdown | valid | Recurse only into .md/.markdown/.txt documentation; extensionless Python, shell, bin and dotfile regressions retain resource existence checks. |
+| 2 | low | Parent paths still enumerate ancestors | valid | Enumerate only directories inside the root; resolve each component to retain symlink/parent semantics. Added exit-and-return paths and symlink-parent regression. |
+| 3 | low | Inline literal # and % treated as URL syntax | valid | Separate literal filesystem paths from Markdown/HTML URL destinations. Test correct resources and decoded/truncated decoys. |
+| 4 | low | Back/self links incorrectly warn about deeper chains | valid | Exclude resolved self and SKILL.md links from chain depth, while retaining all resource checks, cycle detection and real descendant warnings. |
+| 5 | low | Codex icon resources not checked | out of scope | Ticket requires metadata shape and SKILL.md references. Documented shape-only icon boundary; resource validation is a follow-up. |
+| 6 | low | Reference documentation misstates behavior | valid in part | Correct rule ownership and discovery fixture coverage; replace proposal instructions with implemented behavior and link ADR 0009. Existing discovery CLI test already covers this rule. |
+| 7 | low | User backticks close outer display fence | invalid | Rendered bubble prefixes every text line; CommonMark reproductions retain stdout exactly inside one fence. |
+| 8 | low | No live triggering evidence | invalid as ticket gap | Static description satisfies this ticket; live agent evals are explicitly deferred. No empirical trigger-quality claim is made. |
+
+**CI finding:** The committed completion notes had an extra blank line (MD012); removed it. The notes were edited after the previous local gate, so that earlier pass did not cover final committed contents. A generated local-only PR description also needed a file-local MD041 directive for the visual-pr template's opening links; fixed without disabling repository lint rules or staging the artifact.
+
+**Validation after fixes:** `just check` passed locally with 166 tests, strict mypy, lint/lock checks, two skills with zero diagnostics and all pinned CLI version checks. Focused validator tests cover the repaired cases. A focused re-review and final post-notes gate precede publication; GitHub CI on the pushed commit is the completion gate.
+
+**Follow-ups:** Optional Codex icon resource validation and the previously recorded terminal-cell-aware Unicode rendering. Live trigger evals remain in later foundation tickets.
+
+### PR #4 focused fixes re-review
+
+- **Reviewer:** Claude Code `claude-opus-5-5` (fallback: no).
+- **Reviewed:** complete working-tree fixes against HEAD `126ae29a52560fb0ae2a74fe490364d3f828108b`, with prior triage supplied.
+- **Findings:** `ai_tmp/review-20261024T040916Z-claude.md` · **Triage:** `ai_tmp/triage-pr4-fixes.md` (fresh separate subagent).
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | low | Direct sibling links still produce chain warning | invalid as behavior; valid hint clarity | A two-hop resource traversal remains a chain even with another direct entrypoint link. Kept warning, clarified unnecessary-cross-link hint and reference wording, added regression. |
+| 2 | low | Case alias of root reported as escaping | valid diagnostic defect | Recognize alternate root spelling by filesystem identity without listing ancestors; retain rejection with reference-missing and exact-case hint. Added case-insensitive-filesystem regression (skips on case-sensitive hosts). |
+| 3 | low | Reference doc retains proposal instructions | valid editorial remainder | Rewrote remaining behavior descriptions, preserving validation policy. |
+
+**Final local verification:** `just check` passes with 168 tests on macOS, strict mypy, all lint and lock checks, both source skills with zero diagnostics and all three pinned CLI version checks. The full gate is rerun after these completion-note edits before commit; final GitHub CI status is reported on PR #4 after pushing. Linux may skip the single filesystem-specific case-alias regression; all portable path regressions run there.

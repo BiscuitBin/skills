@@ -260,7 +260,7 @@ def test_cycles_and_external_links_terminate(tmp_path: Path) -> None:
         },
     )
     diagnostics = validate_skill(skill)
-    assert [item.rule for item in diagnostics] == ["reference-chain"]
+    assert diagnostics == []
 
 
 def test_full_codex_metadata_shape(tmp_path: Path) -> None:
@@ -425,6 +425,10 @@ def test_unknown_codex_key_and_invalid_name_are_specific(tmp_path: Path) -> None
     [
         ("scripts/run.py", "def run():\n    handlers[name](args)\n"),
         ("scripts/run.sh", "#!/bin/sh\n`scripts/x.sh`\n"),
+        ("scripts/run", "#!/usr/bin/env python3\ndef run():\n    handlers[name](args)\n"),
+        ("bin/tool", "def run():\n    handlers[name](args)\n"),
+        ("scripts/shell-tool", "#!/bin/sh\n`scripts/x.sh`\n"),
+        (".env", "KEY='[name](value)'\n"),
     ],
 )
 def test_linked_source_is_not_markdown(tmp_path: Path, filename: str, content: str) -> None:
@@ -460,14 +464,22 @@ def test_html_resources(tmp_path: Path, body: str, rule: str | None) -> None:
     assert [item.rule for item in validate_skill(skill)] == ([] if rule is None else [rule])
 
 
+@pytest.mark.parametrize(
+    "target",
+    [
+        "references/guide.md",
+        "../example/references/guide.md",
+        "references/../../example/references/guide.md",
+    ],
+)
 def test_reference_case_does_not_list_ancestors(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: str
 ) -> None:
     skill = materialize(
         tmp_path,
         {
             "yaml": "name: example\ndescription: Example.\n",
-            "body": "[Read](references/guide.md)",
+            "body": f"[Read]({target})",
             "files": {"references/guide.md": "Done.\n"},
         },
     )
@@ -494,3 +506,78 @@ def test_discovery_missing_roots_is_actionable(tmp_path: Path) -> None:
     assert "dev-skills: error [discovery]" in result.stdout
     assert "hint:" in result.stdout and "repository root" in result.stdout
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("target", ["scripts/v#2.sh", "assets/a%20b.png"])
+def test_inline_bundle_paths_are_literal(tmp_path: Path, target: str) -> None:
+    skill = materialize(
+        tmp_path,
+        {
+            "yaml": "name: example\ndescription: Example.\n",
+            "body": f"Use `{target}`.",
+            "files": {target: "resource\n"},
+        },
+    )
+    assert validate_skill(skill) == []
+    (skill / target).unlink()
+    decoy = skill / ("scripts/v" if "#" in target else "assets/a b.png")
+    decoy.write_text("wrong resource\n")
+    assert [item.rule for item in validate_skill(skill)] == ["reference-missing"]
+
+
+def test_document_self_link_does_not_warn_about_chain(tmp_path: Path) -> None:
+    skill = materialize(
+        tmp_path,
+        {
+            "yaml": "name: example\ndescription: Example.\n",
+            "body": "[Read](references/guide.md)",
+            "files": {"references/guide.md": "[Setup](guide.md#setup)\n"},
+        },
+    )
+    assert validate_skill(skill) == []
+
+
+def test_reference_case_handles_symlink_parent_traversal(tmp_path: Path) -> None:
+    skill = materialize(
+        tmp_path,
+        {
+            "yaml": "name: example\ndescription: Example.\n",
+            "body": "[Read](references/link/../guide.md)",
+            "files": {
+                "references/deep/child/placeholder": "",
+                "references/deep/guide.md": "Done.\n",
+            },
+        },
+    )
+    (skill / "references/link").symlink_to("deep/child", target_is_directory=True)
+    assert validate_skill(skill) == []
+
+
+def test_case_alias_of_root_is_not_reported_as_escape(tmp_path: Path) -> None:
+    skill = materialize(
+        tmp_path,
+        {
+            "yaml": "name: example\ndescription: Example.\n",
+            "body": "[Read](../EXAMPLE/references/guide.md)",
+            "files": {"references/guide.md": "Done.\n"},
+        },
+    )
+    if not (tmp_path / "EXAMPLE").exists():
+        pytest.skip("requires a case-insensitive filesystem")
+    (diagnostic,) = validate_skill(skill)
+    assert diagnostic.rule == "reference-missing"
+    assert "skill-directory case" in diagnostic.message
+
+
+def test_cross_link_between_direct_resources_has_actionable_hint(tmp_path: Path) -> None:
+    skill = materialize(
+        tmp_path,
+        {
+            "yaml": "name: example\ndescription: Example.\n",
+            "body": "[A](references/a.md) [B](references/b.md)",
+            "files": {"references/a.md": "[B](b.md)", "references/b.md": "Done.\n"},
+        },
+    )
+    (diagnostic,) = validate_skill(skill)
+    assert diagnostic.rule == "reference-chain" and diagnostic.severity == "warning"
+    assert "remove unnecessary cross-links" in diagnostic.hint
