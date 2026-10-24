@@ -15,6 +15,7 @@ Every command goes through `just`. Run `just` on its own to list the recipes.
 | `lint` | Runs every pre-commit hook over every file that is not gitignored, untracked ones included: ruff lint and format check, markdownlint, Prettier and the builtin file checks. prek's `SKIP` and `PREK_SKIP` are ignored here. |
 | `typecheck` | Runs mypy in strict mode over `src/` and `tests/`. |
 | `test` | Runs pytest. |
+| `validate-skills` | Validates every shipped skill and dev skill against the [validator rules](skill-validator.md). Errors fail; warnings pass. |
 | `agents-version` | Prints the version of each pinned agent CLI (Claude Code, Codex and Pi), run from `node_modules/.bin` with isolated homes under `.tools/agent-homes/`. |
 | `just-version` | Fails unless the running just is the pinned version. |
-| `check` | The full gate, which CI also runs: `just-version`, `lock-check`, `lint`, `typecheck`, `test`, then `agents-version`. It stops at the first failure. |
+| `check` | The full gate, which CI also runs: `just-version`, `lock-check`, `lint`, `typecheck`, `test`, `validate-skills`, then `agents-version`. It stops at the first failure. |

@@ -10,7 +10,7 @@ Subcommands:
       to <root>/ai_tmp/review-<timestamp>-<reviewer>.md, and print JSON with
       the findings path and the selection. If the reviewer fails at runtime,
       try the other reviewer when the cross-model rule allows it. Fails if
-      any file outside ai_tmp/ and .git/ changed during the review, saving
+      any file outside ai_tmp/, .git/ and known CLI runtime state changed, saving
       the output as ai_tmp/rejected-<timestamp>-<reviewer>.md instead.
 
 Exit codes: 0 ok, 1 error before any review ran (including unreadable paths), 2 usage error (argparse),
@@ -221,7 +221,7 @@ def default_probe(reviewer: Reviewer) -> str | None:
 
 
 def snapshot(root: Path) -> dict[str, str]:
-    """Map every path under root (except .git/ and ai_tmp/) to its content hash
+    """Map paths except .git/, ai_tmp/ and known CLI runtime state to hashes
     and permission bits. The root itself is recorded as ".".
 
     Walks the filesystem rather than asking git, so ignored and untracked files
@@ -250,6 +250,10 @@ def snapshot(root: Path) -> dict[str, str]:
             try:
                 info = path.lstat()
                 mode = f"mode:{stat.S_IMODE(info.st_mode):o}"
+                if not stat.S_ISLNK(info.st_mode) and _runtime_state(rel):
+                    if name in dirs:
+                        dirs.remove(name)
+                    continue
                 if stat.S_ISLNK(info.st_mode):
                     entries[rel] = f"link:{path.readlink()}"
                 elif stat.S_ISREG(info.st_mode):
@@ -259,6 +263,25 @@ def snapshot(root: Path) -> dict[str, str]:
             except OSError as error:
                 entries[rel] = f"error:{error.errno}"
     return entries
+
+
+def _runtime_state(relative: str) -> bool:
+    """Only observed Claude runtime state; config, instructions and skills stay monitored."""
+    parts = Path(relative).parts
+    prefix = (".tools", "agent-homes", "claude")
+    if parts[: len(prefix)] != prefix or len(parts) <= len(prefix):
+        return False
+    return parts[len(prefix)] in {
+        ".credentials.json",
+        "mcp-needs-auth-cache.json",
+        ".last-cleanup",
+        "backups",
+        "debug",
+        "todos",
+        "session-env",
+        "telemetry",
+        "statsig",
+    }
 
 
 def _file_digest(path: Path) -> str:

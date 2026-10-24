@@ -1,0 +1,57 @@
+[
+  {
+    "id": "shared-valid",
+    "yaml": "name: example\ndescription: Example.\nmetadata:\n  author: Ada\n",
+    "ours": true,
+    "ref": true
+  },
+  {
+    "id": "unicode-name",
+    "directory": "café",
+    "yaml": "name: café\ndescription: Example.\n",
+    "ours": false,
+    "ref": true,
+    "difference": "ASCII-only repo name policy"
+  },
+  {
+    "id": "empty-compatibility",
+    "yaml": "name: example\ndescription: Example.\ncompatibility: ''\n",
+    "ours": false,
+    "ref": true,
+    "difference": "spec requires nonempty compatibility; reference accepts empty"
+  },
+  {
+    "id": "safe-flow-yaml",
+    "yaml": "name: example\ndescription: Example.\nmetadata: {author: Ada}\n",
+    "ours": true,
+    "ref": false,
+    "difference": "PyYAML accepts safe flow mappings; strictyaml rejects them"
+  },
+  {
+    "id": "scalar-coercion",
+    "yaml": "name: example\ndescription: 123\n",
+    "ours": false,
+    "ref": true,
+    "difference": "reference parser coerces YAML scalars to strings"
+  },
+  {
+    "id": "name-whitespace",
+    "yaml": "name: ' example '\ndescription: Example.\n",
+    "ours": false,
+    "ref": true,
+    "difference": "reference trims name whitespace"
+  },
+  {
+    "id": "duplicate-keys",
+    "yaml": "name: example\ndescription: Example.\nname: example\n",
+    "ours": false,
+    "ref": false
+  },
+  {
+    "id": "dev-tools-list",
+    "yaml": "name: example\ndescription: Example.\nallowed-tools:\n  - Read\n",
+    "shipped": false,
+    "ours": true,
+    "ref": true
+  }
+]

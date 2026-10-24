@@ -256,6 +256,48 @@ class SnapshotTest(unittest.TestCase):
         (self.root / ".git" / "index").write_text("x\n")
         self.assertEqual(self.changes(before), [])
 
+    def test_agent_runtime_writes_are_ignored_but_other_tools_are_monitored(self) -> None:
+        tools = self.root / ".tools"
+        homes = tools / "agent-homes"
+        claude = homes / "claude"
+        claude.mkdir(parents=True)
+        before = review.snapshot(self.root)
+        (claude / "mcp-needs-auth-cache.json").write_text("{}\n")
+        (tools / "source.py").write_text("changed\n")
+        self.assertEqual(self.changes(before), ["added: .tools/source.py"])
+
+    def test_agent_config_and_home_replacement_are_detected(self) -> None:
+        home = self.root / ".tools/agent-homes/claude"
+        home.mkdir(parents=True)
+        config = home / "settings.json"
+        config.write_text("{}\n")
+        before = review.snapshot(self.root)
+        config.write_text('{"hooks": {}}\n')
+        self.assertEqual(
+            self.changes(before), ["modified: .tools/agent-homes/claude/settings.json"]
+        )
+        before = review.snapshot(self.root)
+        shutil.rmtree(home)
+        home.symlink_to(self.root / "src", target_is_directory=True)
+        self.assertIn("modified: .tools/agent-homes/claude", self.changes(before))
+
+    def test_claude_config_and_auto_memory_remain_monitored(self) -> None:
+        home = self.root / ".tools/agent-homes/claude"
+        memory = home / "projects/repo/memory"
+        memory.mkdir(parents=True)
+        config = home / ".claude.json"
+        config.write_text("{}\n")
+        before = review.snapshot(self.root)
+        config.write_text('{"mcpServers": {}}\n')
+        (memory / "MEMORY.md").write_text("Persistent instructions\n")
+        self.assertEqual(
+            self.changes(before),
+            [
+                "modified: .tools/agent-homes/claude/.claude.json",
+                "added: .tools/agent-homes/claude/projects/repo/memory/MEMORY.md",
+            ],
+        )
+
 
 class OutputPathTest(unittest.TestCase):
     def setUp(self) -> None:

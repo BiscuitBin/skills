@@ -141,6 +141,10 @@ typecheck:
 test:
     uv run --frozen pytest
 
+[doc('Validate every shipped skill and dev skill.')]
+validate-skills:
+    uv run --frozen python -m skills_tooling.validator
+
 # Run from node_modules/.bin and never from PATH, so a global install cannot
 # stand in for a broken local one.
 [doc('Print the version of each pinned agent CLI.')]
@@ -158,4 +162,4 @@ just-version:
     [ "$found" = "$required" ] || { printf '%s\n' "$required is required; found $found." >&2; exit 1; }
 
 [doc('The full gate, as CI runs it. Stops at the first recipe that fails.')]
-check: just-version lock-check lint typecheck test agents-version
+check: just-version lock-check lint typecheck test validate-skills agents-version

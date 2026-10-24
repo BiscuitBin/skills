@@ -1,0 +1,143 @@
+[
+  {
+    "id": "frontmatter",
+    "yaml": "[unterminated",
+    "rule": "frontmatter",
+    "ref": false
+  },
+  {
+    "id": "name-format",
+    "yaml": "name: Example\ndescription: An example.\n",
+    "rule": "name-format",
+    "ref": false,
+    "directory": "Example"
+  },
+  {
+    "id": "name-directory",
+    "yaml": "name: other\ndescription: An example.\n",
+    "rule": "name-directory",
+    "ref": false
+  },
+  {
+    "id": "description",
+    "yaml": "name: example\ndescription: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+    "rule": "description",
+    "ref": false
+  },
+  {
+    "id": "compatibility",
+    "yaml": "name: example\ndescription: An example.\ncompatibility: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+    "rule": "compatibility",
+    "ref": false
+  },
+  {
+    "id": "metadata",
+    "yaml": "name: example\ndescription: An example.\nmetadata:\n  version: 1\n",
+    "rule": "metadata",
+    "ref": true,
+    "difference": "skills-ref scalar coercion"
+  },
+  {
+    "id": "field-type",
+    "yaml": "name: example\ndescription: An example.\nlicense:\n  - MIT\n",
+    "rule": "field-type",
+    "ref": true,
+    "difference": "skills-ref does not validate license type"
+  },
+  {
+    "id": "field-unknown",
+    "yaml": "name: example\ndescription: An example.\ntypo: value\n",
+    "rule": "field-unknown",
+    "ref": false
+  },
+  {
+    "id": "extension-type",
+    "yaml": "name: example\ndescription: An example.\ndisable-model-invocation: nope\n",
+    "rule": "extension-type",
+    "ref": false,
+    "shipped": false
+  },
+  {
+    "id": "extension-portability",
+    "yaml": "name: example\ndescription: An example.\nuser-invocable: true\n",
+    "rule": "extension-portability",
+    "synthetic_rejection": true,
+    "difference": "documented agent extensions accepted here",
+    "ref": false
+  },
+  {
+    "id": "body-lines",
+    "yaml": "name: example\ndescription: An example.\n",
+    "repeat": "# Line\n",
+    "count": 500,
+    "rule": "body-lines",
+    "ref": true,
+    "difference": "reference ignores body budgets"
+  },
+  {
+    "id": "body-tokens",
+    "yaml": "name: example\ndescription: An example.\n",
+    "repeat": "x",
+    "count": 20001,
+    "rule": "body-tokens",
+    "severity": "warning",
+    "ref": true
+  },
+  {
+    "id": "reference-missing",
+    "yaml": "name: example\ndescription: An example.\n",
+    "body": "[Missing](references/missing.txt)\n",
+    "rule": "reference-missing",
+    "ref": true,
+    "difference": "reference ignores resource links"
+  },
+  {
+    "id": "reference-escape",
+    "yaml": "name: example\ndescription: An example.\n",
+    "body": "[Escape](../outside.md)\n",
+    "rule": "reference-escape",
+    "ref": true,
+    "difference": "reference ignores containment"
+  },
+  {
+    "id": "reference-chain",
+    "yaml": "name: example\ndescription: An example.\n",
+    "body": "[Read](references/first.txt)\n",
+    "files": {
+      "references/first.txt": "[Next](second.txt)\n",
+      "references/second.txt": "done\n"
+    },
+    "rule": "reference-chain",
+    "severity": "warning",
+    "ref": true
+  },
+  {
+    "id": "openai-shape",
+    "yaml": "name: example\ndescription: An example.\n",
+    "files": {
+      "agents/openai.yaml": "interface:\n  display_name: [bad]\n"
+    },
+    "rule": "openai-shape",
+    "ref": true,
+    "difference": "reference ignores Codex UI metadata"
+  },
+  {
+    "id": "openai-description",
+    "yaml": "name: example\ndescription: An example.\n",
+    "files": {
+      "agents/openai.yaml": "interface:\n  short_description: Tiny\n"
+    },
+    "rule": "openai-description",
+    "severity": "warning",
+    "ref": true
+  },
+  {
+    "id": "claude-description",
+    "yaml": "name: example\ndescription: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nwhen_to_use: yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n",
+    "rule": "claude-description",
+    "severity": "warning",
+    "shipped": false,
+    "ref": false,
+    "difference": "documented agent extensions accepted here"
+  }
+]
