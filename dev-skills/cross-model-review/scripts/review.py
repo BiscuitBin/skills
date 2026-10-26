@@ -81,6 +81,11 @@ def reviewer_command(reviewer: Reviewer, root: Path) -> list[str]:
             "--ephemeral",
             "--ignore-user-config",  # user hooks and MCP servers run outside the sandbox
             "--ignore-rules",  # execpolicy rules can allow commands outside the sandbox
+            # Plugins and apps add tools, and Codex syncs remote plugins into its
+            # home mid-run, which the worktree snapshot would reject.
+            "--disable", "plugins",
+            "--disable", "remote_plugin",
+            "--disable", "apps",
             "--skip-git-repo-check",
             "-C", str(root),
             "-",

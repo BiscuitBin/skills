@@ -459,6 +459,9 @@ class CliTest(unittest.TestCase):
             ["--ephemeral"],
             ["--ignore-user-config"],
             ["--ignore-rules"],
+            ["--disable", "plugins"],
+            ["--disable", "remote_plugin"],
+            ["--disable", "apps"],
         ):
             with self.subTest(codex=flags):
                 self.assertTrue(contains(codex_call, flags))
