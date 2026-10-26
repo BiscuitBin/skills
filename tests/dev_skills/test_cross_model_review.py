@@ -276,6 +276,7 @@ class SnapshotTest(unittest.TestCase):
         (home / "state_5.sqlite").write_text("y\n")
         (home / "state_5.sqlite-wal").write_text("x\n")
         (home / "goals_1.sqlite-shm").write_text("x\n")
+        (home / ".sqlite-maintenance.lock").write_text("")
         (home / "log").mkdir()
         (home / "tmp/arg0").mkdir(parents=True)
         (home / "shell_snapshots").mkdir()

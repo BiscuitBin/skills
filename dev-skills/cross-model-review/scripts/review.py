@@ -277,7 +277,14 @@ RUNTIME_STATE = {
         "telemetry",
         "statsig",
     },
-    "codex": {"cache", "log", "tmp", "shell_snapshots", "models_cache.json"},
+    "codex": {
+        "cache",
+        "log",
+        "tmp",
+        "shell_snapshots",
+        "models_cache.json",
+        ".sqlite-maintenance.lock",
+    },
 }
 # Codex's databases and their write-ahead files. memories_*.sqlite is persistent
 # context for the reviewer, so it stays monitored.
