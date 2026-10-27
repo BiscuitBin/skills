@@ -102,14 +102,14 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
   - `cc-plugin-agents-md` loads `AGENTS.md` only when no `CLAUDE.md` is found up the tree;
   - nested `<subdir>/.claude/skills` is discovered mid-session.
 
-  The managed-location canary is CI-only (Linux, `CI=true`, passwordless sudo), by the user's choice. **It has not run yet: it first runs in this branch's PR CI.**
+  The managed-location canary is CI-only (Linux, `CI=true`, passwordless sudo), by the user's choice. It passed both arms in PR #7's CI (run `40441253332`), and the CLI reported the inferred `/etc/claude-code/.claude/skills` path.
 - **Credentials:** `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`) reaches only the child's environment. The fake-secret end-to-end test proves it reaches the API (the `Authorization` header) but appears in no results file, transcript or workspace file. Results are scrubbed and reread, and a leaking file is deleted and fails the run.
 - **Live run:** `just eval cowsay --agent claude`, run `20261027T021602Z-b0ec`, passed all 8 trials. CLI 2.1.309, model `claude-sonnet-5-5`, contamination passed on every trial. Every should-trigger case triggered and no should-not-trigger case did, and both behaviour cases passed every assertion. `--case no-trigger-cow-facts` (run `20261027T021721Z-35ec`) ran exactly one trial and passed. No token-shaped string (`sk-ant-…`) appears under `eval-results/` or `.eval-workspaces/`. The implementer could not grep for the token's value itself, because it never entered the session. Every trial directory kept only `workspace/`.
 - **Fixtures:** three live transcripts (`tests/fixtures/evals/claude/live-*.jsonl`) drive the parser, trigger, assertion and contamination tests. Their paths are placeholders and their rate-limit details are removed. The recorded no-credential auth failure and fake-API transcripts cover run status. Truncated-stream and nonzero-exit cases are derived from them.
 - **Writes outside the project:** Claude Code creates its messaging socket at `/tmp/cc-socks/<pid>.sock` and ignores `TMPDIR`. It removes the socket on exit. The CI-only managed canary test also writes outside the project by design (user-approved): it plants a canary under `/etc/claude-code` with sudo on the throwaway runner, refuses if the directory already exists, and removes only what it created. Its first step asks the CLI for its managed path, because `/etc/claude-code/.claude/skills` is inferred from the binary, not reported by a Linux build. Recorded per AGENTS.md; nothing else wrote outside the project.
 - **Review tooling:** Codex could not review from the project-local home at first. The runner was fixed in `52a464e`, `4b0ccc6` and `1b3734b` (see the design checkpoint).
 - **First PR CI run (#7):** 34 real-CLI tests failed on Linux. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` makes the CLI require `bubblewrap`, which the runner lacks, and the CLI exits before its first event. The flag is dropped, and a new test checks that the token never reaches the agent's Bash commands.
-- **Validation:** `just check` passes with 317 tests, 2 skipped (the CI-only managed canary), strict mypy, lint, lock checks, distribution validation, both skills, the eval suite and the pinned CLI versions. `git status` is clean afterwards.
+- **Validation:** `just check` passes locally with 318 tests, 2 skipped (the CI-only managed canary). PR CI (run `40441253332`, ubuntu-24.04) passes with 319, 1 skipped (the validator's case-insensitive-filesystem test), including both managed-canary arms and the clean-worktree step. The local run also covers strict mypy, lint, lock checks, distribution validation, both skills, the eval suite and the pinned CLI versions. `git status` is clean afterwards.
 
 ### Local code review (`code-review` skill, high)
 
@@ -171,4 +171,3 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - Ticket 06/07: Codex and Pi set `reports_skills = False` (or report), supply `discovery_locations` and `context_isolation`, and keep file credentials in the per-trial agent home.
 - Ticket 08: baselines (`install_skill(None, …)` and `check(baseline=True)` exist and are unit-tested) and rubric `expectations`.
 - Input-file staging stays deferred; the schema rejects it.
-- Check the managed-canary result in this branch's PR CI.
