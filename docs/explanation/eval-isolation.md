@@ -33,16 +33,16 @@ The sweep also found three things about instruction files that make suppression 
 
 ## Codex's discovery locations
 
-Verified against the pinned CLI, 0.163.0, with the real CLI against a fake Responses API that records every request. Codex does not report the skills it loaded: they appear only in the request, which a live run cannot see. So the check reads the locations themselves after each trial, and Codex's own telemetry events report each skill it saw read or explicitly invoked.
+Verified against the pinned CLI, 0.163.0. Rows marked "real CLI" ran it against a fake Responses API that records every request; the location-check rows plant a canary and run the check over a recorded trace. Codex does not report the skills it loaded: they appear only in the request, which a live run cannot see. So the check reads the locations themselves after each trial, and Codex's own telemetry events report each skill it saw read or explicitly invoked.
 
 | Location | Under the harness | Canary |
 | --- | --- | --- |
-| `<workspace>/.agents/skills` | Controlled: the harness installs exactly one skill. Read after the run. | Detected: a second skill fails the check. |
+| `<workspace>/.agents/skills` | Controlled: the harness installs exactly one skill. Read after the run. | Detected by the location check: a second skill fails it. Not run through the real CLI. |
 | Parent directories' `.agents/skills`, up to the repository root | The workspace is its own git root, so there are none. | Isolated: a parent repository's canary never reaches the model. |
-| `$HOME/.agents/skills`, the user-level shared folder in the OS home | `HOME` is the trial home. The caller's real home is never referenced. Read after the run. | Detected in the trial home, where it reaches the model. Isolated in the caller's home. |
-| `$CODEX_HOME/skills`, including the deprecated `~/.codex/skills` | Redirected into the trial. Holds only the bundled `.system` skills, which are allowlisted by CLI version. | Detected. The caller's `CODEX_HOME` canary is isolated. |
-| `/etc/codex` (system skills and config) | Fixed by platform and not redirectable. Checked missing or empty on every trial. | Detected by the check. No live canary: planting it needs root outside the project. |
-| Plugin skills | Plugins, remote plugins and apps are disabled, so nothing is synced into `$CODEX_HOME`. The plugin directories must not exist. | Detected by the check. |
+| `$HOME/.agents/skills`, the user-level shared folder in the OS home | `HOME` is the trial home. The caller's real home is never referenced. Read after the run. | Detected in the trial home, where the real CLI shows it reaches the model. Isolated in the caller's home. |
+| `$CODEX_HOME/skills`, including the deprecated `~/.codex/skills` | Redirected into the trial. Holds only the bundled `.system` skills, which are allowlisted by CLI version. | Detected by the location check, which is not shown to reach the model. The caller's `CODEX_HOME` canary is isolated (real CLI). |
+| `/etc/codex` (system skills and config) | Fixed by platform and not redirectable. Checked missing or empty on every trial. | Detected by the location check, which is not shown to reach the model. No real canary: planting it needs root outside the project. |
+| Plugin skills | Plugins, remote plugins and apps are disabled, so nothing is synced into `$CODEX_HOME`. The plugin directories must not exist. | Detected by the location check, which is not shown to reach the model. |
 | `$CODEX_HOME/AGENTS.md`, `AGENTS.override.md` | Redirected into the trial and checked absent. `project_doc_max_bytes=0` does not cover these global instructions. | Detected: one reaches the model even with suppression on, and fails the check. |
 | `AGENTS.md` in the workspace and every ancestor | Suppressed. | Loads with suppression off. None loads with it on. |
 | `config.toml` in `CODEX_HOME` | `--ignore-user-config`, and `CODEX_HOME` is the trial's. | Isolated: a `developer_instructions` canary in the caller's config never reaches the model. |
