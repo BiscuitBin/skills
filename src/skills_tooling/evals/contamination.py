@@ -5,7 +5,6 @@ does and fails closed. The check runs over the trace afterwards.
 """
 
 import os
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,9 +16,6 @@ if TYPE_CHECKING:
 
     from skills_tooling.evals.adapter import Adapter, Homes, Trace, TrialPaths
 
-LOADING = re.compile(r"Loading skills from: managed=(.*?), user=(.*?), project=\[(.*)\]$")
-LOADED = re.compile(r"Loaded \d+ unique skills \((.*)\)$")
-COUNT = re.compile(r"(managed|user|project|additional): (\d+)")
 # The user's own skills, by agent. Only directory names are read, never contents.
 USER_SKILL_DIRS = (
     (".claude/skills", "user skill ~/.claude/skills"),
@@ -113,39 +109,15 @@ def preflight(
     return problems
 
 
-def _inside(path: str, root: Path) -> bool:
-    return Path(path).resolve().is_relative_to(root.resolve())
-
-
-def _discovery_problems(
-    trace: Trace, trial: TrialPaths, *, installed: bool, system_root: Path
-) -> list[str]:
-    loading = [m for line in trace.debug_lines if (m := LOADING.search(line))]
-    counts = [m for line in trace.debug_lines if (m := LOADED.search(line))]
-    if not loading or not counts:
-        return ["no discovery report in the debug log; failing closed"]
-    problems = []
-    for match in loading:
-        managed, user, projects = match.groups()
-        if not _inside(user, trial.home):
-            problems.append(f"user skills location {user} is outside the trial home")
-        problems += [
-            f"project skills location {project} is outside the workspace"
-            for project in projects.split(", ")
-            if project and not _inside(project, trial.workspace)
-        ]
-        managed_dir = system_root / managed.lstrip("/")
-        if _names(managed_dir):
-            problems.append(f"managed skills location {managed_dir} is not empty")
-    wanted = {"managed": 0, "user": 0, "additional": 0, "project": 1 if installed else 0}
-    for match in counts:
-        found = {name: int(n) for name, n in COUNT.findall(match.group(1))}
-        problems += [
-            f"skills loaded from {name}: {found.get(name)} (expected {count})"
-            for name, count in wanted.items()
-            if found.get(name) != count
-        ]
-    return problems
+def _plugin_problems(adapter: Adapter, trace: Trace, plugins: frozenset[str]) -> list[str]:
+    if trace.visible_plugins is None:
+        if adapter.reports_skills:
+            return [f"{adapter.name} did not report its plugins; failing closed"]
+        return []
+    if trace.visible_plugins != plugins:
+        unexpected = ", ".join(sorted(trace.visible_plugins ^ plugins))
+        return [f"plugins differ from the built-in allowlist: {unexpected}"]
+    return []
 
 
 def check(  # noqa: PLR0913 -- everything one trial's check reads
@@ -171,9 +143,14 @@ def check(  # noqa: PLR0913 -- everything one trial's check reads
             f"(recorded: {known}); re-record it from the canary sweep"
         )
         allowed, plugins = frozenset(), frozenset()
-    if trace.visible_skills is None:
+    visible: set[str] = set()
+    if not adapter.reports_skills:
+        notes.append(
+            f"{adapter.name} does not report its skills: the proof is the preflight's "
+            "redirected homes and mitigated locations, and the canary sweep"
+        )
+    elif trace.visible_skills is None:
         problems.append(f"{adapter.name} did not report its visible skills; failing closed")
-        visible: set[str] = set()
     else:
         visible = set(trace.visible_skills)
         if not baseline and skill not in visible:
@@ -186,10 +163,10 @@ def check(  # noqa: PLR0913 -- everything one trial's check reads
     extra = sorted(seen - allowed - installed - ({skill} if baseline else set()))
     if extra:
         problems.append(f"unexpected skills visible: {', '.join(extra)}")
-    if trace.visible_plugins is not None and trace.visible_plugins != plugins:
-        unexpected = sorted(trace.visible_plugins ^ plugins)
-        problems.append(f"plugins differ from the built-in allowlist: {', '.join(unexpected)}")
-    problems += _discovery_problems(trace, trial, installed=not baseline, system_root=system_root)
+    problems += _plugin_problems(adapter, trace, plugins)
+    problems += adapter.discovery_report_problems(
+        trace, trial, installed=not baseline, system_root=system_root
+    )
     # The discovery report's paths are checked above: any outside the trial fail.
     for name, source in sorted(never.skills.items()):
         if name in allowed or name == skill:

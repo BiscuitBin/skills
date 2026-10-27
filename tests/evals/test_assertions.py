@@ -1,12 +1,14 @@
 """Deterministic assertions over a trace, including the negatives that must fail."""
 
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from skills_tooling.evals import assertions
 from skills_tooling.evals.adapter import Command, PythonCall, Trace
-from skills_tooling.evals.assertions import evaluate, expected_script_output
+from skills_tooling.evals.assertions import contains_lines, evaluate, expected_script_output
 from skills_tooling.evals.cases import Assertion
 
 ROOT = Path(__file__).parents[2]
@@ -176,3 +178,21 @@ def test_results_carry_evidence() -> None:
     )
     assert (result.type, result.passed) == ("script_ran", False)
     assert "python" in result.evidence
+
+
+def test_exact_output_keeps_trailing_blank_lines() -> None:
+    assert not contains_lines("hello", "hello\n\n")
+    assert contains_lines("hello\n", "hello\n\n")
+
+
+def test_expected_output_never_waits_on_stdin_or_hangs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scripts = tmp_path / "skill/scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "reads.py").write_text("import sys\nprint(repr(sys.stdin.read()))\n")
+    (scripts / "hangs.py").write_text("import time\ntime.sleep(60)\n")
+    assert expected_script_output(tmp_path / "skill", "scripts/reads.py", ()) == "''\n"
+    monkeypatch.setattr(assertions, "SCRIPT_TIMEOUT", 0.5)
+    with pytest.raises(subprocess.TimeoutExpired):
+        expected_script_output(tmp_path / "skill", "scripts/hangs.py", ())

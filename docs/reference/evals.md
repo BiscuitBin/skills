@@ -64,7 +64,7 @@ Unknown keys are rejected at every level, so a later field, such as rubric `expe
 | --- | --- | --- |
 | `skill_triggered` | none | The trace records a trigger of the skill under test. |
 | `script_ran` | `script`, optional `args` | All three hold, so a command that merely names the script cannot pass. (1) A Bash command, split into simple commands on `;`, `&&`, `\|\|`, `\|`, `&` and newlines, runs `python`, `python3` or `python3.N` with `script` as its first non-option argument. A path inside `printf`, `echo`, `cat`, a comment, `sh -c '…'` or after `-c`/`-m` does not count. (2) That call's tool result, which the CLI writes, is not an error and contains the script's output for `args` as whole lines (with no `args`, it is nonempty). (3) The trial's `python3` wrapper logged a call of the installed copy, with `args` or with no arguments (text on stdin). |
-| `final_contains_script_output` | `script`, `args` | The harness runs the shipped script itself (`python -I`, outside the workspace) and its output, minus the final newline, appears in the final message as a run of whole, unaltered lines. A trailing `\r` per line is ignored; nothing else is. |
+| `final_contains_script_output` | `script`, `args` | The harness runs the shipped script itself (`python -I`, outside the workspace, stdin `/dev/null`, at most 30 seconds) and its output, minus the final newline, appears in the final message as a run of whole, unaltered lines. A trailing `\r` per line is ignored; nothing else is. |
 | `output_contains` | `value` | The final message contains `value`. |
 | `output_matches` | `pattern` | Python `re.search(pattern, final_message)` matches. The schema rejects a pattern that does not compile. |
 
@@ -79,15 +79,17 @@ An adapter drives one agent CLI. The interface is `skills_tooling.evals.adapter.
 | `name`, `default_model` | The agent's name in results, and the pinned model used without `--model`. |
 | `credential_env` | The environment variables that carry the credential. Their values reach only the child process. |
 | `home_env`, `skills_dir` | The variables that move the agent's home (each must point inside the trial), and where a skill is installed relative to the workspace. |
+| `reports_skills` | Whether the agent reports the skills and plugins it loaded. When it does, a missing report fails closed. When it does not, the contamination proof rests on the preflight and the canary sweep. |
 | `builtin_skills`, `builtin_plugins` | The recorded allowlists of skills and plugins built into the pinned CLI, keyed by CLI version. |
 | `discovery_locations(trial)` | Every location the research notes list for the agent, each with its mitigations (`redirected`, `suppressed`, `reported`, `controlled`, `not-a-location`) and the canary test that covers it. A location with no mitigation fails the preflight. |
 | `context_isolation(env)` | Problems that would let instruction files load. Empty when isolated. |
 | `prepare_homes(trial)` | Creates the isolated agent home and user home and returns the child's whole environment, built from scratch. |
 | `install_skill(skill_dir, workspace)` | Copies the skill into the workspace, or installs nothing for a baseline (`None`). |
 | `run(prompt, trial, homes, *, model, timeout, credentials)` | Runs the prompt headless and returns a `RawRun`: exit code, timeout flag, transcript path, stderr, the kept discovery lines, the `python3` calls, and whether any process survived teardown. |
+| `discovery_report_problems(trace, trial, *, installed, system_root)` | Problems in the agent's own report of where it looked for skills. Claude Code reads its debug log; an agent with no such report returns none. |
 | `parse(raw)` | Normalises the event stream into a `Trace`: skills triggered and invoked, commands run with their output and status, the final message, CLI version, model, exit code, whether the stream ended normally, the run status and its reason, and the skills, plugins and commands the agent reported. |
 
-`visible_skills` is `None` for an agent that does not report its skills. For such an agent, the contamination proof rests on the redirected homes and the canary sweep.
+`visible_skills` is `None` for an agent that does not report its skills. For such an agent (`reports_skills` false), the contamination proof rests on the redirected homes, the preflight's mitigated discovery locations and the canary sweep, and the results note it.
 
 ### Claude Code
 
@@ -120,7 +122,7 @@ The preflight checks all of this before the agent starts, and fails closed.
 
 Each trial passes only when all of these hold:
 
-1. **Reported skills.** The init event's skills, plus any command a `system/commands_changed` event adds, plus every successful `Skill` call, minus the recorded built-ins, is exactly the skill under test (empty for a baseline). The init event's plugins equal the built-in plugins.
+1. **Reported skills.** The init event's skills, plus any command a `system/commands_changed` event adds, plus every successful `Skill` call, minus the recorded built-ins, is exactly the skill under test (empty for a baseline). The init event's plugins equal the built-in plugins, and a missing skill or plugin report fails closed.
 2. **Discovery report.** In the debug log, the `user=` location sits inside the trial home, every `project=` location inside the workspace, and the managed location is missing or empty. The per-location counts are `managed: 0, user: 0, additional: 0` and `project: 1` (0 for a baseline). A missing report fails closed. Only these lines are kept, and the debug log is deleted.
 3. **Never-appear list.** The repo's dev skills, the other shipped skills, and the user's own skills (directory names under `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.pi/agent/skills` and the caller's agent homes) must not appear among the reported skills. The discovery report is checked by location instead (step 2), so any skill directory outside the trial fails there. A name that collides with a built-in is noted, not failed. The repo's `AGENTS.md`, `CLAUDE.md` and the user's `~/.claude/CLAUDE.md` are listed too. They are kept out by the preflight's instruction-file check, because a live run cannot observe the request.
 

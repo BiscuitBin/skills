@@ -21,6 +21,8 @@ OPERATORS = {";", "&&", "||", "|", "&", "\n"}
 # Words that run the command after them; leading NAME=value assignments are skipped too.
 PREFIXES = {"env", "exec", "command", "time", "nohup"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+# Seconds the shipped script may take to produce the expected output.
+SCRIPT_TIMEOUT = 30.0
 # Interpreter options whose value is the next word.
 VALUE_OPTIONS = {"-W", "-X", "--check-hash-based-pycs"}
 
@@ -40,7 +42,9 @@ def expected_script_output(skill_dir: Path, script: str, args: tuple[str, ...]) 
             [sys.executable, "-I", str(skill_dir / script), *args],
             cwd=scratch,
             env={"PATH": "/usr/bin:/bin", "PYTHONUTF8": "1"},
+            stdin=subprocess.DEVNULL,
             capture_output=True,
+            timeout=SCRIPT_TIMEOUT,
             check=True,
         )
     return result.stdout.decode()
@@ -48,7 +52,7 @@ def expected_script_output(skill_dir: Path, script: str, args: tuple[str, ...]) 
 
 def contains_lines(text: str, expected: str) -> bool:
     """Whether expected's lines appear, whole and in order, as a run of text's lines."""
-    want = expected.rstrip("\n").split("\n")
+    want = expected.removesuffix("\n").split("\n")
     have = [line.removesuffix("\r") for line in text.split("\n")]
     return any(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1))
 

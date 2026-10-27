@@ -287,6 +287,11 @@ def test_a_managed_skill_canary_is_detected(
     *,
     policy_skills_on: bool,
 ) -> None:
+    # The managed root must not exist beforehand: the test removes only what it
+    # created, and an existing tree would make "managed location not empty" moot.
+    root = Path("/etc/claude-code")
+    if root.exists():
+        pytest.skip(f"{root} already exists; refusing to modify it")
     canary = LINUX_MANAGED / "canary-managed"
     sudo = ["sudo", "-n"]
     try:
@@ -304,7 +309,10 @@ def test_a_managed_skill_canary_is_detected(
 
         outcome = sweep(tmp_path, monkeypatch, plant, policy_skills_on=policy_skills_on)
     finally:
-        subprocess.run([*sudo, "rm", "-rf", "/etc/claude-code"], check=False)
+        subprocess.run([*sudo, "rm", "-rf", str(canary)], check=False)
+        # rmdir leaves any directory that is not empty, so nothing else is removed.
+        for created in (LINUX_MANAGED, LINUX_MANAGED.parent, root):
+            subprocess.run([*sudo, "rmdir", str(created)], check=False, capture_output=True)
     loaded = "canary-managed" in (outcome.trace.visible_skills or frozenset())
     record_property("managed canary loaded", loaded)
     record_property("policy skills flag", "off" if policy_skills_on else "on")

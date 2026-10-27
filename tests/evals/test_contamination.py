@@ -269,3 +269,51 @@ def test_preflight_fails_closed_on_an_unmitigated_location(tmp_path: Path) -> No
     adapter.install_skill(ROOT / "skills/cowsay", trial.workspace)
     found = preflight(adapter, trial, homes, repo, "cowsay")
     assert any("mystery" in p and "no mitigation" in p for p in found)
+
+
+def test_a_reporting_agent_without_a_plugin_report_fails_closed(trial: TrialPaths) -> None:
+    assert any("plugins" in p for p in problems(trial, trace(trial, visible_plugins=None)))
+
+
+class Silent(ClaudeCode):
+    """An agent that reports nothing, as Codex and Pi do: the proof is the preflight and sweep."""
+
+    reports_skills = False
+
+    def discovery_report_problems(
+        self,
+        trace: Trace,  # noqa: ARG002 -- this agent reports nothing to check
+        trial: TrialPaths,  # noqa: ARG002
+        *,
+        installed: bool,  # noqa: ARG002
+        system_root: Path,  # noqa: ARG002
+    ) -> list[str]:
+        return []
+
+
+def test_a_non_reporting_agent_rests_on_redirection_and_the_sweep(trial: TrialPaths) -> None:
+    silent = Silent(ROOT / "node_modules/.bin/claude")
+    observed = trace(trial, visible_skills=None, visible_plugins=None, debug_lines=())
+    result = check(
+        silent,
+        observed,
+        skill="cowsay",
+        baseline=False,
+        trial=trial,
+        never=NOTHING,
+        system_root=Path("/nonexistent"),
+    )
+    assert result.problems == []
+    assert any("canary sweep" in note for note in result.notes)
+    leaked = replace(observed, skills_triggered=["cross-model-review"])
+    forbidden = NeverAppear(skills={"cross-model-review": "dev skill"}, instruction_files=())
+    result = check(
+        silent,
+        leaked,
+        skill="cowsay",
+        baseline=False,
+        trial=trial,
+        never=forbidden,
+        system_root=Path("/nonexistent"),
+    )
+    assert any("cross-model-review" in p for p in result.problems)

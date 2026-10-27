@@ -118,6 +118,10 @@ class Adapter(Protocol):
     home_env: ClassVar[tuple[str, ...]]
     # Where install_skill puts a skill, relative to the workspace.
     skills_dir: ClassVar[str]
+    # Whether the agent reports the skills and plugins it loaded. When it does,
+    # a missing report fails closed; when it does not, the contamination proof
+    # rests on the preflight and the canary sweep.
+    reports_skills: ClassVar[bool]
     # Skills and plugins built into the pinned CLI, keyed by CLI version.
     builtin_skills: ClassVar[Mapping[str, frozenset[str]]]
     builtin_plugins: ClassVar[Mapping[str, frozenset[str]]]
@@ -144,3 +148,9 @@ class Adapter(Protocol):
     ) -> RawRun: ...
 
     def parse(self, raw: RawRun) -> Trace: ...
+
+    def discovery_report_problems(
+        self, trace: Trace, trial: TrialPaths, *, installed: bool, system_root: Path
+    ) -> list[str]:
+        """Problems in the agent's own report of where it looked for skills."""
+        ...

@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from skills_tooling.evals import workspace
@@ -11,7 +12,6 @@ from skills_tooling.evals.adapter import Command, Homes, Location, RawRun, Trace
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
     from skills_tooling.evals.adapter import TrialPaths
 
@@ -63,6 +63,9 @@ DEBUG_KEPT = re.compile(
     r"Loading skills from: |Loaded \d+ unique skills \(|\[skills\] Dynamically discovered"
 )
 TIMESTAMP = re.compile(r"^\S+ \[DEBUG\] ")
+LOADING = re.compile(r"Loading skills from: managed=(.*?), user=(.*?), project=\[(.*)\]$")
+LOADED = re.compile(r"Loaded \d+ unique skills \((.*)\)$")
+COUNT = re.compile(r"(managed|user|project|additional): (\d+)")
 
 
 class ClaudeCode:
@@ -71,6 +74,7 @@ class ClaudeCode:
     credential_env: ClassVar[tuple[str, ...]] = ("CLAUDE_CODE_OAUTH_TOKEN",)
     home_env: ClassVar[tuple[str, ...]] = ("CLAUDE_CONFIG_DIR",)
     skills_dir: ClassVar[str] = ".claude/skills"
+    reports_skills: ClassVar[bool] = True
     builtin_skills: ClassVar[Mapping[str, frozenset[str]]] = BUILTIN_SKILLS
     builtin_plugins: ClassVar[Mapping[str, frozenset[str]]] = BUILTIN_PLUGINS
 
@@ -228,6 +232,13 @@ class ClaudeCode:
     def parse(self, raw: RawRun) -> Trace:
         return parse_stream(raw)
 
+    def discovery_report_problems(
+        self, trace: Trace, trial: TrialPaths, *, installed: bool, system_root: Path
+    ) -> list[str]:
+        return discovery_report_problems(
+            trace, trial, installed=installed, system_root=system_root
+        )
+
 
 def _kept_debug_lines(debug_log: Path) -> tuple[str, ...]:
     try:
@@ -363,3 +374,46 @@ def _status_reason(raw: RawRun, *, completed: bool, result: Mapping[str, Any]) -
     if raw.exit_code != 0:
         return f"nonzero exit {raw.exit_code}"
     return ""
+
+
+def _entries(directory: Path) -> list[str]:
+    try:
+        return [p.name for p in directory.iterdir()]
+    except FileNotFoundError, NotADirectoryError, PermissionError:
+        return []
+
+
+def _inside(path: str, root: Path) -> bool:
+    return Path(path).resolve().is_relative_to(root.resolve())
+
+
+def discovery_report_problems(
+    trace: Trace, trial: TrialPaths, *, installed: bool, system_root: Path
+) -> list[str]:
+    """Check the CLI's own report of where it looked for skills and what it loaded."""
+    loading = [m for line in trace.debug_lines if (m := LOADING.search(line))]
+    counts = [m for line in trace.debug_lines if (m := LOADED.search(line))]
+    if not loading or not counts:
+        return ["no discovery report in the debug log; failing closed"]
+    problems = []
+    for match in loading:
+        managed, user, projects = match.groups()
+        if not _inside(user, trial.home):
+            problems.append(f"user skills location {user} is outside the trial home")
+        problems += [
+            f"project skills location {project} is outside the workspace"
+            for project in projects.split(", ")
+            if project and not _inside(project, trial.workspace)
+        ]
+        managed_dir = system_root / managed.lstrip("/")
+        if _entries(managed_dir):
+            problems.append(f"managed skills location {managed_dir} is not empty")
+    wanted = {"managed": 0, "user": 0, "additional": 0, "project": 1 if installed else 0}
+    for match in counts:
+        found = {name: int(n) for name, n in COUNT.findall(match.group(1))}
+        problems += [
+            f"skills loaded from {name}: {found.get(name)} (expected {count})"
+            for name, count in wanted.items()
+            if found.get(name) != count
+        ]
+    return problems
