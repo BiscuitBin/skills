@@ -4,6 +4,7 @@ Codex does not report the skills it loaded, so the check reads the locations
 themselves after the run. Each test plants one canary and shows the check fails.
 """
 
+import json
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -168,3 +169,28 @@ def test_the_preflight_fails_without_instruction_suppression(trial: TrialPaths) 
     assert preflight(adapter, trial, homes, ROOT, "cowsay") == [
         "project_doc_max_bytes=0 is not set, so AGENTS.md files load"
     ]
+
+
+def test_the_secrets_are_the_credential_values_not_its_labels() -> None:
+    auth = {
+        "auth_mode": "chatgpt",
+        "OPENAI_API_KEY": None,
+        "tokens": {
+            "id_token": "eyJhbGciOi.fake-id-token-payload.sig",
+            "access_token": "eyJhbGciOi.fake-access-token-payload.sig",
+            "refresh_token": "rt_fake-refresh-token-0123456789",
+            "account_id": "6f1c2b9e-1111-4222-8333-944455556666",
+        },
+        "last_refresh": "2026-10-20T10:00:00.000000Z",
+        "plan_type": "pro",
+    }
+    text = json.dumps(auth)
+    assert sorted(ADAPTER.secrets({"auth.json": text})) == sorted(
+        [
+            text,
+            "eyJhbGciOi.fake-id-token-payload.sig",
+            "eyJhbGciOi.fake-access-token-payload.sig",
+            "rt_fake-refresh-token-0123456789",
+            "6f1c2b9e-1111-4222-8333-944455556666",
+        ]
+    )

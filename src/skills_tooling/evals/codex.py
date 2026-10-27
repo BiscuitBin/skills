@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import os
 import platform
 import re
 import shutil
@@ -66,6 +67,9 @@ STARTS = re.compile(r'event\.name="codex\.conversation_starts"')
 INVOCATION = re.compile(r'event\.name="codex\.skill_invocation"')
 FIELD = re.compile(r'(?<![\w.])([\w.]+)=("(?:[^"\\]|\\.)*"|\S+)')
 FAILED_LOAD = re.compile(r"(failed to load skill .*)$", re.IGNORECASE)
+# A log record starts with a timestamp; lines without one continue the record above.
+RECORD_START = re.compile(r"^\d{4}-\d\d-\d\dT\S+\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s")
+TELEMETRY = "codex_otel"
 STARTS_FIELDS = ("app.version", "model")
 INVOCATION_FIELDS = ("skill.name", "skill.scope", "skill.invocation_type")
 # Programs that print a file's contents. A command that only names the path,
@@ -73,8 +77,13 @@ INVOCATION_FIELDS = ("skill.name", "skill.scope", "skill.invocation_type")
 READERS = {"cat", "head", "tail", "sed", "nl", "awk", "less", "more", "bat"}
 # Codex wraps each command as `<shell> -c '<command>'`, or -lc for a login shell.
 SHELLS = {"bash", "zsh", "sh"}
-# auth.json fields that are not secret, and would scrub common words if they were.
+# Characters the shell expands, so the name in the text is not the directory read.
+UNPLACEABLE = re.compile(r"[*?\[\]{}$~`]")
+# auth.json fields that are not secret. Short strings are not secret either:
+# keys, tokens and account ids are long, and a short label such as a plan name
+# would scrub every occurrence of a common word.
 NOT_SECRET = {"auth_mode", "last_refresh"}
+SECRET_MIN_LENGTH = 20
 
 
 def pinned_executable(root: Path) -> Path:
@@ -238,9 +247,9 @@ class Codex:
         credentials: Mapping[str, str],
     ) -> RawRun:
         # The login reaches the trial's own CODEX_HOME, which teardown removes.
-        auth = homes.agent_home / "auth.json"
-        auth.write_text(credentials["auth.json"])
-        auth.chmod(0o600)
+        auth = os.open(homes.agent_home / "auth.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(auth, "w") as file:
+            file.write(credentials["auth.json"])
         transcript = trial.tmp / "transcript.jsonl"
         stderr = trial.tmp / "stderr.txt"
         argv = [
@@ -277,8 +286,8 @@ class Codex:
             exit_code=finished.exit_code,
             timed_out=finished.timed_out,
             transcript=transcript,
-            # Telemetry lines can name the account, so only the kept fields stay.
-            stderr="\n".join(line for line in logged.split("\n") if "codex_otel" not in line),
+            # Telemetry can name the account, so only the kept fields stay.
+            stderr=stored_stderr(logged),
             debug_lines=kept_lines(logged),
             python_calls=workspace.python_calls(trial),
             survivors=finished.survivors,
@@ -303,7 +312,7 @@ def _secret_leaves(data: object, key: str = "") -> Iterator[str]:
     elif isinstance(data, list):
         for value in data:
             yield from _secret_leaves(value, key)
-    elif isinstance(data, str) and key not in NOT_SECRET:
+    elif isinstance(data, str) and key not in NOT_SECRET and len(data) >= SECRET_MIN_LENGTH:
         yield data
 
 
@@ -312,17 +321,59 @@ def _fields(line: str, wanted: tuple[str, ...]) -> str:
     return " ".join(f"{name}={found[name]}" for name in wanted if name in found)
 
 
-def kept_lines(stderr: str) -> tuple[str, ...]:
-    """The stderr lines the trace reads, reduced to the fields it needs."""
-    kept = []
+def _target(header: str) -> str:
+    """The log target in `[<span>{…}:…: ]<target>: <message>`.
+
+    Span fields hold quoted strings with spaces and colons, so the separators
+    count only outside braces and quotes.
+    """
+    depth, quoted, start, parts = 0, False, 0, []
+    for index, char in enumerate(header):
+        if char == '"' and header[index - 1 : index] != "\\":
+            quoted = not quoted
+        elif not quoted and char in "{}":
+            depth += 1 if char == "{" else -1
+        elif not quoted and depth == 0 and header.startswith(": ", index):
+            parts.append(header[start:index])
+            start = index + 2
+            if "{" not in parts[-1]:
+                return parts[-1]
+    return ""
+
+
+def _records(stderr: str) -> Iterator[tuple[bool, str]]:
+    """Each stderr line, and whether it belongs to a telemetry record.
+
+    A telemetry field can hold tool output or prompt text over several lines,
+    so the lines after a telemetry record's first line belong to it too.
+    """
+    telemetry = False
     for line in stderr.split("\n"):
-        if STARTS.search(line):
+        if match := RECORD_START.match(line):
+            telemetry = _target(line[match.end() :]).startswith(TELEMETRY)
+        yield telemetry, line
+
+
+def kept_lines(stderr: str) -> tuple[str, ...]:
+    """The stderr lines the trace reads, reduced to the fields it needs.
+
+    A failed skill load counts only from Codex's own log, never from a
+    telemetry record, which can carry any text a tool printed.
+    """
+    kept = []
+    for telemetry, line in _records(stderr):
+        if telemetry and RECORD_START.match(line) and STARTS.search(line):
             kept.append(f"conversation_starts {_fields(line, STARTS_FIELDS)}")
-        elif INVOCATION.search(line):
+        elif telemetry and RECORD_START.match(line) and INVOCATION.search(line):
             kept.append(f"skill_invocation {_fields(line, INVOCATION_FIELDS)}")
-        elif match := FAILED_LOAD.search(line):
+        elif not telemetry and (match := FAILED_LOAD.search(line)):
             kept.append(match.group(1))
     return tuple(kept)
+
+
+def stored_stderr(stderr: str) -> str:
+    """stderr without the telemetry records, which can name the account."""
+    return "\n".join(line for telemetry, line in _records(stderr) if not telemetry)
 
 
 def _read_events(transcript: Path) -> tuple[list[dict[str, Any]], bool]:
@@ -363,7 +414,9 @@ def skills_read(command: str) -> list[str]:
     """The skill of each SKILL.md a reader program in `command` names.
 
     `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path named by anything
-    other than a reader, such as `ls`, `test` or `echo`, is not a read.
+    other than a reader, such as `ls`, `test` or `echo`, is not a read. A path
+    whose skill directory cannot be placed from the text (`../SKILL.md`, a glob,
+    a variable) names no skill; Codex's own implicit event still covers it.
     """
     cwd = Path()
     skills = []
@@ -374,9 +427,15 @@ def skills_read(command: str) -> list[str]:
         if Path(words[0]).name not in READERS:
             continue
         for word in words[1:]:
-            path = cwd / word
-            if not word.startswith("-") and path.name == "SKILL.md" and path.parent.name:
-                skills.append(path.parent.name)
+            path = Path(os.path.normpath(cwd / word))
+            skill = path.parent.name
+            if (
+                not word.startswith("-")
+                and path.name == "SKILL.md"
+                and skill not in ("", "..")
+                and not UNPLACEABLE.search(skill)
+            ):
+                skills.append(skill)
     return skills
 
 

@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from skills_tooling.evals.adapter import RawRun, Trace
-from skills_tooling.evals.codex import parse_stream
+from skills_tooling.evals.codex import kept_lines, parse_stream, stored_stderr
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/codex"
 Edit = Callable[[dict[str, Any]], dict[str, Any] | None]
@@ -187,3 +187,70 @@ def test_a_complete_stream_still_fails_on_the_process_outcome(
 ) -> None:
     trace = parse("fake-should-trigger", **overrides)
     assert (trace.status, trace.status_reason) == ("infra_error", reason)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat ../SKILL.md",
+        "cat .agents/skills/*/SKILL.md",
+        'cat "$dir/SKILL.md"',
+        "cat ./SKILL.md",
+    ],
+)
+def test_a_read_whose_skill_cannot_be_placed_names_no_skill(tmp_path: Path, command: str) -> None:
+    def replace_read(event: dict[str, Any]) -> dict[str, Any]:
+        item = event.get("item", {})
+        if "SKILL.md" in item.get("command", ""):
+            event = {**event, "item": {**item, "command": f"/bin/zsh -c '{command}'"}}
+        return event
+
+    path = edited(tmp_path, "fake-should-trigger", replace_read)
+    trace = parse_stream(raw_run(path, without_invocations("fake-should-trigger")))
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], [])
+
+
+def test_a_normalised_path_names_its_skill(tmp_path: Path) -> None:
+    def replace_read(event: dict[str, Any]) -> dict[str, Any]:
+        item = event.get("item", {})
+        if "SKILL.md" in item.get("command", ""):
+            command = "cat .agents/skills/cowsay/scripts/../SKILL.md"
+            event = {**event, "item": {**item, "command": command}}
+        return event
+
+    path = edited(tmp_path, "fake-should-trigger", replace_read)
+    trace = parse_stream(raw_run(path, without_invocations("fake-should-trigger")))
+    assert trace.skills_triggered == ["cowsay"]
+
+
+STDERR = (
+    "Reading additional input from stdin...\n"
+    '2026-10-27T06:30:46.980Z  INFO codex_otel.log_only: event.name="codex.conversation_starts"'
+    ' app.version=0.163.0 user.email="someone@example.com" model=gpt-5.6-terra\n'
+    '2026-10-27T06:30:47.100Z  INFO session_loop{thread_id=01a1}:turn{otel.name="a: b" x=1}:'
+    ' codex_otel.log_only: event.name="codex.tool_result"'
+    ' output="first line\n'
+    "failed to load skill /tmp/x/SKILL.md: printed by a tool\n"
+    'last line"\n'
+    "2026-10-27T06:30:48.000Z ERROR codex_core::session::session: failed to load skill"
+    " /w/.agents/skills/broken/SKILL.md: missing YAML frontmatter delimited by ---\n"
+)
+
+
+def test_only_codexs_own_failed_load_errors_are_kept() -> None:
+    assert kept_lines(STDERR) == (
+        "conversation_starts app.version=0.163.0 model=gpt-5.6-terra",
+        (
+            "failed to load skill /w/.agents/skills/broken/SKILL.md: missing YAML frontmatter "
+            "delimited by ---"
+        ),
+    )
+
+
+def test_stored_stderr_drops_whole_telemetry_records() -> None:
+    stored = stored_stderr(STDERR)
+    assert "someone@example.com" not in stored
+    assert "printed by a tool" not in stored
+    assert "last line" not in stored
+    assert stored.startswith("Reading additional input from stdin...")
+    assert "missing YAML frontmatter" in stored
