@@ -109,7 +109,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - **Writes outside the project:** Claude Code creates its messaging socket at `/tmp/cc-socks/<pid>.sock` and ignores `TMPDIR`. It removes the socket on exit. The CI-only managed canary test also writes outside the project by design (user-approved): it plants a canary under `/etc/claude-code` with sudo on the throwaway runner, refuses if the directory already exists, and removes only what it created. Its first step asks the CLI for its managed path, because `/etc/claude-code/.claude/skills` is inferred from the binary, not reported by a Linux build. Recorded per AGENTS.md; nothing else wrote outside the project.
 - **Review tooling:** Codex could not review from the project-local home at first. The runner was fixed in `52a464e`, `4b0ccc6` and `1b3734b` (see the design checkpoint).
 - **First PR CI run (#7):** 34 real-CLI tests failed on Linux. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` makes the CLI require `bubblewrap`, which the runner lacks, and the CLI exits before its first event. The flag is dropped, and a new test checks that the token never reaches the agent's Bash commands.
-- **Validation:** `just check` passes locally with 339 tests after the PR review fixes (318 before), 2 skipped (the CI-only managed canary). PR CI (run `40441253332`, ubuntu-24.04) passes with 319, 1 skipped (the validator's case-insensitive-filesystem test), including both managed-canary arms and the clean-worktree step. The local run also covers strict mypy, lint, lock checks, distribution validation, both skills, the eval suite and the pinned CLI versions. `git status` is clean afterwards.
+- **Validation:** `just check` passes locally with 339 tests after the PR review fixes (318 before), 2 skipped (the CI-only managed canary). PR CI (run `40441253332`, ubuntu-24.04) passes with 319, 1 skipped (the validator's case-insensitive-filesystem test), including both managed-canary arms and the clean-worktree step. After the PR review fixes, run `40457182948` on `53b57ad` passes with 340, 1 skipped, all 25 canary tests included. The local run also covers strict mypy, lint, lock checks, distribution validation, both skills, the eval suite and the pinned CLI versions. `git status` is clean afterwards.
 
 ### Local code review (`code-review` skill, high)
 
@@ -169,7 +169,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 ### PR review (GitHub Copilot)
 
 - **Reviewer:** `copilot-pull-request-reviewer` on PR #7 (a different model family; triaged inline by the implementer against the code and with failing tests first)
-- **Reviewed:** `4890bc9` · **Comments:** `ai_tmp/pr7-copilot-comments.json` · **Fixed in:** `3b6cb75`
+- **Reviewed:** `4890bc9` · **Comments:** `ai_tmp/pr7-copilot-comments.json` · **Fixed in:** `3b6cb75` · **CI:** run `40457182948` green · Each thread was answered with its fix and resolved, at the user's request
 
 | # | Severity | Finding | Verdict | Action |
 | --- | --- | --- | --- | --- |
