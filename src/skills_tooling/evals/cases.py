@@ -81,7 +81,7 @@ def _assertion(data: object, where: str, skill_dir: Path, problems: list[str]) -
         if key in data and not isinstance(data[key], str):
             problems.append(f"{where}: {key} must be a string")
     args = data.get("args")
-    if args is not None and not (isinstance(args, list) and all(isinstance(a, str) for a in args)):
+    if "args" in data and not (isinstance(args, list) and all(isinstance(a, str) for a in args)):
         problems.append(f"{where}: args must be a list of strings")
     script = data.get("script")
     if isinstance(script, str):

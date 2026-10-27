@@ -56,14 +56,14 @@ Cases live at `evals/<skill>/evals.json`, outside the shipped skill's directory,
 | `files` | Input files are not staged yet: anything but an empty list is rejected with a note that staging is deferred. |
 | `assertions` | Deterministic assertions, below. A `behaviour` case needs at least one. |
 
-Unknown keys are rejected at every level, so a later field, such as rubric `expectations`, has to be added on purpose.
+Unknown keys are rejected at every level, so a later field, such as rubric `expectations`, has to be added on purpose. An assertion's `args`, when present, must be a list of strings: `null` is rejected, and `[]` means no arguments.
 
 ### Assertions
 
 | Type | Fields | Passes when |
 | --- | --- | --- |
 | `skill_triggered` | none | The trace records a trigger of the skill under test. |
-| `script_ran` | `script`, optional `args` | All three hold, so a command that merely names the script cannot pass. (1) A Bash command, split into simple commands on `;`, `&&`, `\|\|`, `\|`, `&` and newlines, runs `python`, `python3` or `python3.N` with `script` as its first non-option argument. A path inside `printf`, `echo`, `cat`, a comment, `sh -c '…'` or after `-c`/`-m` does not count. (2) That call's tool result, which the CLI writes, is not an error and contains the script's output for `args` as whole lines (with no `args`, it is nonempty). (3) The trial's `python3` wrapper logged a call of the installed copy, with `args` or with no arguments (text on stdin). |
+| `script_ran` | `script`, optional `args` | All three hold, so a command that merely names the script cannot pass. (1) A Bash command, split into simple commands on `;`, `&&`, `\|\|`, `\|`, `&` and newlines, runs `python`, `python3` or `python3.N` with `script` as its first non-option argument, matched on trailing path parts so `cd scripts && python3 cowsay.py` counts. A path inside `printf`, `echo`, `cat`, a comment or `sh -c '…'` does not count, and neither does a path after an option that runs no script: `-c` or `-m` (attached or clustered, as in `-Ic'…'`), `-`, `-h`, `-V`, `--help`, `--version` or any option the parser does not know. (2) That call's tool result, which the CLI writes, is not an error and contains the script's output for `args` as whole lines (with no `args`, it is nonempty). (3) The trial's `python3` wrapper logged a call of the installed copy, with `args` or with no arguments (text on stdin). |
 | `final_contains_script_output` | `script`, `args` | The harness runs the shipped script itself (`python -I`, outside the workspace, stdin `/dev/null`, at most 30 seconds) and its output, minus the final newline, appears in the final message as a run of whole, unaltered lines. A trailing `\r` per line is ignored; nothing else is. |
 | `output_contains` | `value` | The final message contains `value`. |
 | `output_matches` | `pattern` | Python `re.search(pattern, final_message)` matches. The schema rejects a pattern that does not compile. |
@@ -105,7 +105,7 @@ An adapter drives one agent CLI. The interface is `skills_tooling.evals.adapter.
 | --- | --- | --- |
 | Claude Code | `CLAUDE_CODE_OAUTH_TOKEN`, from `claude setup-token` | Read from the caller's environment and placed only in the child's environment. The harness writes it nowhere. The pinned CLI does not pass it on to its Bash tool's processes. |
 
-The harness refuses to start without the token. Every file it writes under `eval-results/` passes through a scrub that replaces each credential value with `[REDACTED]`. The run then rereads every file, and deletes any that still holds a value and fails. After each trial, in a `finally`, the process group is killed and checked empty, and the trial's `home/`, `tmp/` and `bin/` are removed. The workspace is kept for inspection unless it holds a credential value, in which case it is deleted too. `results.json` records the credential's variable name, never its value. Codex's `auth.json` and Pi's auth file belong in the per-trial agent home, which the same `finally` removes (tickets 06 and 07).
+The harness refuses to start without the token. Every file it writes under `eval-results/` passes through a scrub that replaces each credential value with `[REDACTED]`. The run then rereads every file, and deletes any that still holds a value and fails. After each trial, in a `finally`, the process group is killed and checked empty, and the trial's `home/`, `tmp/` and `bin/` are removed. The workspace is kept for inspection. If a credential value is found anywhere in the trial directory, the whole trial directory is deleted, the files are named in the trial's `secret_found`, and the trial fails. The `PASS`/`FAIL` lines printed at the end are scrubbed the same way as the files. `results.json` records the credential's variable name, never its value. Codex's `auth.json` and Pi's auth file belong in the per-trial agent home, which the same `finally` removes (tickets 06 and 07).
 
 ## Isolation
 
@@ -151,4 +151,5 @@ The canary sweep (`tests/evals/test_contamination_canaries.py`) shows the check 
 | `assertions` | Each `type`, `result` (`passed`, `failed` or `not_scored`) and `evidence`. Every assertion is `not_scored` on an infrastructure error, so a crash can never pass a should-not-trigger case. |
 | `transcript` | The scrubbed transcript, relative to the repo root. |
 | `stderr` | The last 2000 characters of the agent's stderr, scrubbed. |
-| `passed` | `status` is `ok`, contamination passed, the trigger matched and every assertion passed. |
+| `secret_found` | `null`, or the `files` in the trial directory that held a credential value and whether the directory was `deleted`. |
+| `passed` | No secret was found, `status` is `ok`, contamination passed, the trigger matched and every assertion passed. |

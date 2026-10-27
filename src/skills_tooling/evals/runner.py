@@ -182,6 +182,7 @@ def run_trial(settings: RunSettings, case: Case) -> dict[str, Any]:
         "cli_version": None,
         "model": None,
         "transcript": None,
+        "secret_found": None,
     }
     trial: TrialPaths | None = None
     try:
@@ -193,12 +194,18 @@ def run_trial(settings: RunSettings, case: Case) -> dict[str, Any]:
     finally:
         if trial is not None:
             workspace.teardown(trial)
-            if results.files_holding(trial.root, settings.secrets):
-                shutil.rmtree(trial.workspace, ignore_errors=True)
-                record["workspace_deleted"] = "a secret was found in the workspace"
+            leaked = results.files_holding(trial.root, settings.secrets)
+            if leaked:
+                # Anywhere in the trial, not only the workspace, so all of it goes.
+                shutil.rmtree(trial.root, ignore_errors=True)
+                record["secret_found"] = {
+                    "files": [path.relative_to(trial.root).as_posix() for path in leaked],
+                    "deleted": not trial.root.exists(),
+                }
         record["finished_at"] = _now()
     record["passed"] = (
-        record["status"] == "ok"
+        record["secret_found"] is None
+        and record["status"] == "ok"
         and record["contamination"]["passed"] is True
         and record["trigger"]["matched"] is True
         and all(a["result"] == "passed" for a in record["assertions"])
@@ -234,15 +241,21 @@ def run_suite(settings: RunSettings) -> int:
     for trial in trials:
         verdict = "PASS" if trial["passed"] else "FAIL"
         reason = "" if trial["passed"] else f": {_why(trial)}"
-        print(f"{verdict} {trial['case']}{reason}")
+        # The record holds the agent's own error text, so it is scrubbed like the files.
+        print(results.scrub(f"{verdict} {trial['case']}{reason}", settings.secrets))
     print(f"Results: {path.relative_to(settings.root)}")
     return 0 if passed else 1
 
 
 def _why(trial: Mapping[str, Any]) -> str:
-    if trial.get("status") != "ok":
-        return f"infrastructure error, {trial.get('status_reason')}"
     reasons = []
+    if leak := trial.get("secret_found"):
+        state = "deleted" if leak["deleted"] else "NOT deleted"
+        reasons.append(
+            f"secret found in the trial directory ({', '.join(leak['files'])}), {state}"
+        )
+    if trial.get("status") != "ok":
+        return "; ".join([*reasons, f"infrastructure error, {trial.get('status_reason')}"])
     if not trial["contamination"]["passed"]:
         reasons.append("contamination: " + "; ".join(trial["contamination"]["problems"]))
     if trial["trigger"]["matched"] is not True:

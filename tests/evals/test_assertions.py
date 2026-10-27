@@ -90,10 +90,25 @@ def test_a_real_run_passes_every_assertion() -> None:
         "true # python3 .claude/skills/cowsay/scripts/cowsay.py",
         "sh -c 'python3 .claude/skills/cowsay/scripts/cowsay.py -- hi'",
         "python3 -c 'print(1)' .claude/skills/cowsay/scripts/cowsay.py",
+        "python3 -c'print(1)' .claude/skills/cowsay/scripts/cowsay.py",
+        "python3 -Ic 'print(1)' .claude/skills/cowsay/scripts/cowsay.py",
+        "python3 -Ic'print(1)' .claude/skills/cowsay/scripts/cowsay.py",
+        "python3 -mjson.tool .claude/skills/cowsay/scripts/cowsay.py",
     ],
 )
 def test_script_ran_fails_when_the_command_only_names_the_script(command: str) -> None:
     assert not check(SCRIPT_RAN, trace(commands=[Command(command, ok=True, output=COW)]))
+
+
+@pytest.mark.parametrize("flag", ["--version", "-V", "-h", "-?", "--help", "-IV"])
+def test_script_ran_fails_when_the_interpreter_only_reports_itself(flag: str) -> None:
+    # Without args the tool result need only be nonempty, and the version text is.
+    command = f"python3 {flag} .claude/skills/cowsay/scripts/cowsay.py"
+    call = PythonCall(str(WORKSPACE), (flag, ".claude/skills/cowsay/scripts/cowsay.py"))
+    observed = trace(
+        commands=[Command(command, ok=True, output="Python 3.13.1")], python_calls=(call,)
+    )
+    assert not check(Assertion("script_ran", script=SCRIPT), observed)
 
 
 def test_script_ran_fails_when_the_command_skipped_the_script() -> None:
@@ -124,6 +139,9 @@ def test_script_ran_fails_without_a_python_call_for_the_installed_copy() -> None
         "python3 -X utf8 .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
         "python3 -W ignore -I .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
         "env -i PYTHONUTF8=1 python3 .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
+        "python3 -Xutf8 -Wignore .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
+        "python3 -IuX utf8 .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
+        "python3 --check-hash-based-pycs never .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
     ],
 )
 def test_script_ran_accepts_interpreter_options_and_env(command: str) -> None:
@@ -137,6 +155,18 @@ def test_script_ran_accepts_a_cd_then_relative_path_and_stdin() -> None:
     call = PythonCall(str(INSTALLED), (SCRIPT,))
     observed = trace(commands=[Command(command, ok=True, output=COW)], python_calls=(call,))
     assert check(SCRIPT_RAN, observed)
+
+
+def test_script_ran_accepts_a_cd_into_the_scripts_directory() -> None:
+    command = "cd .claude/skills/cowsay/scripts && python3 cowsay.py -- 'Ship it, team!'"
+    call = PythonCall(str(INSTALLED / "scripts"), ("cowsay.py", *ARGS))
+    observed = trace(commands=[Command(command, ok=True, output=COW)], python_calls=(call,))
+    assert check(SCRIPT_RAN, observed)
+
+
+def test_script_ran_fails_for_a_different_script_of_the_same_name() -> None:
+    command = "python3 elsewhere/cowsay.py -- 'Ship it, team!'"
+    assert not check(SCRIPT_RAN, trace(commands=[Command(command, ok=True, output=COW)]))
 
 
 @pytest.mark.parametrize(

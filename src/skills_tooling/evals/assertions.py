@@ -25,8 +25,10 @@ PREFIXES = {"env", "exec", "command", "time", "nohup"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 # Seconds the shipped script may take to produce the expected output.
 SCRIPT_TIMEOUT = 30.0
-# Interpreter options whose value is the next word.
-VALUE_OPTIONS = {"-W", "-X", "--check-hash-based-pycs"}
+# The interpreter's single-letter flags that take no value and still run the script.
+FLAGS = set("bBdEiIOPqsSuvx")
+# Single-letter options whose value is the rest of the word, or else the next word.
+VALUE_FLAGS = set("WX")
 
 
 @dataclass(frozen=True)
@@ -96,18 +98,48 @@ def _script_argument(words: list[str]) -> tuple[str, list[str]] | None:
             words = words[1:]
     if not words or PYTHON.fullmatch(Path(words[0]).name) is None:
         return None
-    rest = words[1:]
-    while rest and rest[0].startswith("-"):
-        if rest[0] in {"-c", "-m", "-"}:
-            return None
-        rest = rest[2:] if rest[0] in VALUE_OPTIONS else rest[1:]
+    rest = _past_options(words[1:])
     return (rest[0], rest[1:]) if rest else None
+
+
+def _past_options(rest: list[str]) -> list[str] | None:
+    """The words after the interpreter's options, or None when they run no script.
+
+    Inline code (-c), a module (-m), stdin (-), help, version, and any option
+    not known here all mean no script ran, attached or clustered as in -Ic'…'.
+    """
+    while rest and rest[0].startswith("-"):
+        word, rest = rest[0], rest[1:]
+        if word == "--check-hash-based-pycs":
+            rest = rest[1:]
+            continue
+        if word.startswith("--") or word == "-":
+            return None
+        for position, flag in enumerate(word[1:], start=2):
+            if flag in VALUE_FLAGS:
+                if position == len(word):
+                    rest = rest[1:]
+                break
+            if flag not in FLAGS:
+                return None
+    return rest
+
+
+def _same_script(argument: str, script: str) -> bool:
+    """Whether the two paths agree on their trailing parts, as after `cd scripts`.
+
+    The wrapper's log, resolved against the real working directory, is what
+    proves the installed copy ran; this only ties the command to the script.
+    """
+    have, want = Path(argument).parts, Path(script).parts
+    shorter = min(len(have), len(want))
+    return have[-shorter:] == want[-shorter:]
 
 
 def _runs_script(command: Command, script: str) -> bool:
     for words in _simple_commands(command.command):
         found = _script_argument(words)
-        if found is not None and (found[0] == script or found[0].endswith("/" + script)):
+        if found is not None and _same_script(found[0], script):
             return True
     return False
 

@@ -128,6 +128,18 @@ def test_a_valid_suite_loads(tmp_path: Path) -> None:
             ),
             "args must be a list of strings",
         ),
+        (
+            behaviour(
+                assertions=[
+                    {
+                        "type": "final_contains_script_output",
+                        "script": "scripts/cowsay.py",
+                        "args": None,
+                    }
+                ]
+            ),
+            "args must be a list of strings",
+        ),
     ],
 )
 def test_invalid_cases_are_rejected_with_a_reason(

@@ -259,7 +259,9 @@ def _content_text(content: object) -> str:
 def _read_events(transcript: Path) -> tuple[list[dict[str, Any]], bool]:
     """The transcript's JSON events, and whether every nonblank line parsed."""
     try:
-        lines = transcript.read_text(errors="replace").splitlines()
+        # Only \n ends a JSONL record: splitlines() would also split on U+2028
+        # and the like, which JSON strings may hold raw.
+        lines = transcript.read_text(errors="replace").split("\n")
     except FileNotFoundError:
         return [], True
     events: list[dict[str, Any]] = []

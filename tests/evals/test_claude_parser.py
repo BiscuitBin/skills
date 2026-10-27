@@ -5,6 +5,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from skills_tooling.evals.adapter import RawRun, Trace
 from skills_tooling.evals.assertions import contains_lines, expected_script_output
 from skills_tooling.evals.claude_code import BUILTIN_PLUGINS, BUILTIN_SKILLS, parse_stream
@@ -65,6 +67,30 @@ def test_behaviour_transcript_records_the_command_and_its_output() -> None:
     assert command.ok
     assert command.command.startswith("python3 .claude/skills/cowsay/scripts/cowsay.py")
     assert "< Ship it, team! >" in command.output
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85"])
+def test_unicode_line_separators_inside_a_string_do_not_split_an_event(
+    tmp_path: Path, separator: str
+) -> None:
+    # JSON allows these unescaped inside strings, and the CLI writes them raw.
+    def add_separator(event: dict[str, Any]) -> dict[str, Any]:
+        for block in event.get("message", {}).get("content", []):
+            if isinstance(block, dict) and block.get("type") == "text":
+                block["text"] += f"{separator}moo"
+        if event.get("type") == "result":
+            event["result"] += f"{separator}moo"
+        return event
+
+    events = [json.loads(line) for line in (FIXTURES / "fake-should-trigger.jsonl").open()]
+    path = tmp_path / "separators.jsonl"
+    path.write_text(
+        "".join(json.dumps(add_separator(e), ensure_ascii=False) + "\n" for e in events)
+    )
+    trace = parse_stream(raw_run(path))
+    assert (trace.status, trace.stream_completed) == ("ok", True)
+    assert trace.skills_triggered == ["cowsay"]
+    assert trace.final_message.endswith(f"{separator}moo")
 
 
 def test_a_plugin_prefixed_skill_name_counts_as_the_skill(tmp_path: Path) -> None:
