@@ -114,6 +114,10 @@ class Adapter(Protocol):
     name: ClassVar[str]
     default_model: ClassVar[str]
     credential_env: ClassVar[tuple[str, ...]]
+    # The variables that move the agent's home; each must point inside the trial.
+    home_env: ClassVar[tuple[str, ...]]
+    # Where install_skill puts a skill, relative to the workspace.
+    skills_dir: ClassVar[str]
     # Skills and plugins built into the pinned CLI, keyed by CLI version.
     builtin_skills: ClassVar[Mapping[str, frozenset[str]]]
     builtin_plugins: ClassVar[Mapping[str, frozenset[str]]]

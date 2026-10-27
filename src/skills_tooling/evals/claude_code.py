@@ -69,6 +69,8 @@ class ClaudeCode:
     name: ClassVar[str] = "claude"
     default_model: ClassVar[str] = "claude-sonnet-5-5"
     credential_env: ClassVar[tuple[str, ...]] = ("CLAUDE_CODE_OAUTH_TOKEN",)
+    home_env: ClassVar[tuple[str, ...]] = ("CLAUDE_CONFIG_DIR",)
+    skills_dir: ClassVar[str] = ".claude/skills"
     builtin_skills: ClassVar[Mapping[str, frozenset[str]]] = BUILTIN_SKILLS
     builtin_plugins: ClassVar[Mapping[str, frozenset[str]]] = BUILTIN_PLUGINS
 
@@ -167,7 +169,7 @@ class ClaudeCode:
         if skill_dir is None:
             return None
         # A copy, never a symlink, which would resolve back into the repo.
-        target = workspace / ".claude/skills" / skill_dir.name
+        target = workspace / self.skills_dir / skill_dir.name
         shutil.copytree(skill_dir, target, ignore=shutil.ignore_patterns("__pycache__"))
         return target
 
@@ -342,9 +344,7 @@ def parse_stream(raw: RawRun) -> Trace:
         visible_plugins=(
             frozenset(str(p.get("source")) for p in init["plugins"]) if "plugins" in init else None
         ),
-        initial_commands=(
-            frozenset(init["slash_commands"]) if "slash_commands" in init else None
-        ),
+        initial_commands=(frozenset(init["slash_commands"]) if "slash_commands" in init else None),
         dynamic_commands=dynamic,
         debug_lines=raw.debug_lines,
         python_calls=raw.python_calls,
