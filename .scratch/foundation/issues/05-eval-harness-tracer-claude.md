@@ -109,7 +109,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - **Writes outside the project:** Claude Code creates its messaging socket at `/tmp/cc-socks/<pid>.sock` and ignores `TMPDIR`. It removes the socket on exit. The CI-only managed canary test also writes outside the project by design (user-approved): it plants a canary under `/etc/claude-code` with sudo on the throwaway runner, refuses if the directory already exists, and removes only what it created. Its first step asks the CLI for its managed path, because `/etc/claude-code/.claude/skills` is inferred from the binary, not reported by a Linux build. Recorded per AGENTS.md; nothing else wrote outside the project.
 - **Review tooling:** Codex could not review from the project-local home at first. The runner was fixed in `52a464e`, `4b0ccc6` and `1b3734b` (see the design checkpoint).
 - **First PR CI run (#7):** 34 real-CLI tests failed on Linux. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` makes the CLI require `bubblewrap`, which the runner lacks, and the CLI exits before its first event. The flag is dropped, and a new test checks that the token never reaches the agent's Bash commands.
-- **Validation:** `just check` passes locally with 318 tests, 2 skipped (the CI-only managed canary). PR CI (run `40441253332`, ubuntu-24.04) passes with 319, 1 skipped (the validator's case-insensitive-filesystem test), including both managed-canary arms and the clean-worktree step. The local run also covers strict mypy, lint, lock checks, distribution validation, both skills, the eval suite and the pinned CLI versions. `git status` is clean afterwards.
+- **Validation:** `just check` passes locally with 339 tests after the PR review fixes (318 before), 2 skipped (the CI-only managed canary). PR CI (run `40441253332`, ubuntu-24.04) passes with 319, 1 skipped (the validator's case-insensitive-filesystem test), including both managed-canary arms and the clean-worktree step. The local run also covers strict mypy, lint, lock checks, distribution validation, both skills, the eval suite and the pinned CLI versions. `git status` is clean afterwards.
 
 ### Local code review (`code-review` skill, high)
 
@@ -165,6 +165,20 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 | --- | --- | --- | --- | --- |
 | 1 | medium (triaged low) | The script timeout left the script's descendants running | valid | Runs through `run_isolated` in its own process group, with a regression test (`55f370a`) |
 | 2 | low | A scoring failure dropped the trial's metadata and contamination result | valid | Scoring is guarded; the evidence is kept and the assertions are left unscored, with a regression test |
+
+### PR review (GitHub Copilot)
+
+- **Reviewer:** `copilot-pull-request-reviewer` on PR #7 (a different model family; triaged inline by the implementer against the code and with failing tests first)
+- **Reviewed:** `4890bc9` · **Comments:** `ai_tmp/pr7-copilot-comments.json` · **Fixed in:** `3b6cb75`
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | high | Attached or clustered `-c`/`-m` and `--version`/`-h` let `script_ran` pass without running the script | valid | The interpreter's options are parsed letter by letter; `-c`, `-m`, `-`, help, version and unknown options mean no script. Negative tests for `-c'…'`, `-Ic'…'`, `-mjson.tool` and six info flags; positive for `-Xutf8 -Wignore`, `-IuX utf8` |
+| 2 | high | A secret beside the workspace (`../token.txt`) survived cleanup and the trial still passed | valid | A secret anywhere under the trial deletes the whole trial directory, is recorded in `secret_found` and fails the trial. Test plants the token in the trial root |
+| 3 | high | Failure diagnostics printed to stdout were not scrubbed | valid | The `PASS`/`FAIL` lines go through `scrub`. Test: an infra error whose reason holds the token prints `[REDACTED]` |
+| 4 | medium | `cd …/scripts && python3 cowsay.py` failed `script_ran` | valid | The command's script argument matches on trailing path parts; the wrapper log, resolved against the real cwd, still proves the installed copy ran. A same-named script elsewhere still fails |
+| 5 | medium | `"args": null` passed validation | valid | `args`, when present, must be a list of strings |
+| 6 | medium | `splitlines()` split events on U+2028, U+2029 and U+0085 | valid | Transcripts split on `\n` only. Test writes those characters raw into a fixture |
 
 **Follow-ups:**
 
