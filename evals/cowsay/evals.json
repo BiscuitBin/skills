@@ -1,0 +1,81 @@
+{
+  "skill_name": "cowsay",
+  "evals": [
+    {
+      "id": "trigger-talking-cow",
+      "kind": "trigger",
+      "prompt": "Can you make a cow say 'Hello, world!'?",
+      "should_trigger": true
+    },
+    {
+      "id": "trigger-cowsay-output",
+      "kind": "trigger",
+      "prompt": "Show me cowsay output for: good morning",
+      "should_trigger": true
+    },
+    {
+      "id": "trigger-cow-speech-bubble",
+      "kind": "trigger",
+      "prompt": "I want an ASCII cow with a speech bubble that says I love Mondays.",
+      "should_trigger": true
+    },
+    {
+      "id": "no-trigger-cow-facts",
+      "kind": "trigger",
+      "prompt": "Tell me three facts about cows.",
+      "should_trigger": false
+    },
+    {
+      "id": "no-trigger-ascii-cat",
+      "kind": "trigger",
+      "prompt": "Draw a small ASCII art cat.",
+      "should_trigger": false
+    },
+    {
+      "id": "no-trigger-cow-haiku",
+      "kind": "trigger",
+      "prompt": "Write a haiku about cows grazing in a field.",
+      "should_trigger": false
+    },
+    {
+      "id": "behaviour-ship-it",
+      "kind": "behaviour",
+      "prompt": "Have a cow say: Ship it, team!",
+      "should_trigger": true,
+      "expected_output": "The bundled script's cow saying \"Ship it, team!\", shown verbatim.",
+      "files": [],
+      "assertions": [
+        { "type": "skill_triggered" },
+        { "type": "script_ran", "script": "scripts/cowsay.py", "args": ["--", "Ship it, team!"] },
+        {
+          "type": "final_contains_script_output",
+          "script": "scripts/cowsay.py",
+          "args": ["--", "Ship it, team!"]
+        },
+        { "type": "output_contains", "value": "< Ship it, team! >" }
+      ]
+    },
+    {
+      "id": "behaviour-wrapped-text",
+      "kind": "behaviour",
+      "prompt": "Use cowsay to make a cow say exactly this: The quick brown fox jumps over the lazy dog by the river",
+      "should_trigger": true,
+      "expected_output": "The bundled script's cow with the text wrapped onto two bubble lines at 40 characters.",
+      "files": [],
+      "assertions": [
+        { "type": "skill_triggered" },
+        {
+          "type": "script_ran",
+          "script": "scripts/cowsay.py",
+          "args": ["--", "The quick brown fox jumps over the lazy dog by the river"]
+        },
+        {
+          "type": "final_contains_script_output",
+          "script": "scripts/cowsay.py",
+          "args": ["--", "The quick brown fox jumps over the lazy dog by the river"]
+        },
+        { "type": "output_matches", "pattern": "(?m)^\\\\ dog by the river +/$" }
+      ]
+    }
+  ]
+}

@@ -87,3 +87,19 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 
 - **Design checkpoint:** before building, write the proposed case schema, adapter interface, isolation approach and credential approach, and get them reviewed. Will Codex and Pi fit the adapter interface (see the research notes)? Can contamination slip through? Does credential handling leak user config or secrets into results?
 - **Implementation checkpoint:** before marking done, review the full diff against these acceptance criteria.
+
+## Completion notes
+
+### Design checkpoint: cross-model review
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`)
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** design proposal `ai_tmp/design-05.md` at base `005bbfb`, before any harness code
+- **Findings:** `ai_tmp/review-20261026T233337Z-codex.md` · **Triage:** `ai_tmp/triage-design-05.md` (fresh separate subagent)
+- **Review runs:** the first four runs were rejected (exit 4) because Codex writes runtime state into its project-local home. None of the rejected output was triaged. The runner was fixed in three commits before the fifth run succeeded: `52a464e` ignores Codex's caches, logs, temporary files and state databases; `4b0ccc6` ignores its SQLite maintenance lock; `1b3734b` disables Codex plugins and apps for the read-only reviewer, because Codex updated a curated remote plugin mid-review. Codex config, auth, instructions, memories, plugins and skills stay monitored.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | high | `script_ran` passes on a command that only names the script path | valid | Design §5: `script_ran` needs a python-interpreter command shape, a tool_result containing the harness-computed output, and an entry in the trial `python3` wrapper's exec log. Negative tests cover `printf`/`echo`/`cat`, comments, `false && … ; true` and quoted arguments. |
+| 2 | high | Canary sweep cannot establish nested and managed discovery coverage | valid | Probed: nested `<ws>/sub/.claude/skills` is discovered mid-session after a `Read` in `sub/` (debug `Dynamically discovered`, `system/commands_changed`). The visible set now unions init skills, `commands_changed` and `Skill` calls; the workspace inventory is checked before each run; the nested canary is exercised mid-session. The managed location cannot be redirected, so it is `reported` on every trial and canaried by a CI-only sudo test (user's decision). The injectable system root is a checker unit test only. |
+| 3 | medium | A normal exit can leave credential-bearing descendants alive | valid | The process group is killed and verified empty on every path, normal exit included, with a background-`sleep` test. Probed: the pinned CLI already strips `CLAUDE_CODE_OAUTH_TOKEN` from Bash children; `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` added as a second guard. A `setsid` escape is documented as a limit. |
