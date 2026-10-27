@@ -13,6 +13,7 @@ from skills_tooling.evals import assertions
 from skills_tooling.evals.adapter import Command, PythonCall, Trace
 from skills_tooling.evals.assertions import contains_lines, evaluate, expected_script_output
 from skills_tooling.evals.cases import Assertion
+from tests.evals.test_claude_parser import parse
 
 ROOT = Path(__file__).parents[2]
 SKILL_DIR = ROOT / "skills/cowsay"
@@ -223,3 +224,13 @@ def test_a_timed_out_script_leaves_no_descendants(
         if pid_file.exists():
             with contextlib.suppress(ProcessLookupError):
                 os.kill(int(pid_file.read_text()), signal.SIGKILL)
+
+
+def test_the_cowsay_behaviour_assertions_over_the_recorded_live_transcript() -> None:
+    observed = parse("live-behaviour")
+    assert check(FINAL, observed)
+    assert check(Assertion("skill_triggered"), observed)
+    assert check(Assertion("output_contains", value="< Ship it, team! >"), observed)
+    assert not check(
+        Assertion("final_contains_script_output", script=SCRIPT, args=("--", "Ship it")), observed
+    )

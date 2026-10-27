@@ -9,6 +9,7 @@ from skills_tooling.evals import workspace
 from skills_tooling.evals.adapter import Location, Trace, TrialPaths
 from skills_tooling.evals.claude_code import BUILTIN_PLUGINS, BUILTIN_SKILLS, ClaudeCode
 from skills_tooling.evals.contamination import NeverAppear, check, never_appear, preflight
+from tests.evals.test_claude_parser import parse
 
 ROOT = Path(__file__).parents[2]
 ADAPTER = ClaudeCode(ROOT / "node_modules/.bin/claude")
@@ -317,3 +318,14 @@ def test_a_non_reporting_agent_rests_on_redirection_and_the_sweep(trial: TrialPa
         system_root=Path("/nonexistent"),
     )
     assert any("cross-model-review" in p for p in result.problems)
+
+
+def test_recorded_live_transcripts_pass_and_a_planted_skill_fails(trial: TrialPaths) -> None:
+    # The debug log is not part of the transcript, so the discovery report is
+    # the one a clean trial at these paths prints.
+    for name in ("live-should-trigger", "live-should-not-trigger", "live-behaviour"):
+        observed = replace(parse(name), debug_lines=discovery(trial))
+        assert problems(trial, observed) == [], name
+    planted = replace(parse("live-should-trigger"), debug_lines=discovery(trial))
+    planted = replace(planted, visible_skills=planted.visible_skills | {"cross-model-review"})  # type: ignore[operator]
+    assert any("cross-model-review" in p for p in problems(trial, planted))
