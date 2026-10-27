@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from skills_tooling.evals import workspace
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -36,18 +38,29 @@ class AssertionResult:
 
 @functools.cache
 def expected_script_output(skill_dir: Path, script: str, args: tuple[str, ...]) -> str:
-    """Run the shipped script the way the harness trusts: isolated, outside any workspace."""
-    with tempfile.TemporaryDirectory() as scratch:
-        result = subprocess.run(  # noqa: S603 -- the script path is validated by the schema
-            [sys.executable, "-I", str(skill_dir / script), *args],
-            cwd=scratch,
+    """Run the shipped script the way the harness trusts: isolated, outside any workspace.
+
+    It runs in its own process group with stdin closed, like the agent, so a
+    script that hangs or starts a child leaves nothing behind.
+    """
+    argv = [sys.executable, "-I", str(skill_dir / script), *args]
+    with tempfile.TemporaryDirectory() as scratch, tempfile.TemporaryDirectory() as logs:
+        out, err = Path(logs) / "stdout", Path(logs) / "stderr"
+        done = workspace.run_isolated(
+            argv,
+            cwd=Path(scratch),
             env={"PATH": "/usr/bin:/bin", "PYTHONUTF8": "1"},
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
+            stdout=out,
+            stderr=err,
             timeout=SCRIPT_TIMEOUT,
-            check=True,
         )
-    return result.stdout.decode()
+        if done.timed_out:
+            raise subprocess.TimeoutExpired(argv, SCRIPT_TIMEOUT)
+        if done.exit_code != 0 or done.survivors:
+            raise subprocess.CalledProcessError(
+                done.exit_code or -1, argv, stderr=err.read_bytes()
+            )
+        return out.read_bytes().decode()
 
 
 def contains_lines(text: str, expected: str) -> bool:

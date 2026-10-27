@@ -6,14 +6,17 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from skills_tooling.evals import workspace
+from skills_tooling.evals import runner, workspace
 from skills_tooling.evals.assertions import expected_script_output
 from skills_tooling.evals.claude_code import ClaudeCode
 from skills_tooling.evals.contamination import NeverAppear
 from skills_tooling.evals.runner import RunSettings, run_suite
 from tests.evals.fake_anthropic import Turn, serve, text, tool
+
+if TYPE_CHECKING:
+    import pytest
 
 ROOT = Path(__file__).parents[2]
 TOKEN = "sk-ant-oat01-fake-runner-test"
@@ -237,3 +240,23 @@ def test_the_command_refuses_to_start_without_the_pinned_cli(tmp_path: Path) -> 
     assert "node_modules/.bin/claude" in result.stderr
     assert "just initialize" in result.stderr
     assert not (root / "eval-results").exists()
+
+
+def test_a_scoring_failure_keeps_the_runs_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*_args: object, **_kwargs: object) -> object:
+        raise subprocess.TimeoutExpired(["cowsay.py"], 30)
+
+    monkeypatch.setattr(runner, "evaluate", broken)
+    root = fake_root(tmp_path)
+    with serve(GOOD) as server:
+        assert run_suite(settings(root, server.url, case_ids=("behaviour-ship-it",))) == 1
+    [trial] = results(root)["trials"]
+    assert trial["status"] == "infra_error"
+    assert "while scoring" in trial["status_reason"]
+    assert (trial["cli_version"], trial["model"]) == ("2.1.309", "claude-sonnet-5-5")
+    assert (root / trial["transcript"]).is_file()
+    assert trial["contamination"]["passed"] is True
+    assert {a["result"] for a in trial["assertions"]} == {"not_scored"}
+    assert trial["passed"] is False

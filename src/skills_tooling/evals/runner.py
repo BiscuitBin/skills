@@ -151,11 +151,17 @@ def _attempt(settings: RunSettings, case: Case, trial: TrialPaths) -> dict[str, 
     )
     transcript = settings.results_dir / "transcripts" / f"{case.id}.jsonl"
     results.write_text(transcript, raw.transcript.read_text(errors="replace"), settings.secrets)
+    try:
+        scored = _score(settings, case, trace, trial)
+    except Exception as error:  # noqa: BLE001 -- keep the run's evidence when scoring breaks
+        reason = f"harness error while scoring: {type(error).__name__}: {error}"
+        scored = _not_scored(case, results.scrub(reason, settings.secrets), [])
     return {
         "cli_version": trace.cli_version,
         # The model the agent reports running, which a --model alias resolves to.
         "model": trace.model,
-        **_score(settings, case, trace, trial),
+        **scored,
+        # Listed after `scored`, so the real result replaces _not_scored's null.
         "contamination": {
             "passed": contamination.passed,
             "problems": contamination.problems,

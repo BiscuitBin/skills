@@ -1,5 +1,8 @@
 """Deterministic assertions over a trace, including the negatives that must fail."""
 
+import contextlib
+import os
+import signal
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -196,3 +199,27 @@ def test_expected_output_never_waits_on_stdin_or_hangs(
     monkeypatch.setattr(assertions, "SCRIPT_TIMEOUT", 0.5)
     with pytest.raises(subprocess.TimeoutExpired):
         expected_script_output(tmp_path / "skill", "scripts/hangs.py", ())
+
+
+def test_a_timed_out_script_leaves_no_descendants(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scripts = tmp_path / "skill/scripts"
+    scripts.mkdir(parents=True)
+    pid_file = tmp_path / "child.pid"
+    (scripts / "spawns.py").write_text(
+        "import pathlib, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid))\n"
+        "time.sleep(60)\n"
+    )
+    monkeypatch.setattr(assertions, "SCRIPT_TIMEOUT", 1.0)
+    try:
+        with pytest.raises(subprocess.TimeoutExpired):
+            expected_script_output(tmp_path / "skill", "scripts/spawns.py", ())
+        with pytest.raises(ProcessLookupError):
+            os.kill(int(pid_file.read_text()), 0)
+    finally:
+        if pid_file.exists():
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(int(pid_file.read_text()), signal.SIGKILL)
