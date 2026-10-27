@@ -254,3 +254,61 @@ def test_stored_stderr_drops_whole_telemetry_records() -> None:
     assert "last line" not in stored
     assert stored.startswith("Reading additional input from stdin...")
     assert "missing YAML frontmatter" in stored
+
+
+def with_read(tmp_path: Path, command: str) -> Trace:
+    """fake-should-trigger with its SKILL.md read replaced, and no Codex event."""
+
+    def replace_read(event: dict[str, Any]) -> dict[str, Any]:
+        item = event.get("item", {})
+        if "SKILL.md" in item.get("command", ""):
+            event = {**event, "item": {**item, "command": command}}
+        return event
+
+    path = edited(tmp_path, "fake-should-trigger", replace_read)
+    return parse_stream(raw_run(path, without_invocations("fake-should-trigger")))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # The command exits 0 and prints, whatever the read did.
+        "true || cat .agents/skills/cowsay/SKILL.md; echo done",
+        "cat .agents/skills/cowsay/SKILL.md 2>/dev/null || echo missing",
+        "cat .agents/skills/cowsay/SKILL.md | head -40",
+        "cat .agents/skills/cowsay/SKILL.md; true",
+    ],
+)
+def test_a_read_whose_outcome_the_exit_status_hides_is_not_a_trigger(
+    tmp_path: Path, command: str
+) -> None:
+    trace = with_read(tmp_path, command)
+    assert trace.skills_triggered == []
+    assert trace.skills_invoked == ["cowsay"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "awk -v label=.agents/skills/cowsay/SKILL.md 'BEGIN {print label}'",
+        "awk 'BEGIN{}' x=.agents/skills/cowsay/SKILL.md",
+        "cat /tmp/cowsay/SKILL.md",
+    ],
+)
+def test_a_reader_that_does_not_read_an_installed_skill_is_not_a_trigger(
+    tmp_path: Path, command: str
+) -> None:
+    trace = with_read(tmp_path, command)
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat /private/trial/workspace/.agents/skills/cowsay/SKILL.md",
+        "cd .agents/skills && cat cowsay/SKILL.md",
+        "cat ../../skills/cowsay/SKILL.md",
+    ],
+)
+def test_a_read_in_a_skills_directory_is_a_trigger(tmp_path: Path, command: str) -> None:
+    assert with_read(tmp_path, command).skills_triggered == ["cowsay"]

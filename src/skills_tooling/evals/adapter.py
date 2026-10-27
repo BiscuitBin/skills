@@ -72,6 +72,9 @@ class RawRun:
     python_calls: tuple[PythonCall, ...]
     survivors: bool
     elapsed: float
+    # Credential values that appeared during the run, such as a refreshed
+    # login, to scrub and sweep for as well as the ones the run started with.
+    secrets: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

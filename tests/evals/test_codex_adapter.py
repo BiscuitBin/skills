@@ -4,7 +4,7 @@ import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from skills_tooling.evals import workspace
 from skills_tooling.evals.codex import Codex, pinned_executable
@@ -235,3 +235,41 @@ def test_a_run_records_the_version_and_model_and_never_the_key(tmp_path: Path) -
     # The trial's home, with its auth.json, is gone; only the workspace is kept.
     kept = root / ".eval-workspaces/test-run" / trial["case"]
     assert [p.name for p in kept.iterdir()] == ["workspace"]
+
+
+def test_a_token_refreshed_mid_run_is_scrubbed_and_swept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refreshed = "rt_fake-refreshed-token-0123456789"
+    real = workspace.run_isolated
+
+    def refreshing(argv: list[str], **kwargs: Any) -> workspace.Finished:  # noqa: ANN401
+        finished = real(argv, **kwargs)
+        # As if Codex refreshed the login, and the agent printed the new file
+        # and copied it into the workspace.
+        auth = Path(kwargs["env"]["CODEX_HOME"]) / "auth.json"
+        auth.write_text(json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": refreshed}))
+        with kwargs["stdout"].open("a") as transcript:
+            transcript.write(json.dumps({"type": "note", "text": refreshed}) + "\n")
+        (kwargs["cwd"] / "copied.txt").write_text(refreshed)
+        return finished
+
+    monkeypatch.setattr(workspace, "run_isolated", refreshing)
+    root = fake_root(tmp_path, [CASES[0]])
+    with serve([message("Moo.")], api_key=KEY) as server:
+        adapter = Codex(pinned_executable(ROOT), api_base_url=server.url)
+        run_suite(
+            settings(
+                root,
+                server.url,
+                adapter=adapter,
+                model=adapter.default_model,
+                credentials={"auth.json": AUTH},
+            )
+        )
+    for path in (root / "eval-results").rglob("*"):
+        if path.is_file():
+            assert refreshed not in path.read_text(), path
+    data = json.loads((root / "eval-results/test-run/results.json").read_text())
+    [trial] = data["trials"]
+    assert trial["secret_found"] == {"files": ["workspace/copied.txt"], "deleted": True}

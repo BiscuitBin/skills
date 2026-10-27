@@ -72,22 +72,30 @@ def contains_lines(text: str, expected: str) -> bool:
     return any(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1))
 
 
-def simple_commands(command: str) -> Iterator[list[str]]:
+def command_list(command: str) -> list[tuple[list[str], str]]:
+    """Each simple command with the operator that follows it ("" for the last)."""
     lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
     lexer.whitespace = " \t\r"
+    found: list[tuple[list[str], str]] = []
     current: list[str] = []
     try:
         for token in lexer:
             if token in OPERATORS:
                 if current:
-                    yield current
+                    found.append((current, token))
                 current = []
             else:
                 current.append(token)
     except ValueError:  # unbalanced quotes: the shell would not have run it either
-        return
+        return []
     if current:
-        yield current
+        found.append((current, ""))
+    return found
+
+
+def simple_commands(command: str) -> Iterator[list[str]]:
+    for words, _ in command_list(command):
+        yield words
 
 
 def _script_argument(words: list[str]) -> tuple[str, list[str]] | None:

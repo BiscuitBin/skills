@@ -19,7 +19,7 @@ from skills_tooling.evals.adapter import (
     RawRun,
     Trace,
 )
-from skills_tooling.evals.assertions import simple_commands
+from skills_tooling.evals.assertions import ASSIGNMENT, command_list, simple_commands
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -79,6 +79,8 @@ READERS = {"cat", "head", "tail", "sed", "nl", "awk", "less", "more", "bat"}
 SHELLS = {"bash", "zsh", "sh"}
 # Characters the shell expands, so the name in the text is not the directory read.
 UNPLACEABLE = re.compile(r"[*?\[\]{}$~`]")
+# The directory a skill directory sits in: .agents/skills, skills, dev-skills, .system.
+SKILLS_DIR = re.compile(r"skills$|^\.system$")
 # auth.json fields that are not secret. Short strings are not secret either:
 # keys, tokens and account ids are long, and a short label such as a plan name
 # would scrub every occurrence of a common word.
@@ -282,6 +284,11 @@ class Codex:
             timeout=timeout,
         )
         logged = stderr.read_text(errors="replace")
+        try:
+            # Codex rewrites auth.json when it refreshes a ChatGPT login.
+            current = self.secrets({"auth.json": (homes.agent_home / "auth.json").read_text()})
+        except OSError:
+            current = []
         return RawRun(
             exit_code=finished.exit_code,
             timed_out=finished.timed_out,
@@ -292,6 +299,7 @@ class Codex:
             python_calls=workspace.python_calls(trial),
             survivors=finished.survivors,
             elapsed=finished.elapsed,
+            secrets=tuple(current),
         )
 
     def parse(self, raw: RawRun) -> Trace:
@@ -411,32 +419,46 @@ def unwrap(command: str) -> str:
 
 
 def skills_read(command: str) -> list[str]:
-    """The skill of each SKILL.md a reader program in `command` names.
+    """The skill of each SKILL.md in a skills directory a reader program names.
 
-    `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path named by anything
-    other than a reader, such as `ls`, `test` or `echo`, is not a read. A path
-    whose skill directory cannot be placed from the text (`../SKILL.md`, a glob,
-    a variable) names no skill; Codex's own implicit event still covers it.
+    `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path counts only when
+    its grandparent is a skills directory (`.agents/skills`, `skills`,
+    `.system`), so `/tmp/cowsay/SKILL.md` is not a skill. A path named by
+    anything other than a reader, such as `ls`, `test` or `echo`, or as a
+    `name=value` assignment, is not a read. A path whose skill directory the
+    text cannot place (`../SKILL.md`, a glob, a variable) names no skill;
+    Codex's own implicit event still covers it.
     """
     cwd = Path()
     skills = []
-    for words in simple_commands(command):
+    for words, _ in command_list(command):
         if words[0] == "cd" and len(words) == 2:  # noqa: PLR2004 -- cd and its directory
             cwd = cwd / words[1]
             continue
         if Path(words[0]).name not in READERS:
             continue
         for word in words[1:]:
+            if word.startswith("-") or ASSIGNMENT.fullmatch(word):
+                continue
             path = Path(os.path.normpath(cwd / word))
             skill = path.parent.name
             if (
-                not word.startswith("-")
-                and path.name == "SKILL.md"
+                path.name == "SKILL.md"
                 and skill not in ("", "..")
                 and not UNPLACEABLE.search(skill)
+                and SKILLS_DIR.search(path.parent.parent.name)
             ):
                 skills.append(skill)
     return skills
+
+
+def outcome_is_the_read(command: str) -> bool:
+    """Whether the command's exit status is every part's: only `&&` joins them.
+
+    After `||`, `;`, `&` or a pipe, a command can exit 0 and print something
+    whatever a read in it did.
+    """
+    return all(operator in ("&&", "") for _, operator in command_list(command))
 
 
 def parse_stream(raw: RawRun) -> Trace:
@@ -465,7 +487,7 @@ def parse_stream(raw: RawRun) -> Trace:
             commands.append(Command(command, ok, output))
             read = skills_read(command)
             invoked += read
-            if ok and output.strip():
+            if ok and output.strip() and outcome_is_the_read(command):
                 triggered += read
     starts = ""
     for line in raw.debug_lines:
