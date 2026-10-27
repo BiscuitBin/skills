@@ -146,6 +146,16 @@ test:
 validate-skills:
     uv run --frozen python -m skills_tooling.validator
 
+[doc('Validate every evals/*/evals.json against the case schema. Calls no agent.')]
+validate-evals:
+    uv run --frozen python -m skills_tooling.evals validate
+
+# Live: it calls a paid model, needs CLAUDE_CODE_OAUTH_TOKEN, and is never part
+# of check or PR CI (docs/adr/0004-eval-tiers-and-ci.md).
+[doc("Run a skill's eval cases against a pinned agent: `just eval cowsay --agent claude [--case ID]`.")]
+eval +args:
+    uv run --frozen python -m skills_tooling.evals run "$@"
+
 [doc('Check distribution versions and validate the marketplace and shipped plugins strictly.')]
 validate-distribution:
     uv run --frozen python -m skills_tooling.distribution --committed
@@ -169,4 +179,4 @@ just-version:
     [ "$found" = "$required" ] || { printf '%s\n' "$required is required; found $found." >&2; exit 1; }
 
 [doc('The full gate, as CI runs it. Stops at the first recipe that fails.')]
-check: just-version lock-check lint typecheck validate-distribution test validate-skills agents-version
+check: just-version lock-check lint typecheck validate-distribution test validate-skills validate-evals agents-version

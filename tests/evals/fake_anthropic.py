@@ -7,6 +7,7 @@ headers and body, which shows exactly what the model would have seen.
 
 import json
 import threading
+from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 # The reply to a request is the turn indexed by how many assistant messages the
 # request already holds; the last turn repeats.
 Turn = list[dict[str, Any]]
+Script = list[Turn] | Mapping[str, list[Turn]]
 
 
 @dataclass
@@ -98,9 +100,23 @@ def _stream(turn: Turn, model: str, number: int) -> bytes:
     return b"".join(parts)
 
 
+def _script_for(request: dict[str, Any], turns: Script) -> list[Turn]:
+    if isinstance(turns, list):
+        return turns
+    asked = json.dumps(request.get("messages", [])[:1])
+    for prompt, script in turns.items():
+        if json.dumps(prompt)[1:-1] in asked:
+            return script
+    return [text("No script for this prompt.")]
+
+
 @contextmanager
-def serve(turns: list[Turn]) -> Iterator[FakeAnthropic]:
-    """Serve the scripted turns on a free local port until the block exits."""
+def serve(turns: Script) -> Iterator[FakeAnthropic]:
+    """Serve the scripted turns on a free local port until the block exits.
+
+    `turns` is one script for every request, or a script per prompt: the first
+    prompt found in the request's first message picks the script.
+    """
     recorded: list[Request] = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -112,7 +128,8 @@ def serve(turns: list[Turn]) -> Iterator[FakeAnthropic]:
             request = json.loads(body or "{}")
             model = str(request.get("model", "fake-model"))
             replies = sum(1 for m in request.get("messages", []) if m.get("role") == "assistant")
-            turn = turns[min(replies, len(turns) - 1)]
+            script = _script_for(request, turns)
+            turn = script[min(replies, len(script) - 1)]
             if request.get("stream"):
                 data, kind = _stream(turn, model, len(recorded)), "text/event-stream"
             else:
