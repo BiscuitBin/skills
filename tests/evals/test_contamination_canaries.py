@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from skills_tooling.evals import workspace
-from skills_tooling.evals.claude_code import ClaudeCode
+from skills_tooling.evals.claude_code import LOADING, ClaudeCode
 from skills_tooling.evals.contamination import NeverAppear, check
 from tests.evals.fake_anthropic import serve, text, tool
 
@@ -292,6 +292,13 @@ def test_a_managed_skill_canary_is_detected(
     root = Path("/etc/claude-code")
     if root.exists():
         pytest.skip(f"{root} already exists; refusing to modify it")
+    # LINUX_MANAGED was inferred, not reported, so ask the CLI where it looks first.
+    probe = tmp_path / "probe"
+    probe.mkdir()
+    clean = sweep(probe, monkeypatch, lambda _: None)
+    reported = {m.group(1) for line in clean.trace.debug_lines if (m := LOADING.search(line))}
+    if reported != {str(LINUX_MANAGED)}:
+        pytest.fail(f"the CLI reports managed={reported}; update LINUX_MANAGED")
     canary = LINUX_MANAGED / "canary-managed"
     sudo = ["sudo", "-n"]
     try:
@@ -307,7 +314,9 @@ def test_a_managed_skill_canary_is_detected(
         def plant(_: Sweep) -> None:
             pass
 
-        outcome = sweep(tmp_path, monkeypatch, plant, policy_skills_on=policy_skills_on)
+        planted = tmp_path / "planted"
+        planted.mkdir()
+        outcome = sweep(planted, monkeypatch, plant, policy_skills_on=policy_skills_on)
     finally:
         subprocess.run([*sudo, "rm", "-rf", str(canary)], check=False)
         # rmdir leaves any directory that is not empty, so nothing else is removed.
