@@ -70,7 +70,7 @@ def _assertion(data: object, where: str, skill_dir: Path, problems: list[str]) -
         problems.append(f"{where}: an assertion must be an object")
         return None
     kind = data.get("type")
-    if kind not in ASSERTION_FIELDS:
+    if not isinstance(kind, str) or kind not in ASSERTION_FIELDS:
         problems.append(f"{where}: unknown assertion type {kind!r}")
         return None
     required, optional = ASSERTION_FIELDS[kind]

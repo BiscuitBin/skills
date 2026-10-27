@@ -112,6 +112,18 @@ def test_script_ran_fails_without_a_python_call_for_the_installed_copy() -> None
     assert not check(SCRIPT_RAN, trace(python_calls=(other_text,)))
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python3 -X utf8 .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
+        "python3 -W ignore -I .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
+        "env -i PYTHONUTF8=1 python3 .claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'",
+    ],
+)
+def test_script_ran_accepts_interpreter_options_and_env(command: str) -> None:
+    assert check(SCRIPT_RAN, trace(commands=[Command(command, ok=True, output=COW)]))
+
+
 def test_script_ran_accepts_a_cd_then_relative_path_and_stdin() -> None:
     command = (
         "cd .claude/skills/cowsay && printf '%s' 'Ship it, team!' | python3 scripts/cowsay.py"

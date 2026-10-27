@@ -1,5 +1,6 @@
 """Deterministic assertions over a trace. See docs/reference/evals.md."""
 
+import functools
 import re
 import shlex
 import subprocess
@@ -20,6 +21,8 @@ OPERATORS = {";", "&&", "||", "|", "&", "\n"}
 # Words that run the command after them; leading NAME=value assignments are skipped too.
 PREFIXES = {"env", "exec", "command", "time", "nohup"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+# Interpreter options whose value is the next word.
+VALUE_OPTIONS = {"-W", "-X", "--check-hash-based-pycs"}
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,7 @@ class AssertionResult:
     evidence: str
 
 
+@functools.cache
 def expected_script_output(skill_dir: Path, script: str, args: tuple[str, ...]) -> str:
     """Run the shipped script the way the harness trusts: isolated, outside any workspace."""
     with tempfile.TemporaryDirectory() as scratch:
@@ -71,13 +75,15 @@ def _script_argument(words: list[str]) -> tuple[str, list[str]] | None:
     """For `python3 <script> args…`, the script and its args; None for anything else."""
     while words and (words[0] in PREFIXES or ASSIGNMENT.fullmatch(words[0])):
         words = words[1:]
+        while words and words[0].startswith("-"):  # options of env, command, time…
+            words = words[1:]
     if not words or PYTHON.fullmatch(Path(words[0]).name) is None:
         return None
     rest = words[1:]
     while rest and rest[0].startswith("-"):
         if rest[0] in {"-c", "-m", "-"}:
             return None
-        rest = rest[1:]
+        rest = rest[2:] if rest[0] in VALUE_OPTIONS else rest[1:]
     return (rest[0], rest[1:]) if rest else None
 
 

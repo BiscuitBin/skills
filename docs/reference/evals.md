@@ -14,7 +14,7 @@ The eval harness runs a skill's eval cases against a pinned agent CLI, headless,
 
 **Live evals need an authenticated agent and are never part of the PR gate.** `just eval` calls a paid model, so it runs only locally or from a manual job that holds the secret ([ADR 0004](../adr/0004-eval-tiers-and-ci.md)). `just check` and PR CI cover the harness without credentials: the tests drive the real pinned CLI against a local fake Anthropic API (`tests/evals/fake_anthropic.py`) and parse recorded transcripts (`tests/fixtures/evals/claude/`).
 
-Exit codes: 0 when every trial passed, 1 when any trial failed or hit an infrastructure error, 2 for a usage error (a missing token, an invalid suite, an unknown case). Nothing is written on a usage error.
+Exit codes: 0 when every trial passed, 1 when any trial failed or hit an infrastructure error, 2 for a usage error (a missing token, an invalid suite, an unknown case, a missing pinned CLI). Nothing is written on a usage error. A harness failure inside one trial is recorded as that trial's infrastructure error, and the other trials still run.
 
 ## Case schema
 
@@ -94,7 +94,7 @@ An adapter drives one agent CLI. The interface is `skills_tooling.evals.adapter.
 - **Command:** `node_modules/.bin/claude -p <prompt> --output-format stream-json --verbose --model <model> --no-session-persistence --strict-mcp-config --permission-mode dontAsk --max-budget-usd 1.00 --debug-file <trial>/tmp/debug.log --allowedTools Skill Read Bash`. Stdin is `/dev/null`. `--bare` is not used because it accepts only an API key, and `--safe-mode` is not used because it disables skills.
 - **Environment:** built from scratch. `HOME`, `CLAUDE_CONFIG_DIR` (`<home>/.claude`), the four `XDG_*` directories and `TMPDIR` point inside the trial. `PATH` is `<trial>/bin:/usr/bin:/bin`. `CLAUDE_CODE_DISABLE_CLAUDE_MDS`, `CLAUDE_CODE_DISABLE_POLICY_SKILLS`, `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`, `DISABLE_AUTOUPDATER`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and `DISABLE_TELEMETRY` are all `1`. The Justfile's shared `CLAUDE_CONFIG_DIR` never reaches the child.
 - **Trigger rule:** an assistant `tool_use` named `Skill` whose `input.skill` is `<name>` or `<plugin>:<name>`, and whose matching `tool_result` is not `is_error`.
-- **Run status:** `infra_error` when the run timed out, a process survived teardown, the last event is not a `result` or a line did not parse, the `result` has `is_error: true`, the exit code is nonzero, or the init event's model is not the requested one. A failed login reports `subtype: "success"` with `is_error: true`, so `subtype` is never used. `apiKeySource` is `none` under OAuth too, so it is never used either.
+- **Run status:** `infra_error` when the run timed out, a process survived teardown, the last event is not a `result` or a line did not parse, the `result` has `is_error: true`, or the exit code is nonzero. A failed login reports `subtype: "success"` with `is_error: true`, so `subtype` is never used. `apiKeySource` is `none` under OAuth too, so it is never used either.
 - **Built-in allowlist (2.1.309):** `batch claude-api code-review dataviz debug deep-research doctor fewer-permission-prompts loop plugin-authoring run run-skill-generator schedule simplify update-config verify workflow-authoring`. The plugins are `cc-plugin-agents-md@builtin` and `cc-plugin-plugin-authoring@builtin`. `schedule` is listed only when an OAuth token is set. A new CLI version fails the check with a hint to re-record the allowlist from the canary sweep.
 
 ## Credentials
@@ -120,9 +120,9 @@ The preflight checks all of this before the agent starts, and fails closed.
 
 Each trial passes only when all of these hold:
 
-1. **Reported skills.** The init event's skills, plus any command a `system/commands_changed` event adds, plus every `Skill` call, minus the recorded built-ins, is exactly the skill under test (empty for a baseline). The init event's plugins equal the built-in plugins.
+1. **Reported skills.** The init event's skills, plus any command a `system/commands_changed` event adds, plus every successful `Skill` call, minus the recorded built-ins, is exactly the skill under test (empty for a baseline). The init event's plugins equal the built-in plugins.
 2. **Discovery report.** In the debug log, the `user=` location sits inside the trial home, every `project=` location inside the workspace, and the managed location is missing or empty. The per-location counts are `managed: 0, user: 0, additional: 0` and `project: 1` (0 for a baseline). A missing report fails closed. Only these lines are kept, and the debug log is deleted.
-3. **Never-appear list.** The repo's dev skills, the other shipped skills, and the user's own skills (directory names under `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.pi/agent/skills` and the caller's agent homes) must not appear among the reported skills or in the discovery report. A name that collides with a built-in is noted, not failed. The repo's `AGENTS.md`, `CLAUDE.md` and the user's `~/.claude/CLAUDE.md` are listed too. They are kept out by the preflight's instruction-file check, because a live run cannot observe the request.
+3. **Never-appear list.** The repo's dev skills, the other shipped skills, and the user's own skills (directory names under `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.pi/agent/skills` and the caller's agent homes) must not appear among the reported skills. The discovery report is checked by location instead (step 2), so any skill directory outside the trial fails there. A name that collides with a built-in is noted, not failed. The repo's `AGENTS.md`, `CLAUDE.md` and the user's `~/.claude/CLAUDE.md` are listed too. They are kept out by the preflight's instruction-file check, because a live run cannot observe the request.
 
 The canary sweep (`tests/evals/test_contamination_canaries.py`) shows the check fails when a canary sits in each location the agent reads, and that every other location stays isolated. The managed-location canary runs only in CI, because it writes to `/etc/claude-code`.
 
@@ -141,7 +141,7 @@ The canary sweep (`tests/evals/test_contamination_canaries.py`) shows the check 
 | Trial field | Meaning |
 | --- | --- |
 | `case`, `kind`, `agent` | The case and the agent. |
-| `cli_version`, `model` | From the agent's init event. |
+| `cli_version`, `model` | From the agent's init event. `model` is what the agent ran, so a `--model` alias shows the model it resolved to. |
 | `started_at`, `finished_at` | UTC, ISO 8601. |
 | `status`, `status_reason` | `ok` or `infra_error`, with the reason. |
 | `trigger` | `expected`, `actual`, `matched`. `actual` and `matched` are `null` on an infrastructure error. |

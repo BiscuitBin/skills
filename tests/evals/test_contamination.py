@@ -121,8 +121,29 @@ def test_a_skill_discovered_mid_run_fails(trial: TrialPaths) -> None:
 
 
 def test_calling_an_unlisted_skill_fails(trial: TrialPaths) -> None:
-    observed = trace(trial, skills_invoked=["cowsay", "secret-skill"])
+    observed = trace(trial, skills_triggered=["secret-skill"], skills_invoked=["secret-skill"])
     assert any("secret-skill" in p for p in problems(trial, observed))
+
+
+def test_a_failed_call_to_a_missing_skill_is_not_contamination(trial: TrialPaths) -> None:
+    assert problems(trial, trace(trial, skills_invoked=["ascii-art"])) == []
+
+
+def test_an_empty_project_list_is_not_a_location(trial: TrialPaths) -> None:
+    lines = (
+        f"Loading skills from: managed={MANAGED}, user={trial.home}/.claude/skills, project=[]",
+        discovery(trial, project=0)[1],
+    )
+    observed = trace(trial, skill=None, debug_lines=lines)
+    assert problems(trial, observed, baseline=True) == []
+
+
+def test_never_appear_names_do_not_match_the_trials_own_paths(tmp_path: Path) -> None:
+    trial = workspace.create_trial(tmp_path / "ticket", "run", "trigger-talking-cow")
+    forbidden = NeverAppear(
+        skills={"trigger": "user skill", "ticket": "user skill"}, instruction_files=()
+    )
+    assert problems(trial, trace(trial), forbidden=forbidden) == []
 
 
 def test_discovery_paths_outside_the_trial_fail(trial: TrialPaths) -> None:

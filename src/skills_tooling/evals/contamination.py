@@ -132,7 +132,7 @@ def _discovery_problems(
         problems += [
             f"project skills location {project} is outside the workspace"
             for project in projects.split(", ")
-            if not _inside(project, trial.workspace)
+            if project and not _inside(project, trial.workspace)
         ]
         managed_dir = system_root / managed.lstrip("/")
         if _names(managed_dir):
@@ -179,7 +179,8 @@ def check(  # noqa: PLR0913 -- everything one trial's check reads
         if not baseline and skill not in visible:
             problems.append(f"the skill under test {skill!r} is not visible")
     discovered = set(trace.dynamic_commands) - (trace.initial_commands or frozenset())
-    seen = visible | discovered | set(trace.skills_invoked)
+    # A failed Skill call to a name that does not exist shows nothing leaked.
+    seen = visible | discovered | set(trace.skills_triggered)
     if baseline and skill in seen:
         problems.append(f"the skill under test {skill!r} is visible in the baseline arm")
     extra = sorted(seen - allowed - installed - ({skill} if baseline else set()))
@@ -189,13 +190,13 @@ def check(  # noqa: PLR0913 -- everything one trial's check reads
         unexpected = sorted(trace.visible_plugins ^ plugins)
         problems.append(f"plugins differ from the built-in allowlist: {', '.join(unexpected)}")
     problems += _discovery_problems(trace, trial, installed=not baseline, system_root=system_root)
-    report = " ".join(trace.debug_lines)
+    # The discovery report's paths are checked above: any outside the trial fail.
     for name, source in sorted(never.skills.items()):
         if name in allowed or name == skill:
             notes.append(
                 f"{name!r} ({source}) shares a name with a built-in or the skill under test"
             )
-        elif name in seen or re.search(rf"/{re.escape(name)}(/|\b)", report):
+        elif name in seen:
             problems.append(f"never-appear skill {name!r} ({source}) is visible")
     if never.instruction_files:
         notes.append(

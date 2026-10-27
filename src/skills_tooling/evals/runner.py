@@ -7,7 +7,7 @@ error is recorded but never scored.
 
 import secrets
 import shutil
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -72,25 +72,28 @@ def select_cases(cases: tuple[Case, ...], case_ids: tuple[str, ...]) -> list[Cas
     return [case for case in cases if not case_ids or case.id in case_ids]
 
 
-def _infra_error(trace: Trace, reason: str) -> Trace:
-    return replace(trace, status="infra_error", status_reason=reason)
-
-
-def _score(
-    settings: RunSettings, case: Case, trace: Trace, trial: TrialPaths
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    if trace.status != "ok":
-        trigger = {"expected": case.should_trigger, "actual": None, "matched": None}
-        skipped = [
+def _not_scored(case: Case, reason: str, problems: list[str]) -> dict[str, Any]:
+    """An infrastructure error: recorded, never scored, so it can never pass a case."""
+    return {
+        "status": "infra_error",
+        "status_reason": reason,
+        "trigger": {"expected": case.should_trigger, "actual": None, "matched": None},
+        # null: the check never ran. A failed preflight is a contamination failure.
+        "contamination": {
+            "passed": False if problems else None,
+            "problems": problems,
+            "notes": [],
+        },
+        "assertions": [
             {"type": a.type, "result": "not_scored", "evidence": ""} for a in case.assertions
-        ]
-        return trigger, skipped
-    actual = settings.skill in trace.skills_triggered
-    trigger = {
-        "expected": case.should_trigger,
-        "actual": actual,
-        "matched": actual == case.should_trigger,
+        ],
     }
+
+
+def _score(settings: RunSettings, case: Case, trace: Trace, trial: TrialPaths) -> dict[str, Any]:
+    if trace.status != "ok":
+        return _not_scored(case, trace.status_reason, [])
+    actual = settings.skill in trace.skills_triggered
     installed = trial.workspace / settings.adapter.skills_dir / settings.skill
     scored = []
     for assertion in case.assertions:
@@ -108,90 +111,93 @@ def _score(
                 "evidence": result.evidence,
             }
         )
-    return trigger, scored
+    return {
+        "status": "ok",
+        "status_reason": "",
+        "trigger": {
+            "expected": case.should_trigger,
+            "actual": actual,
+            "matched": actual == case.should_trigger,
+        },
+        "assertions": scored,
+    }
+
+
+def _attempt(settings: RunSettings, case: Case, trial: TrialPaths) -> dict[str, Any]:
+    """Preflight, run, check and score one trial."""
+    adapter = settings.adapter
+    homes = adapter.prepare_homes(trial)
+    adapter.install_skill(settings.root / "skills" / settings.skill, trial.workspace)
+    problems = preflight(adapter, trial, homes, settings.root, settings.skill)
+    if problems:
+        return _not_scored(case, "preflight failed: " + "; ".join(problems), problems)
+    raw = adapter.run(
+        case.prompt,
+        trial,
+        homes,
+        model=settings.model,
+        timeout=settings.timeout,
+        credentials=settings.credentials,
+    )
+    trace = adapter.parse(raw)
+    contamination = check(
+        adapter,
+        trace,
+        skill=settings.skill,
+        baseline=False,
+        trial=trial,
+        never=settings.never,
+        system_root=settings.system_root,
+    )
+    transcript = settings.results_dir / "transcripts" / f"{case.id}.jsonl"
+    results.write_text(transcript, raw.transcript.read_text(errors="replace"), settings.secrets)
+    return {
+        "cli_version": trace.cli_version,
+        # The model the agent reports running, which a --model alias resolves to.
+        "model": trace.model,
+        **_score(settings, case, trace, trial),
+        "contamination": {
+            "passed": contamination.passed,
+            "problems": contamination.problems,
+            "notes": contamination.notes,
+        },
+        "transcript": transcript.relative_to(settings.root).as_posix(),
+        "stderr": results.scrub(raw.stderr[-2000:], settings.secrets),
+    }
 
 
 def run_trial(settings: RunSettings, case: Case) -> dict[str, Any]:
-    adapter = settings.adapter
+    """One trial. A harness failure is recorded as an infrastructure error, not raised."""
     record: dict[str, Any] = {
         "case": case.id,
         "kind": case.kind,
-        "agent": adapter.name,
+        "agent": settings.adapter.name,
         "started_at": _now(),
+        "cli_version": None,
+        "model": None,
+        "transcript": None,
     }
-    trial = workspace.create_trial(settings.workspaces_dir, settings.run_id, case.id)
+    trial: TrialPaths | None = None
     try:
-        homes = adapter.prepare_homes(trial)
-        adapter.install_skill(settings.root / "skills" / settings.skill, trial.workspace)
-        problems = preflight(adapter, trial, homes, settings.root, settings.skill)
-        if problems:
-            record |= {
-                "cli_version": None,
-                "model": None,
-                "status": "infra_error",
-                "status_reason": "preflight failed: " + "; ".join(problems),
-                "trigger": {"expected": case.should_trigger, "actual": None, "matched": None},
-                "contamination": {"passed": False, "problems": problems, "notes": []},
-                "assertions": [
-                    {"type": a.type, "result": "not_scored", "evidence": ""}
-                    for a in case.assertions
-                ],
-                "transcript": None,
-            }
-            return record
-        raw = adapter.run(
-            case.prompt,
-            trial,
-            homes,
-            model=settings.model,
-            timeout=settings.timeout,
-            credentials=settings.credentials,
-        )
-        trace = adapter.parse(raw)
-        if trace.status == "ok" and trace.model != settings.model:
-            trace = _infra_error(trace, f"ran {trace.model!r}, not {settings.model!r}")
-        contamination = check(
-            adapter,
-            trace,
-            skill=settings.skill,
-            baseline=False,
-            trial=trial,
-            never=settings.never,
-            system_root=settings.system_root,
-        )
-        transcript = settings.results_dir / "transcripts" / f"{case.id}.jsonl"
-        results.write_text(
-            transcript, raw.transcript.read_text(errors="replace"), settings.secrets
-        )
-        trigger, scored = _score(settings, case, trace, trial)
-        record |= {
-            "cli_version": trace.cli_version,
-            "model": trace.model,
-            "status": trace.status,
-            "status_reason": trace.status_reason,
-            "trigger": trigger,
-            "contamination": {
-                "passed": contamination.passed,
-                "problems": contamination.problems,
-                "notes": contamination.notes,
-            },
-            "assertions": scored,
-            "transcript": transcript.relative_to(settings.root).as_posix(),
-            "stderr": results.scrub(raw.stderr[-2000:], settings.secrets),
-        }
-        return record
+        trial = workspace.create_trial(settings.workspaces_dir, settings.run_id, case.id)
+        record |= _attempt(settings, case, trial)
+    except Exception as error:  # noqa: BLE001 -- one trial's failure must not lose the run
+        reason = results.scrub(f"harness error: {type(error).__name__}: {error}", settings.secrets)
+        record |= _not_scored(case, reason, [])
     finally:
-        workspace.teardown(trial)
-        if results.files_holding(trial.root, settings.secrets):
-            shutil.rmtree(trial.workspace, ignore_errors=True)
-            record["workspace_deleted"] = "a secret was found in the workspace"
+        if trial is not None:
+            workspace.teardown(trial)
+            if results.files_holding(trial.root, settings.secrets):
+                shutil.rmtree(trial.workspace, ignore_errors=True)
+                record["workspace_deleted"] = "a secret was found in the workspace"
         record["finished_at"] = _now()
-        record["passed"] = (
-            record.get("status") == "ok"
-            and record.get("contamination", {}).get("passed") is True
-            and record.get("trigger", {}).get("matched") is True
-            and all(a["result"] == "passed" for a in record.get("assertions", []))
-        )
+    record["passed"] = (
+        record["status"] == "ok"
+        and record["contamination"]["passed"] is True
+        and record["trigger"]["matched"] is True
+        and all(a["result"] == "passed" for a in record["assertions"])
+    )
+    return record
 
 
 def run_suite(settings: RunSettings) -> int:

@@ -98,6 +98,8 @@ def test_a_valid_suite_loads(tmp_path: Path) -> None:
             "missing 'should_trigger'",
         ),
         (behaviour(assertions=[{"type": "vibes"}]), "unknown assertion type 'vibes'"),
+        (behaviour(assertions=[{"type": ["skill_triggered"]}]), "unknown assertion type"),
+        (behaviour(kind=["trigger"]), "kind must be 'trigger' or 'behaviour'"),
         (
             behaviour(assertions=[{"type": "output_contains", "value": "x", "extra": 1}]),
             "unknown key 'extra'",

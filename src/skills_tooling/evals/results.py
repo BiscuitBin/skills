@@ -36,13 +36,15 @@ def write_json(path: Path, data: dict[str, Any], secrets: Iterable[str]) -> None
 
 def files_holding(directory: Path, secrets: Iterable[str]) -> list[Path]:
     needles = [s.encode() for s in secrets if s]
-    return [
-        path
-        for path in sorted(directory.rglob("*"))
-        if path.is_file()
-        and not path.is_symlink()
-        and any(n in path.read_bytes() for n in needles)
-    ]
+    if not needles:
+        return []
+    found = []
+    for path in sorted(directory.rglob("*")):
+        if path.is_file() and not path.is_symlink():
+            data = path.read_bytes()
+            if any(needle in data for needle in needles):
+                found.append(path)
+    return found
 
 
 def verify_clean(directory: Path, secrets: Iterable[str]) -> None:

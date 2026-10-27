@@ -49,6 +49,13 @@ def run(args: argparse.Namespace) -> int:
     except (CaseError, UsageError, FileNotFoundError) as error:
         print(f"eval: {error}", file=sys.stderr)
         return USAGE
+    if not adapter.executable.is_file():
+        print(
+            f"eval: the pinned CLI {root / 'node_modules/.bin/claude'} is missing; "
+            "run just initialize.",
+            file=sys.stderr,
+        )
+        return USAGE
     settings = RunSettings(
         root=root,
         skill=args.skill,

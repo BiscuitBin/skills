@@ -206,3 +206,34 @@ def test_the_command_rejects_an_unknown_case(tmp_path: Path) -> None:
     assert result.returncode == 2
     assert "unknown case 'nope'" in result.stderr
     assert not (root / "eval-results").exists()
+
+
+def test_a_harness_error_in_one_trial_is_recorded_and_the_rest_still_run(tmp_path: Path) -> None:
+    class Broken(ClaudeCode):
+        def run(self, prompt: str, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+            if prompt == TRIGGER:
+                msg = "simulated harness failure"
+                raise RuntimeError(msg)
+            return super().run(prompt, *args, **kwargs)
+
+    root = fake_root(tmp_path)
+    with serve(GOOD) as server:
+        broken = Broken(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+        assert run_suite(settings(root, server.url, adapter=broken)) == 1
+    by_case = {trial["case"]: trial for trial in results(root)["trials"]}
+    assert by_case["trigger-moo"]["status"] == "infra_error"
+    assert "simulated harness failure" in by_case["trigger-moo"]["status_reason"]
+    assert by_case["no-trigger-facts"]["passed"] is True
+    assert [p.name for p in (root / ".eval-workspaces/test-run/trigger-moo").iterdir()] == [
+        "workspace"
+    ]
+
+
+def test_the_command_refuses_to_start_without_the_pinned_cli(tmp_path: Path) -> None:
+    env = {**os.environ, "CLAUDE_CODE_OAUTH_TOKEN": TOKEN}
+    root = fake_root(tmp_path)
+    result = run_cli("cowsay", "--agent", "claude", "--root", str(root), env=env)
+    assert result.returncode == 2
+    assert "node_modules/.bin/claude" in result.stderr
+    assert "just initialize" in result.stderr
+    assert not (root / "eval-results").exists()
