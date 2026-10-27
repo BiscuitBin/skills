@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from skills_tooling.evals.adapter import RawRun, Trace
+from skills_tooling.evals.assertions import contains_lines, expected_script_output
 from skills_tooling.evals.claude_code import BUILTIN_PLUGINS, BUILTIN_SKILLS, parse_stream
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/claude"
+SKILL_DIR = Path(__file__).parents[2] / "skills/cowsay"
 Edit = Callable[[dict[str, Any]], dict[str, Any] | None]
 
 
@@ -114,3 +116,33 @@ def test_commands_changed_events_are_collected(tmp_path: Path) -> None:
     assert trace.initial_commands is not None
     assert {"compact", "cowsay"} <= trace.initial_commands
     assert "canary" not in trace.initial_commands
+
+
+# Recorded from the live `just eval cowsay --agent claude` run (ticket 05),
+# with paths replaced by placeholders and rate-limit details removed.
+
+
+def test_live_should_trigger_transcript() -> None:
+    trace = parse("live-should-trigger")
+    assert (trace.status, trace.skills_triggered) == ("ok", ["cowsay"])
+    assert (trace.cli_version, trace.model) == ("2.1.309", "claude-sonnet-5-5")
+    assert trace.visible_skills == BUILTIN_SKILLS["2.1.309"] | {"cowsay"}
+    assert trace.visible_plugins == BUILTIN_PLUGINS["2.1.309"]
+
+
+def test_live_should_not_trigger_transcript() -> None:
+    trace = parse("live-should-not-trigger")
+    assert trace.status == "ok"
+    assert (trace.skills_triggered, trace.skills_invoked, trace.commands) == ([], [], [])
+    assert "cow" in trace.final_message.lower()
+
+
+def test_live_behaviour_transcript_shows_the_scripts_exact_output() -> None:
+    trace = parse("live-behaviour")
+    assert (trace.status, trace.skills_triggered) == ("ok", ["cowsay"])
+    [command] = trace.commands
+    assert command.ok
+    assert command.command.endswith(".claude/skills/cowsay/scripts/cowsay.py -- 'Ship it, team!'")
+    cow = expected_script_output(SKILL_DIR, "scripts/cowsay.py", ("--", "Ship it, team!"))
+    assert contains_lines(command.output, cow)
+    assert contains_lines(trace.final_message, cow)
