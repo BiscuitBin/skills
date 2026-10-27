@@ -16,7 +16,9 @@ Every command goes through `just`. Run `just` on its own to list the recipes.
 | `typecheck` | Runs mypy in strict mode over `src/` and `tests/`. |
 | `test` | Runs pytest, records JUnit results (including installation modes) in `ai_tmp/pytest.xml`, and shows captured output from passing tests in the CI log. |
 | `validate-skills` | Validates every shipped skill and dev skill against the [validator rules](skill-validator.md). Errors fail; warnings pass. |
+| `validate-evals` | Validates every `evals/*/evals.json` against the [eval case schema](evals.md#case-schema). It calls no agent. |
+| `eval <skill> --agent claude` | Runs a skill's eval cases against the pinned agent and writes `eval-results/<run-id>/results.json`. It needs `CLAUDE_CODE_OAUTH_TOKEN` and calls a paid model, so it is never part of `check`. Takes `--case`, `--model` and `--timeout`. See [evals](evals.md). |
 | `validate-distribution` | Checks marketplace sources and versions, requires committed install sources, then runs pinned Claude Code's strict validation on the marketplace and each shipped plugin. See [distribution](distribution.md). |
 | `agents-version` | Prints the version of each pinned agent CLI (Claude Code, Codex and Pi), run from `node_modules/.bin` with isolated homes under `.tools/agent-homes/`. |
 | `just-version` | Fails unless the running just is the pinned version. |
-| `check` | The full gate, which CI also runs: `just-version`, `lock-check`, `lint`, `typecheck`, `validate-distribution`, `test` (including credential-free install round trips), `validate-skills`, then `agents-version`. It stops at the first failure. |
+| `check` | The full gate, which CI also runs: `just-version`, `lock-check`, `lint`, `typecheck`, `validate-distribution`, `test` (including credential-free install round trips and the eval harness against a local fake API), `validate-skills`, `validate-evals`, then `agents-version`. It stops at the first failure. |
