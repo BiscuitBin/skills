@@ -13,9 +13,11 @@ from typing import Any
 import pytest
 
 from skills_tooling.evals.adapter import RawRun, Trace
+from skills_tooling.evals.assertions import contains_lines, expected_script_output
 from skills_tooling.evals.codex import kept_lines, parse_stream, stored_stderr
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/codex"
+SKILL_DIR = Path(__file__).parents[2] / "skills/cowsay"
 Edit = Callable[[dict[str, Any]], dict[str, Any] | None]
 
 
@@ -312,3 +314,45 @@ def test_a_reader_that_does_not_read_an_installed_skill_is_not_a_trigger(
 )
 def test_a_read_in_a_skills_directory_is_a_trigger(tmp_path: Path, command: str) -> None:
     assert with_read(tmp_path, command).skills_triggered == ["cowsay"]
+
+
+# Live transcripts from run 20261027T224559Z-1535, which passed every case.
+# results.json keeps no stderr events, so each .log holds only the
+# conversation_starts line, rebuilt from the cli_version and model it recorded.
+
+
+def test_a_live_read_is_a_trigger() -> None:
+    trace = parse("live-should-trigger")
+    assert (trace.status, trace.stream_completed) == ("ok", True)
+    assert trace.commands[0].command == "sed -n '1,240p' .agents/skills/cowsay/SKILL.md"
+    assert trace.skills_triggered == ["cowsay"]
+    assert (trace.cli_version, trace.model) == ("0.163.0", "gpt-5.6-terra")
+
+
+def test_a_live_run_with_no_read_is_not_triggered() -> None:
+    trace = parse("live-should-not-trigger")
+    assert trace.status == "ok"
+    assert (trace.skills_triggered, trace.commands) == ([], [])
+    assert trace.final_message
+
+
+def test_a_live_behaviour_run_shows_the_scripts_cow() -> None:
+    trace = parse("live-behaviour")
+    assert trace.skills_triggered == ["cowsay"]
+    assert trace.commands[0].command.startswith("pwd && sed -n '1,240p' ")
+    expected = expected_script_output(SKILL_DIR, "scripts/cowsay.py", ("--", "Ship it, team!"))
+    assert contains_lines(trace.commands[1].output, expected)
+    assert contains_lines(trace.final_message, expected)
+
+
+def test_a_live_explicit_invocation_reads_nothing_and_rests_on_codexs_event() -> None:
+    # Live, `$cowsay:cowsay` ran the script without reading SKILL.md: Codex had
+    # injected it. Only the explicit event, as recorded in fake-explicit, shows it.
+    alone = parse("live-explicit")
+    assert [c.command for c in alone.commands] == [
+        "python3 .agents/skills/cowsay/scripts/cowsay.py -- 'Explicitly invoked.'"
+    ]
+    assert alone.skills_triggered == []
+    event = tuple(line for line in log("fake-explicit") if line.startswith("skill_invocation "))
+    with_event = parse("live-explicit", debug_lines=log("live-explicit") + event)
+    assert with_event.skills_triggered == ["cowsay"]

@@ -4,7 +4,7 @@
 
 **Blocked by:** 05 (Eval harness tracer bullet: cowsay on Claude Code).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Authenticated access to the pinned Codex CLI is required to capture transcripts and pass the live eval; the implementer need not be Codex. Cross-model review is also required.
 
@@ -22,7 +22,7 @@
 - [x] The contamination check works for Codex. It is shown to fail on a deliberately contaminated run, with a canary in each discovery location the research notes list for Codex, including the user-level shared skills folder in the OS home.
 - [x] The results file records the Codex CLI version and the model.
 - [x] Recorded Codex transcripts drive unit tests of the parser and trigger detection. These tests run in `just check` without credentials.
-- [ ] A live run of `just eval cowsay --agent codex` passes every case. The results are summarised in the completion notes. Any case that cannot pass on Codex for a documented reason is marked as an agent-specific expectation, not deleted.
+- [x] A live run of `just eval cowsay --agent codex` passes every case. The results are summarised in the completion notes. Any case that cannot pass on Codex for a documented reason is marked as an agent-specific expectation, not deleted.
 
 ## Review checkpoints
 
@@ -65,7 +65,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 ### Code review (`/code-review`, Claude)
 
 | # | Finding | Verdict | Action |
-|---|---------|---------|--------|
+| --- | --- | --- | --- |
 | 1 | `..`, globs and variables before `SKILL.md` were recorded as skill names | valid | fixed in d4dff54: normalised paths, unplaceable names skipped |
 | 2 | Refreshed ChatGPT tokens are not scrubbed | valid | documented, then fixed in 4d4c816 (cross-model finding 4) |
 | 3 | Short `auth.json` strings would become scrub needles | valid | fixed in d4dff54: 20-character minimum |
@@ -85,7 +85,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - **Findings:** `ai_tmp/review-20261027T221335Z-codex.md` · **Triage:** `ai_tmp/triage-20261027-06.md`
 
 | # | Severity | Finding | Verdict | Action |
-|---|----------|---------|---------|--------|
+| --- | --- | --- | --- | --- |
 | 1 | high | Reads masked by `\|\|`, `;` or a pipe count as triggers | valid | fixed in 4d4c816: only `&&` may join a counted read |
 | 2 | high (triage: low) | `awk -v x=…/SKILL.md` counts as a read | valid | fixed in 4d4c816: `name=value` words skipped |
 | 3 | medium | Any `<name>/SKILL.md`, such as `/tmp/cowsay/SKILL.md`, counts | valid | fixed in 4d4c816: must sit in a skills directory |
@@ -93,10 +93,20 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 | 5 | high | The live run has not happened | out of scope | pending; see below |
 
 **Follow-ups:**
+
 - `review.py` treats a reviewer's first-run initialisation of its own home as a worktree change. Excluding `.tools/agent-homes/<reviewer>/` startup files would avoid the false rejection.
 - With the stricter trigger rule, a masked read of a canary skill is seen only through Codex's own event. The location check still catches the canary itself.
 - The end-to-end tests use Codex's `workspace-write` sandbox and have run on macOS only. Confirm them in Linux CI.
 
 ### Live run
 
-Pending: the user runs `just eval cowsay --agent codex`.
+The user ran `just eval cowsay --agent codex` at 4d4c816 (run `20261027T224559Z-1535`, 2026-10-27 22:45:59 to 22:46:58 UTC). It passed all 9 cases, on `codex-cli 0.163.0` with `gpt-5.6-terra`. `credential_env` was `["CODEX_HOME"]`, every trial's contamination check passed, and no secret was found. No case needed an agent-specific expectation.
+
+| Case | Trigger (expected → actual) | Evidence |
+| --- | --- | --- |
+| trigger-talking-cow, trigger-cowsay-output, trigger-cow-speech-bubble | true → true | `sed -n '1,240p' .agents/skills/cowsay/SKILL.md`, then the script |
+| trigger-explicit-invocation | true → true | no `SKILL.md` read: Codex injected it, and the script ran directly. The trigger rests on the `explicit` event |
+| no-trigger-cow-facts, no-trigger-ascii-cat, no-trigger-cow-haiku | false → false | no commands |
+| behaviour-ship-it, behaviour-wrapped-text | true → true | all 4 assertions passed in each, including `script_ran` and `final_contains_script_output` |
+
+Four live transcripts are fixtures in `tests/fixtures/evals/codex/live-*.jsonl`, driving tests in `tests/evals/test_codex_parser.py`. `results.json` keeps no stderr events, so each `.log` holds only the `conversation_starts` line, rebuilt from the `cli_version` and `model` the run recorded. The explicit-case test pairs the live transcript with the event line recorded in `fake-explicit.log`.

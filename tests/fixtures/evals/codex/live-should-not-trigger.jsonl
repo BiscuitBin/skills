@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a17f8b-3aa9-71f0-8bde-436976a0fa01"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"- Cows are social animals and form close bonds within their herd.\n- They are ruminants, meaning they digest food using a four-part stomach.\n- A dairy cow can produce several gallons of milk per day."}}
+{"type":"turn.completed","usage":{"input_tokens":13068,"cached_input_tokens":11008,"cache_write_input_tokens":0,"output_tokens":65,"reasoning_output_tokens":15}}
