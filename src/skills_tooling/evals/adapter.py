@@ -108,11 +108,17 @@ class Trace:
     python_calls: tuple[PythonCall, ...] = ()
 
 
+class CredentialError(Exception):
+    """The caller's credential is missing or unreadable; nothing ran."""
+
+
 class Adapter(Protocol):
-    """Drives one agent CLI. Codex (ticket 06) and Pi (ticket 07) implement it too."""
+    """Drives one agent CLI. Pi (ticket 07) implements it too."""
 
     name: ClassVar[str]
     default_model: ClassVar[str]
+    # The caller's environment variables the credential comes from. results.json
+    # records these names, never a value.
     credential_env: ClassVar[tuple[str, ...]]
     # The variables that move the agent's home; each must point inside the trial.
     home_env: ClassVar[tuple[str, ...]]
@@ -125,6 +131,16 @@ class Adapter(Protocol):
     # Skills and plugins built into the pinned CLI, keyed by CLI version.
     builtin_skills: ClassVar[Mapping[str, frozenset[str]]]
     builtin_plugins: ClassVar[Mapping[str, frozenset[str]]]
+    # The pinned CLI binary the adapter runs.
+    executable: Path
+
+    def read_credentials(self, environ: Mapping[str, str]) -> Mapping[str, str]:
+        """The credential, read from the caller; raises CredentialError when it is missing."""
+        ...
+
+    def secrets(self, credentials: Mapping[str, str]) -> list[str]:
+        """Every value in the credential that must never reach a results file."""
+        ...
 
     def discovery_locations(self, trial: TrialPaths) -> list[Location]: ...
 

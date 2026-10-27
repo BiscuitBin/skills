@@ -150,9 +150,10 @@ validate-skills:
 validate-evals:
     uv run --frozen python -m skills_tooling.evals validate
 
-# Live: it calls a paid model, needs CLAUDE_CODE_OAUTH_TOKEN, and is never part
-# of check or PR CI (docs/adr/0004-eval-tiers-and-ci.md).
-[doc("Run a skill's eval cases against a pinned agent: `just eval cowsay --agent claude [--case ID]`.")]
+# Live: it calls a paid model, needs CLAUDE_CODE_OAUTH_TOKEN (claude) or a Codex
+# login in the project's CODEX_HOME (codex), and is never part of check or PR CI
+# (docs/adr/0004-eval-tiers-and-ci.md).
+[doc("Run a skill's eval cases against a pinned agent: `just eval cowsay --agent claude|codex [--case ID]`.")]
 eval +args:
     uv run --frozen python -m skills_tooling.evals run "$@"
 

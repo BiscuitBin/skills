@@ -260,3 +260,35 @@ def test_a_scoring_failure_keeps_the_runs_evidence(
     assert trial["contamination"]["passed"] is True
     assert {a["result"] for a in trial["assertions"]} == {"not_scored"}
     assert trial["passed"] is False
+
+
+def test_the_codex_command_refuses_to_start_without_a_project_login(tmp_path: Path) -> None:
+    root = fake_root(tmp_path)
+    empty = tmp_path / "codex-home"
+    empty.mkdir()
+    env = {**os.environ, "CODEX_HOME": str(empty)}
+    result = run_cli("cowsay", "--agent", "codex", "--root", str(root), env=env)
+    assert result.returncode == 2
+    assert f"{empty}/auth.json" in result.stderr
+    assert "codex login" in result.stderr
+    assert not (root / "eval-results").exists()
+
+
+def test_the_codex_command_refuses_to_start_without_codex_home(tmp_path: Path) -> None:
+    root = fake_root(tmp_path)
+    env = {k: v for k, v in os.environ.items() if k != "CODEX_HOME"}
+    result = run_cli("cowsay", "--agent", "codex", "--root", str(root), env=env)
+    assert result.returncode == 2
+    assert "CODEX_HOME is not set" in result.stderr
+
+
+def test_the_codex_command_refuses_to_start_without_the_pinned_cli(tmp_path: Path) -> None:
+    root = fake_root(tmp_path)
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    (home / "auth.json").write_text('{"auth_mode": "apikey", "OPENAI_API_KEY": "sk-fake"}')
+    env = {**os.environ, "CODEX_HOME": str(home)}
+    result = run_cli("cowsay", "--agent", "codex", "--root", str(root), env=env)
+    assert result.returncode == 2
+    assert "node_modules/@openai" in result.stderr
+    assert "just initialize" in result.stderr

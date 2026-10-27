@@ -72,7 +72,7 @@ def contains_lines(text: str, expected: str) -> bool:
     return any(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1))
 
 
-def _simple_commands(command: str) -> Iterator[list[str]]:
+def simple_commands(command: str) -> Iterator[list[str]]:
     lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
     lexer.whitespace = " \t\r"
     current: list[str] = []
@@ -137,7 +137,7 @@ def _same_script(argument: str, script: str) -> bool:
 
 
 def _runs_script(command: Command, script: str) -> bool:
-    for words in _simple_commands(command.command):
+    for words in simple_commands(command.command):
         found = _script_argument(words)
         if found is not None and _same_script(found[0], script):
             return True

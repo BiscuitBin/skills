@@ -52,7 +52,7 @@ class RunSettings:
 
     @property
     def secrets(self) -> list[str]:
-        return [value for value in self.credentials.values() if value]
+        return self.adapter.secrets(self.credentials)
 
 
 def new_run_id() -> str:

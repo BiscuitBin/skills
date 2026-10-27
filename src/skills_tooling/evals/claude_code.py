@@ -8,7 +8,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from skills_tooling.evals import workspace
-from skills_tooling.evals.adapter import Command, Homes, Location, RawRun, Trace
+from skills_tooling.evals.adapter import (
+    Command,
+    CredentialError,
+    Homes,
+    Location,
+    RawRun,
+    Trace,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -81,6 +88,20 @@ class ClaudeCode:
         self.executable = executable.resolve()
         # Only tests set this, to point the CLI at a local fake API.
         self.api_base_url = api_base_url
+
+    def read_credentials(self, environ: Mapping[str, str]) -> Mapping[str, str]:
+        credentials = {name: environ.get(name, "") for name in self.credential_env}
+        missing = [name for name, value in credentials.items() if not value]
+        if missing:
+            msg = (
+                f"{', '.join(missing)} is not set. Live evals need an authenticated agent: "
+                "run `claude setup-token` and export the token. See docs/reference/evals.md."
+            )
+            raise CredentialError(msg)
+        return credentials
+
+    def secrets(self, credentials: Mapping[str, str]) -> list[str]:
+        return [value for value in credentials.values() if value]
 
     def discovery_locations(self, trial: TrialPaths) -> list[Location]:
         ws, home = trial.workspace, trial.home

@@ -20,6 +20,12 @@
       "should_trigger": true
     },
     {
+      "id": "trigger-explicit-invocation",
+      "kind": "trigger",
+      "prompt": "$cowsay:cowsay Make the cow say: Explicitly invoked.",
+      "should_trigger": true
+    },
+    {
       "id": "no-trigger-cow-facts",
       "kind": "trigger",
       "prompt": "Tell me three facts about cows.",
