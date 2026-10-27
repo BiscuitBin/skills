@@ -103,6 +103,10 @@ class ClaudeCode:
     def secrets(self, credentials: Mapping[str, str]) -> list[str]:
         return [value for value in credentials.values() if value]
 
+    def trial_secrets(self, trial: TrialPaths) -> list[str]:  # noqa: ARG002 -- the adapter interface
+        # The token lives only in the child's environment.
+        return []
+
     def discovery_locations(self, trial: TrialPaths) -> list[Location]:
         ws, home = trial.workspace, trial.home
         return [

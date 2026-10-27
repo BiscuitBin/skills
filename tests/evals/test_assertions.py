@@ -11,7 +11,12 @@ import pytest
 
 from skills_tooling.evals import assertions
 from skills_tooling.evals.adapter import Command, PythonCall, Trace
-from skills_tooling.evals.assertions import contains_lines, evaluate, expected_script_output
+from skills_tooling.evals.assertions import (
+    command_list,
+    contains_lines,
+    evaluate,
+    expected_script_output,
+)
 from skills_tooling.evals.cases import Assertion
 from tests.evals.test_claude_parser import parse
 
@@ -264,3 +269,9 @@ def test_the_cowsay_behaviour_assertions_over_the_recorded_live_transcript() -> 
     assert not check(
         Assertion("final_contains_script_output", script=SCRIPT, args=("--", "Ship it")), observed
     )
+
+
+def test_an_operator_at_the_end_of_a_line_ends_the_command() -> None:
+    assert command_list("a ||\n b") == [(["a"], "||"), (["b"], "")]
+    assert command_list("a &&\n\n b ;\n c") == [(["a"], "&&"), (["b"], ";"), (["c"], "")]
+    assert command_list("a\n\nb") == [(["a"], "\n"), (["b"], "")]

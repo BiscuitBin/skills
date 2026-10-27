@@ -19,7 +19,8 @@ if TYPE_CHECKING:
     from skills_tooling.evals.cases import Assertion
 
 PYTHON = re.compile(r"python(?:3(?:\.\d+)?)?")
-OPERATORS = {";", "&&", "||", "|", "&", "\n"}
+PUNCTUATION = set(";&|\n")
+OPERATOR_PIECE = re.compile(r"&&|\|\||;;|\|&|[;&|\n]")
 # Words that run the command after them; leading NAME=value assignments are skipped too.
 PREFIXES = {"env", "exec", "command", "time", "nohup"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
@@ -72,6 +73,18 @@ def contains_lines(text: str, expected: str) -> bool:
     return any(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1))
 
 
+def _operator(token: str) -> str | None:
+    """The operator a punctuation token stands for, or None for a word.
+
+    The lexer returns adjacent punctuation as one token, so `||` at the end of a
+    line arrives as `||\n`. A newline after an operator only continues the line.
+    """
+    if not token or set(token) - PUNCTUATION:
+        return None
+    pieces = OPERATOR_PIECE.findall(token)
+    return next((piece for piece in pieces if piece != "\n"), "\n")
+
+
 def command_list(command: str) -> list[tuple[list[str], str]]:
     """Each simple command with the operator that follows it ("" for the last)."""
     lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
@@ -80,9 +93,9 @@ def command_list(command: str) -> list[tuple[list[str], str]]:
     current: list[str] = []
     try:
         for token in lexer:
-            if token in OPERATORS:
+            if (operator := _operator(token)) is not None:
                 if current:
-                    found.append((current, token))
+                    found.append((current, operator))
                 current = []
             else:
                 current.append(token)

@@ -141,7 +141,7 @@ def _attempt(
         timeout=settings.timeout,
         credentials=settings.credentials,
     )
-    secrets += [value for value in raw.secrets if value not in secrets]
+    _add_trial_secrets(adapter, trial, secrets)
     trace = adapter.parse(raw)
     contamination = check(
         adapter,
@@ -175,6 +175,10 @@ def _attempt(
     }
 
 
+def _add_trial_secrets(adapter: Adapter, trial: TrialPaths, secrets: list[str]) -> None:
+    secrets += [value for value in adapter.trial_secrets(trial) if value not in secrets]
+
+
 def run_trial(
     settings: RunSettings, case: Case, secrets: list[str] | None = None
 ) -> dict[str, Any]:
@@ -200,10 +204,14 @@ def run_trial(
         trial = workspace.create_trial(settings.workspaces_dir, settings.run_id, case.id)
         record |= _attempt(settings, case, trial, secrets)
     except Exception as error:  # noqa: BLE001 -- one trial's failure must not lose the run
+        if trial is not None:
+            _add_trial_secrets(settings.adapter, trial, secrets)
         reason = results.scrub(f"harness error: {type(error).__name__}: {error}", secrets)
         record |= _not_scored(case, reason, [])
     finally:
         if trial is not None:
+            # Before teardown removes the trial's home, on every path.
+            _add_trial_secrets(settings.adapter, trial, secrets)
             workspace.teardown(trial)
             leaked = results.files_holding(trial.root, secrets)
             if leaked:

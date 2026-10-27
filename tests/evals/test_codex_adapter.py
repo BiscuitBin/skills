@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     import pytest
 
-    from skills_tooling.evals.adapter import Trace, TrialPaths
+    from skills_tooling.evals.adapter import Homes, RawRun, Trace, TrialPaths
 
 ROOT = Path(__file__).parents[2]
 KEY = "sk-fake-codex-adapter-test"
@@ -272,4 +272,26 @@ def test_a_token_refreshed_mid_run_is_scrubbed_and_swept(
             assert refreshed not in path.read_text(), path
     data = json.loads((root / "eval-results/test-run/results.json").read_text())
     [trial] = data["trials"]
+    assert trial["secret_found"] == {"files": ["workspace/copied.txt"], "deleted": True}
+
+
+def test_a_token_refreshed_before_the_run_fails_is_still_swept(tmp_path: Path) -> None:
+    refreshed = "rt_fake-refreshed-token-9876543210"
+
+    class RefreshesThenFails(Codex):
+        def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401, ARG002
+            # As if Codex refreshed the login, a tool copied it into the
+            # workspace, and reading the run's evidence then raised.
+            auth = {"auth_mode": "apikey", "OPENAI_API_KEY": refreshed}
+            (homes.agent_home / "auth.json").write_text(json.dumps(auth))
+            (trial.workspace / "copied.txt").write_text(refreshed)
+            msg = "python log unreadable"
+            raise IsADirectoryError(msg)
+
+    root = fake_root(tmp_path, [CASES[0]])
+    adapter = RefreshesThenFails(pinned_executable(ROOT))
+    run_suite(settings(root, "unused", adapter=adapter, credentials={"auth.json": AUTH}))
+    data = json.loads((root / "eval-results/test-run/results.json").read_text())
+    [trial] = data["trials"]
+    assert trial["status"] == "infra_error"
     assert trial["secret_found"] == {"files": ["workspace/copied.txt"], "deleted": True}

@@ -279,6 +279,9 @@ def with_read(tmp_path: Path, command: str) -> Trace:
         "cat .agents/skills/cowsay/SKILL.md 2>/dev/null || echo missing",
         "cat .agents/skills/cowsay/SKILL.md | head -40",
         "cat .agents/skills/cowsay/SKILL.md; true",
+        # An operator at the end of a line still separates the commands.
+        "cat /nonexistent/skills/cowsay/SKILL.md ||\n echo done",
+        "cat .agents/skills/cowsay/SKILL.md ;\n echo done",
     ],
 )
 def test_a_read_whose_outcome_the_exit_status_hides_is_not_a_trigger(
@@ -295,6 +298,9 @@ def test_a_read_whose_outcome_the_exit_status_hides_is_not_a_trigger(
         "awk -v label=.agents/skills/cowsay/SKILL.md 'BEGIN {print label}'",
         "awk 'BEGIN{}' x=.agents/skills/cowsay/SKILL.md",
         "cat /tmp/cowsay/SKILL.md",
+        # awk opens an operand only if its program says so.
+        "awk -F .agents/skills/cowsay/SKILL.md 'BEGIN {print \"done\"}'",
+        "awk 'BEGIN {print \"done\"; exit}' .agents/skills/cowsay/SKILL.md",
     ],
 )
 def test_a_reader_that_does_not_read_an_installed_skill_is_not_a_trigger(
@@ -310,6 +316,7 @@ def test_a_reader_that_does_not_read_an_installed_skill_is_not_a_trigger(
         "cat /private/trial/workspace/.agents/skills/cowsay/SKILL.md",
         "cd .agents/skills && cat cowsay/SKILL.md",
         "cat ../../skills/cowsay/SKILL.md",
+        "cd .agents/skills/cowsay &&\n cat SKILL.md",
     ],
 )
 def test_a_read_in_a_skills_directory_is_a_trigger(tmp_path: Path, command: str) -> None:

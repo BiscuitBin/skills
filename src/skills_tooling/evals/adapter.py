@@ -72,9 +72,6 @@ class RawRun:
     python_calls: tuple[PythonCall, ...]
     survivors: bool
     elapsed: float
-    # Credential values that appeared during the run, such as a refreshed
-    # login, to scrub and sweep for as well as the ones the run started with.
-    secrets: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -143,6 +140,14 @@ class Adapter(Protocol):
 
     def secrets(self, credentials: Mapping[str, str]) -> list[str]:
         """Every value in the credential that must never reach a results file."""
+        ...
+
+    def trial_secrets(self, trial: TrialPaths) -> list[str]:
+        """Credential values that appeared in the trial, such as a refreshed login.
+
+        The runner reads these after the run and again before teardown, on
+        every path, and scrubs and sweeps for them too.
+        """
         ...
 
     def discovery_locations(self, trial: TrialPaths) -> list[Location]: ...

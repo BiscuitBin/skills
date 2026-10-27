@@ -73,8 +73,9 @@ TELEMETRY = "codex_otel"
 STARTS_FIELDS = ("app.version", "model")
 INVOCATION_FIELDS = ("skill.name", "skill.scope", "skill.invocation_type")
 # Programs that print a file's contents. A command that only names the path,
-# such as ls, test or echo, is not a read.
-READERS = {"cat", "head", "tail", "sed", "nl", "awk", "less", "more", "bat"}
+# such as ls, test or echo, is not a read. awk is not one: whether it opens an
+# operand depends on its program, so an awk read is left to Codex's own event.
+READERS = {"cat", "head", "tail", "sed", "nl", "less", "more", "bat"}
 # Codex wraps each command as `<shell> -c '<command>'`, or -lc for a login shell.
 SHELLS = {"bash", "zsh", "sh"}
 # Characters the shell expands, so the name in the text is not the directory read.
@@ -143,6 +144,13 @@ class Codex:
             with contextlib.suppress(json.JSONDecodeError):
                 found += _secret_leaves(json.loads(text))
         return [value for value in found if value]
+
+    def trial_secrets(self, trial: TrialPaths) -> list[str]:
+        """The trial's auth.json as it is now: Codex rewrites it when it refreshes a login."""
+        try:
+            return self.secrets({"auth.json": (trial.home / ".codex/auth.json").read_text()})
+        except OSError:
+            return []
 
     def discovery_locations(self, trial: TrialPaths) -> list[Location]:
         ws, home = trial.workspace, trial.home
@@ -284,11 +292,6 @@ class Codex:
             timeout=timeout,
         )
         logged = stderr.read_text(errors="replace")
-        try:
-            # Codex rewrites auth.json when it refreshes a ChatGPT login.
-            current = self.secrets({"auth.json": (homes.agent_home / "auth.json").read_text()})
-        except OSError:
-            current = []
         return RawRun(
             exit_code=finished.exit_code,
             timed_out=finished.timed_out,
@@ -299,7 +302,6 @@ class Codex:
             python_calls=workspace.python_calls(trial),
             survivors=finished.survivors,
             elapsed=finished.elapsed,
-            secrets=tuple(current),
         )
 
     def parse(self, raw: RawRun) -> Trace:
