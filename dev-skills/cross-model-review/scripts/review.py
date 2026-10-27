@@ -81,6 +81,11 @@ def reviewer_command(reviewer: Reviewer, root: Path) -> list[str]:
             "--ephemeral",
             "--ignore-user-config",  # user hooks and MCP servers run outside the sandbox
             "--ignore-rules",  # execpolicy rules can allow commands outside the sandbox
+            # Plugins and apps add tools, and Codex syncs remote plugins into its
+            # home mid-run, which the worktree snapshot would reject.
+            "--disable", "plugins",
+            "--disable", "remote_plugin",
+            "--disable", "apps",
             "--skip-git-repo-check",
             "-C", str(root),
             "-",
@@ -265,13 +270,8 @@ def snapshot(root: Path) -> dict[str, str]:
     return entries
 
 
-def _runtime_state(relative: str) -> bool:
-    """Only observed Claude runtime state; config, instructions and skills stay monitored."""
-    parts = Path(relative).parts
-    prefix = (".tools", "agent-homes", "claude")
-    if parts[: len(prefix)] != prefix or len(parts) <= len(prefix):
-        return False
-    return parts[len(prefix)] in {
+RUNTIME_STATE = {
+    "claude": {
         ".credentials.json",
         "mcp-needs-auth-cache.json",
         ".last-cleanup",
@@ -281,7 +281,31 @@ def _runtime_state(relative: str) -> bool:
         "session-env",
         "telemetry",
         "statsig",
-    }
+    },
+    "codex": {
+        "cache",
+        "log",
+        "tmp",
+        "shell_snapshots",
+        "models_cache.json",
+        ".sqlite-maintenance.lock",
+    },
+}
+# Codex's databases and their write-ahead files. memories_*.sqlite is persistent
+# context for the reviewer, so it stays monitored.
+CODEX_DATABASE = re.compile(r"(?:state|logs|goals|queue)_\d+\.sqlite(?:-wal|-shm)?")
+
+
+def _runtime_state(relative: str) -> bool:
+    """Only observed agent runtime state; config, instructions and skills stay monitored."""
+    parts = Path(relative).parts
+    prefix = (".tools", "agent-homes")
+    if parts[: len(prefix)] != prefix or len(parts) <= len(prefix) + 1:
+        return False
+    agent, entry = parts[len(prefix)], parts[len(prefix) + 1]
+    if agent == "codex" and CODEX_DATABASE.fullmatch(entry):
+        return True
+    return entry in RUNTIME_STATE.get(agent, set())
 
 
 def _file_digest(path: Path) -> str:

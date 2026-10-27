@@ -61,10 +61,11 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
 # Tests assert and compare against literals. The cross-model review tests run
-# the script as a subprocess and call its private helpers.
+# the script as a subprocess and call its private helpers. The eval tests use
+# fake tokens to prove secrets never reach results.
 # Shipped scripts run standalone, outside the tooling package.
 "skills/**/scripts/*.py" = ["INP001"]
-"tests/**" = ["INP001", "PLR2004", "S101", "S603", "SLF001"]
+"tests/**" = ["INP001", "PLR2004", "S101", "S105", "S603", "SLF001"]
 # The review script exists to run git and the reviewer CLIs.
 "dev-skills/cross-model-review/scripts/review.py" = ["S603", "S607"]
 

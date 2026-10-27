@@ -266,6 +266,41 @@ class SnapshotTest(unittest.TestCase):
         (tools / "source.py").write_text("changed\n")
         self.assertEqual(self.changes(before), ["added: .tools/source.py"])
 
+    def test_codex_runtime_writes_are_ignored(self) -> None:
+        home = self.root / ".tools/agent-homes/codex"
+        (home / "cache/remote_plugin_catalog").mkdir(parents=True)
+        (home / "state_5.sqlite").write_text("x\n")
+        before = review.snapshot(self.root)
+        (home / "cache/remote_plugin_catalog/c.json").write_text("{}\n")
+        (home / "models_cache.json").write_text("{}\n")
+        (home / "state_5.sqlite").write_text("y\n")
+        (home / "state_5.sqlite-wal").write_text("x\n")
+        (home / "goals_1.sqlite-shm").write_text("x\n")
+        (home / ".sqlite-maintenance.lock").write_text("")
+        (home / "log").mkdir()
+        (home / "tmp/arg0").mkdir(parents=True)
+        (home / "shell_snapshots").mkdir()
+        self.assertEqual(self.changes(before), [])
+
+    def test_codex_config_memories_and_skills_remain_monitored(self) -> None:
+        home = self.root / ".tools/agent-homes/codex"
+        home.mkdir(parents=True)
+        before = review.snapshot(self.root)
+        (home / "config.toml").write_text('model = "x"\n')
+        (home / "AGENTS.md").write_text("Persistent instructions\n")
+        (home / "memories_1.sqlite").write_text("x\n")
+        (home / "skills/canary").mkdir(parents=True)
+        self.assertEqual(
+            sorted(self.changes(before)),
+            [
+                "added: .tools/agent-homes/codex/AGENTS.md",
+                "added: .tools/agent-homes/codex/config.toml",
+                "added: .tools/agent-homes/codex/memories_1.sqlite",
+                "added: .tools/agent-homes/codex/skills",
+                "added: .tools/agent-homes/codex/skills/canary",
+            ],
+        )
+
     def test_agent_config_and_home_replacement_are_detected(self) -> None:
         home = self.root / ".tools/agent-homes/claude"
         home.mkdir(parents=True)
@@ -424,6 +459,9 @@ class CliTest(unittest.TestCase):
             ["--ephemeral"],
             ["--ignore-user-config"],
             ["--ignore-rules"],
+            ["--disable", "plugins"],
+            ["--disable", "remote_plugin"],
+            ["--disable", "apps"],
         ):
             with self.subTest(codex=flags):
                 self.assertTrue(contains(codex_call, flags))

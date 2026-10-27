@@ -80,6 +80,13 @@ Sources: <https://code.claude.com/docs/en/skills>, <https://code.claude.com/docs
   - `~/.claude/skills/<name>/` (user), `.claude/skills/` (project), and nested `<subdir>/.claude/skills/`.
   - A plugin's `skills/`, and enterprise locations.
   - On a name clash, enterprise beats personal and personal beats project.
+- **Verified against the pinned 2.1.309 (ticket 05, 2026-10-26).** These correct or extend the notes above. The canary sweep in `tests/evals/test_contamination_canaries.py` checks each one.
+  - The user skill location is `$CLAUDE_CONFIG_DIR/skills`, not `~/.claude/skills`, whenever `CLAUDE_CONFIG_DIR` is set. `~/.agents/skills`, and `.claude/skills` or `.agents/skills` above the workspace's git root, are not read.
+  - Nested `<subdir>/.claude/skills` is discovered only mid-session, after the agent touches a file in `<subdir>`. The debug log then shows `[skills] Dynamically discovered N skills`, and the stream gets a `system/commands_changed` event listing every slash command.
+  - `--debug-file` logs `Loading skills from: managed=…, user=…, project=[…]` and `Loaded N unique skills (… managed: M, user: U, project: P, additional: A …)`. The managed root is fixed by platform: `/Library/Application Support/ClaudeCode` on macOS, `/etc/claude-code` on Linux.
+  - Instruction files load across the workspace's git root: a parent `CLAUDE.md`, and `<ancestor>/.claude/CLAUDE.md` for every ancestor, which includes the user's `~/.claude/CLAUDE.md`. The built-in `cc-plugin-agents-md` loads `AGENTS.md` only when no `CLAUDE.md` is found up the tree. An ancestor `CLAUDE.md`'s `@AGENTS.md` import is not expanded. `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` blocks all of them and leaves skills loading. The init event does not report which instruction files loaded.
+  - `CLAUDE_CODE_OAUTH_TOKEN` honours `ANTHROPIC_BASE_URL`, so a local fake API can stand in for the real one. `apiKeySource` reads `none` under OAuth. With no credential the result is `"Not logged in"`, with `is_error: true` and `subtype: "success"` (exit 1). The CLI strips the token from its Bash tool's environment.
+  - With an OAuth token set, the init event lists one more built-in skill, `schedule`.
 - **Headless:** `claude -p "…" --output-format stream-json --verbose`, with `--allowedTools` or `--permission-mode`.
   - `--bare` skips CLAUDE.md auto-discovery, plugin sync and keychain reads, and accepts only an API key (or `apiKeyHelper`) for Anthropic auth. Its help text (2.1.309) does not say it skips skill discovery: "Skills still resolve via /skill-name". Check against the pinned version before relying on it for isolation.
   - `--safe-mode` disables CLAUDE.md, skills, installed plugins and hooks.

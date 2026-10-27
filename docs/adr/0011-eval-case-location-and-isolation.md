@@ -1,0 +1,7 @@
+# Eval cases live in evals/; trials are isolated by redirection and proven by the agent's own reports
+
+Eval cases live at `evals/<skill>/evals.json`, at the repo root and outside the shipped skill's directory. Distribution ships `skills/<name>/` whole (ADR 0010), so a case file there would reach users, and the install round trips check that tree file by file. A separate root keeps the shipped payload exactly the skill and lets evals change without a plugin version bump.
+
+Each trial runs the real agent CLI with redirected homes, a fresh git workspace that is its own root, a constructed `PATH`, and instruction files switched off. It is not run in a container or a separate OS user. Isolation is proven by what the agent itself reports, checked on every trial against a recorded allowlist of built-ins, and by a canary sweep in `just check` that runs the pinned CLI against a local fake API. Where an agent reports nothing, the proof rests on the redirected homes and the sweep. A location that can be neither redirected nor canaried fails the preflight.
+
+A container would also limit file access, which redirection does not: an agent can still read the repository above its workspace. Containers were rejected for this tracer bullet because they need a runtime the project does not pin, and the same isolation code has to serve Codex and Pi. The file-access limit is documented, not mitigated ([eval isolation](../explanation/eval-isolation.md)).
