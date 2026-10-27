@@ -10,18 +10,18 @@
 
 ## Acceptance criteria
 
-- [ ] The Codex adapter implements the ticket 05 interface without changing the case schema. If the interface has to change, the Claude Code adapter and its tests are updated in the same change.
-- [ ] The run uses an isolated Codex home, ignores user config, and is ephemeral.
+- [x] The Codex adapter implements the ticket 05 interface without changing the case schema. If the interface has to change, the Claude Code adapter and its tests are updated in the same change.
+- [x] The run uses an isolated Codex home, ignores user config, and is ephemeral.
   - Credentials reach the isolated home without user skills or config coming with them.
   - The run never writes to the user's real Codex home.
-- [ ] Trigger detection:
+- [x] Trigger detection:
   - A command that reads the skill-under-test's `SKILL.md` counts as a trigger, but only if the read completed successfully. A failed read, or a command that merely mentions the path, does not count.
   - A run with no such read counts as not triggered, and a test asserts this.
   - A "failed to load skill" warning makes the run fail, not pass silently.
-- [ ] One extra case uses Codex's explicit invocation (`$cowsay`) and asserts the skill triggered. First check, with a recorded transcript, how the pinned Codex loads an explicitly invoked skill. If that does not produce a read of the skill's `SKILL.md`, detect the explicit load another way and document how.
-- [ ] The contamination check works for Codex. It is shown to fail on a deliberately contaminated run, with a canary in each discovery location the research notes list for Codex, including the user-level shared skills folder in the OS home.
-- [ ] The results file records the Codex CLI version and the model.
-- [ ] Recorded Codex transcripts drive unit tests of the parser and trigger detection. These tests run in `just check` without credentials.
+- [x] One extra case uses Codex's explicit invocation (`$cowsay`) and asserts the skill triggered. First check, with a recorded transcript, how the pinned Codex loads an explicitly invoked skill. If that does not produce a read of the skill's `SKILL.md`, detect the explicit load another way and document how.
+- [x] The contamination check works for Codex. It is shown to fail on a deliberately contaminated run, with a canary in each discovery location the research notes list for Codex, including the user-level shared skills folder in the OS home.
+- [x] The results file records the Codex CLI version and the model.
+- [x] Recorded Codex transcripts drive unit tests of the parser and trigger detection. These tests run in `just check` without credentials.
 - [ ] A live run of `just eval cowsay --agent codex` passes every case. The results are summarised in the completion notes. Any case that cannot pass on Codex for a documented reason is marked as an agent-specific expectation, not deleted.
 
 ## Review checkpoints
@@ -34,3 +34,69 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - Apply the valid fixes, rerun `just check`, and record every finding and how it was handled under **Completion notes**.
 
 - **Implementation checkpoint:** before marking done, review the full diff against these acceptance criteria. Pay particular attention to false-positive and false-negative trigger detection, and to isolation leaks.
+
+## Completion notes
+
+### What was built
+
+- `src/skills_tooling/evals/codex.py`, the Codex adapter. `just eval cowsay --agent codex` runs the shared cases against the pinned `codex-cli 0.163.0` native binary, with `gpt-5.6-terra` as the default model (the user asked for "terra"; it is the only terra in the CLI's bundled catalog).
+- **Interface change:** `Adapter` gained `executable`, `read_credentials` and `secrets`, and `RawRun` gained `secrets` (empty by default). The Claude Code adapter implements them with unchanged behaviour, and its tests pass unchanged. The case schema is unchanged.
+- **Credential:** only `auth.json` from the project's `CODEX_HOME` (`.tools/agent-homes/codex`) is copied, mode 0600, into each trial's `CODEX_HOME`. Its long string values are scrubbed and swept, and so is a login Codex refreshes mid-trial, which is read back before teardown. The user's `~/.codex` is never read or written. `tests/evals/test_codex_adapter.py` shows that the caller's `CODEX_HOME` is never written, and that the caller's skills, `AGENTS.md` and `config.toml` never reach the model.
+- **Isolation flags:**
+  - `--ephemeral --ignore-user-config --ignore-rules --sandbox workspace-write`
+  - `allow_login_shell=false`: a login shell's `path_helper` hid the trial's `python3` wrapper.
+  - `project_doc_max_bytes=0`
+  - `--disable plugins remote_plugin apps`: Codex syncs the account's remote plugins otherwise.
+- **Trigger detection:**
+  - A completed `command_execution` counts when it reads `<skills dir>/<skill>/SKILL.md` with a reader program, joined only by `&&`, exits 0 and prints.
+  - So does Codex's own `codex.skill_invocation` telemetry event (`implicit` for a read, `explicit` for a `$skill` mention).
+  - `failed to load skill` makes the run an `infra_error`.
+  - Fixtures cover each case: a should-trigger read, a `cd` read, no read, a failed read, a mention-only command, a read that never completed, masked reads, a broken skill, a failed login and a truncated stream.
+- **Explicit invocation:**
+  - Checked with the real CLI against a fake API. `$name` makes Codex inject `SKILL.md` into the request as a `<skill>` message; no command reads it, and the JSONL shows nothing. It is detected by the `invocation_type="explicit"` event that `RUST_LOG=warn,codex_otel.log_only=info` puts on stderr (`fake-explicit` fixture). Documented in `docs/reference/evals.md`.
+  - Codex names the shipped skill `cowsay:cowsay`, because it reads `skills/cowsay/.claude-plugin/plugin.json` (which `npx skills` also installs for Codex). A bare `$cowsay` loads nothing explicitly, so the new case `trigger-explicit-invocation` uses `$cowsay:cowsay`, as the user chose. It runs on Claude Code too.
+- **Contamination:**
+  - Codex does not report its skills (`reports_skills = False`), so the adapter reads every location after the run: `<workspace>/.agents/skills`, `<home>/.agents/skills`, `$CODEX_HOME/skills` and `.system`, plugin directories, `$CODEX_HOME/AGENTS.md` and `AGENTS.override.md`, and `/etc/codex`.
+  - `tests/evals/test_codex_contamination.py` plants a canary in each and shows the check fails.
+  - Finding: `project_doc_max_bytes=0` does not suppress the global `$CODEX_HOME/AGENTS.md`, which the check therefore requires to be absent.
+- **Results:** `cli_version` and `model` come from Codex's `codex.conversation_starts` event, and `credential_env` is `["CODEX_HOME"]`.
+- **Tests without credentials:** the real pinned Codex runs against a fake Responses API (`tests/evals/fake_openai.py`), and the parser tests use the recorded fixtures in `tests/fixtures/evals/codex/`. All run in `just check`.
+
+### Code review (`/code-review`, Claude)
+
+| # | Finding | Verdict | Action |
+|---|---------|---------|--------|
+| 1 | `..`, globs and variables before `SKILL.md` were recorded as skill names | valid | fixed in d4dff54: normalised paths, unplaceable names skipped |
+| 2 | Refreshed ChatGPT tokens are not scrubbed | valid | documented, then fixed in 4d4c816 (cross-model finding 4) |
+| 3 | Short `auth.json` strings would become scrub needles | valid | fixed in d4dff54: 20-character minimum |
+| 4 | `failed to load skill` matched inside telemetry (tool output) | valid | fixed in d4dff54: only Codex's own log lines count |
+| 5 | Multi-line telemetry continuation lines reached the stored stderr | valid | fixed in d4dff54: whole telemetry records dropped, log target parsed past span prefixes |
+| 6 | The Codex-only `$cowsay:cowsay` prompt sits in the shared suite | out of scope | the user's choice; it runs on Claude Code as an ordinary prompt |
+| 7 | The repo-skills check counts entries but does not name them | low, not fixed | the preflight checks the name before the run |
+| 8 | `auth.json` was briefly world-readable | valid | fixed in d4dff54: created 0600 |
+| 9 | Helpers duplicated from `claude_code.py` | low, not fixed | kept local, to leave the Claude adapter untouched |
+| 10 | `RunSettings.secrets` re-parses `auth.json` on each access | low, not fixed | negligible cost |
+
+### Cross-model review
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`)
+- **Reviewer:** codex `gpt-6-astra` (fallback: no). The first attempt was rejected (exit 4): Codex initialised its own home under `.tools/agent-homes/codex/` on its first run in this worktree, which the reviewer's snapshot counts as a change. The rerun was clean.
+- **Reviewed:** `03dadcf...d4dff54`
+- **Findings:** `ai_tmp/review-20261027T221335Z-codex.md` · **Triage:** `ai_tmp/triage-20261027-06.md`
+
+| # | Severity | Finding | Verdict | Action |
+|---|----------|---------|---------|--------|
+| 1 | high | Reads masked by `\|\|`, `;` or a pipe count as triggers | valid | fixed in 4d4c816: only `&&` may join a counted read |
+| 2 | high (triage: low) | `awk -v x=…/SKILL.md` counts as a read | valid | fixed in 4d4c816: `name=value` words skipped |
+| 3 | medium | Any `<name>/SKILL.md`, such as `/tmp/cowsay/SKILL.md`, counts | valid | fixed in 4d4c816: must sit in a skills directory |
+| 4 | high (triage: medium) | Refreshed tokens escape the scrub and the sweep | valid | fixed in 4d4c816: read back before teardown, added to the trial's secrets |
+| 5 | high | The live run has not happened | out of scope | pending; see below |
+
+**Follow-ups:**
+- `review.py` treats a reviewer's first-run initialisation of its own home as a worktree change. Excluding `.tools/agent-homes/<reviewer>/` startup files would avoid the false rejection.
+- With the stricter trigger rule, a masked read of a canary skill is seen only through Codex's own event. The location check still catches the canary itself.
+- The end-to-end tests use Codex's `workspace-write` sandbox and have run on macOS only. Confirm them in Linux CI.
+
+### Live run
+
+Pending: the user runs `just eval cowsay --agent codex`.
