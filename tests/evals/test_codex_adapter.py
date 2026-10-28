@@ -1,6 +1,5 @@
 """Drive the pinned Codex CLI through the adapter against the fake Responses API."""
 
-import contextlib
 import json
 import subprocess
 from dataclasses import dataclass
@@ -56,16 +55,6 @@ def test_trial_records_trigger_command_and_final_message(tmp_path: Path) -> None
             credentials={"auth.json": AUTH},
         )
     trace = adapter.parse(raw)
-    # TEMPORARY CI DEBUG: revert before merge.
-    print("DEBUG transcript:\n" + raw.transcript.read_text())
-    print("DEBUG stderr:\n" + (trial.tmp / "stderr.txt").read_text())
-    for knob in (
-        "kernel/apparmor_restrict_unprivileged_userns",
-        "kernel/unprivileged_userns_clone",
-    ):
-        with contextlib.suppress(OSError):
-            print(f"DEBUG {knob}=" + Path("/proc/sys", knob).read_text())
-    print("DEBUG commands:", trace.commands)
     assert (trace.status, trace.status_reason) == ("ok", "")
     assert trace.skills_triggered == ["cowsay"]
     assert [(c.command, c.ok) for c in trace.commands][1] == (command, True)
