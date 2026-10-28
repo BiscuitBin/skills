@@ -59,7 +59,10 @@ def test_trial_records_trigger_command_and_final_message(tmp_path: Path) -> None
     # TEMPORARY CI DEBUG: revert before merge.
     print("DEBUG transcript:\n" + raw.transcript.read_text())
     print("DEBUG stderr:\n" + (trial.tmp / "stderr.txt").read_text())
-    for knob in ("kernel/apparmor_restrict_unprivileged_userns", "kernel/unprivileged_userns_clone"):
+    for knob in (
+        "kernel/apparmor_restrict_unprivileged_userns",
+        "kernel/unprivileged_userns_clone",
+    ):
         with contextlib.suppress(OSError):
             print(f"DEBUG {knob}=" + Path("/proc/sys", knob).read_text())
     print("DEBUG commands:", trace.commands)
