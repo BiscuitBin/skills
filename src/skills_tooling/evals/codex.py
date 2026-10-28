@@ -51,7 +51,8 @@ CONFIG = (
 # plugins into its home mid-run.
 DISABLED = ("plugins", "remote_plugin", "apps")
 # Writes are confined to the workspace and the trial's TMPDIR, where the
-# python3 wrapper logs its calls.
+# python3 wrapper logs its calls. The macOS sandbox allows TMPDIR on its own;
+# the Linux one denies it, so run() names it as a writable root.
 SANDBOX = "workspace-write"
 # Only Codex's own log-only telemetry events, which name the CLI version, the
 # model and each explicitly invoked skill, and warnings and errors.
@@ -278,6 +279,7 @@ class Codex:
         ]
         for setting in self.config:
             argv += ["-c", setting]
+        argv += ["-c", f"sandbox_workspace_write.writable_roots=[{json.dumps(str(trial.tmp))}]"]
         for feature in DISABLED:
             argv += ["--disable", feature]
         if self.api_base_url is not None:
