@@ -109,7 +109,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 
 - `review.py` treats a reviewer's first-run initialisation of its own home as a worktree change. Excluding `.tools/agent-homes/<reviewer>/` startup files would avoid the false rejection.
 - With the stricter trigger rule, a masked read of a canary skill is seen only through Codex's own event. The location check still catches the canary itself.
-- The end-to-end tests use Codex's `workspace-write` sandbox and have run on macOS only. CI has not been run yet: confirm them in Linux CI.
+- The end-to-end tests use Codex's `workspace-write` sandbox. Their first Linux CI run, on `ubuntu-24.04`, failed the trigger-command and version/key tests in `test_codex_adapter.py`. A debug run ([40614691505](https://github.com/BiscuitBin/skills/actions/runs/40614691505), prints added in `8fe4d12` and removed by `143d61f`) showed the cause: the runner sets `kernel.apparmor_restrict_unprivileged_userns=1`, so bubblewrap fails with `loopback: Failed RTM_NEWADDR: Operation not permitted` and Codex denies every sandboxed command. Naming the trial's `TMPDIR` as a Codex writable root (`313e2f7`) had no effect and was reverted (`ac1b808`). CI now lifts the restriction with `sysctl` before the gate, and the gate also runs on `macos-15`, where the sandbox is Seatbelt. The two parser gaps the run exposed, a denied command missing from the trace and a trigger recorded with no read, are ticket 13.
 - A read with `2>&1` is not counted by the text rule, because the lexer sees an `&`; it rests on Codex's implicit event.
 - The shared suite's `trigger-explicit-invocation` (`$cowsay:cowsay`) has not been run on Claude Code yet.
 
