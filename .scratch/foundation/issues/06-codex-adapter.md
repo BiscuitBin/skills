@@ -113,6 +113,14 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - A read with `2>&1` is not counted by the text rule, because the lexer sees an `&`; it rests on Codex's implicit event.
 - The shared suite's `trigger-explicit-invocation` (`$cowsay:cowsay`) has not been run on Claude Code yet.
 
+#### Round three: the CI fix
+
+- **Reviewer:** codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `143d61f...519914f`: the CI matrix and sysctl step, the `evals.md` sentence, ticket 13 and the CI follow-up above
+- **Findings:** `ai_tmp/review-20261028T235900Z-codex.md` · **Triage:** `ai_tmp/triage-20261028-06-ci-matrix.md`
+
+No findings. The reviewer had no access to GitHub, so it checked the CI claims against the saved job logs. Triage confirmed them with `gh`: run 40777692982 is at `882b2f2` with both jobs green, and debug run 40614691505 is the failed run at `97fc0ee`.
+
 ### Live run
 
 The user ran `just eval cowsay --agent codex` at 4d4c816 (run `20261027T224559Z-1535`, 2026-10-27 22:45:59 to 22:46:58 UTC). It passed all 9 cases, on `codex-cli 0.163.0` with `gpt-5.6-terra`. `credential_env` was `["CODEX_HOME"]`, every trial's contamination check passed, and no secret was found. No case needed an agent-specific expectation.
