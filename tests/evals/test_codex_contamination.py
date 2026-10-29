@@ -5,6 +5,7 @@ themselves after the run. Each test plants one canary and shows the check fails.
 """
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -138,6 +139,18 @@ def test_reading_a_never_appear_skill_fails(trial: TrialPaths) -> None:
         system_root=trial.root / "system-root",
     ).problems
     assert "never-appear skill 'review' (dev skill) is visible" in found
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root lists any directory")
+def test_a_location_the_check_cannot_list_is_an_error_not_empty(trial: TrialPaths) -> None:
+    system = trial.root / "system-root/etc/codex"
+    system.mkdir(parents=True)
+    system.chmod(0o111)
+    try:
+        with pytest.raises(PermissionError):
+            problems(trial)
+    finally:
+        system.chmod(0o755)
 
 
 def test_an_unrecorded_cli_version_fails(trial: TrialPaths) -> None:

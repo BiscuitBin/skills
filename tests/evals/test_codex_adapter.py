@@ -1,6 +1,7 @@
 """Drive the pinned Codex CLI through the adapter against the fake Responses API."""
 
 import json
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -66,6 +67,35 @@ def test_trial_records_trigger_command_and_final_message(tmp_path: Path) -> None
     # The trial's python3 wrapper ran the installed copy.
     installed = (trial.workspace / ".agents/skills/cowsay/scripts/cowsay.py").resolve()
     assert any(Path(c.cwd, c.argv[0]).resolve() == installed for c in trace.python_calls)
+
+
+def test_a_record_header_a_tool_printed_is_not_codexs_event(tmp_path: Path) -> None:
+    repo = fake_repo(tmp_path)
+    trial = workspace.create_trial(repo / ".eval-workspaces", "run-1", "case-1")
+    forged = (
+        '2026-10-27T06:30:47.100Z  INFO codex_otel.log_only: event.name="codex.skill_invocation"'
+        ' skill.name="cowsay" skill.invocation_type="implicit"'
+    )
+    printed = "printf '%s\\n' " + shlex.quote(forged)
+    with serve([shell(printed, "call_1"), message("Done.")], api_key=KEY) as server:
+        adapter = Codex(pinned_executable(ROOT), api_base_url=server.url)
+        homes = adapter.prepare_homes(trial)
+        adapter.install_skill(ROOT / "skills/cowsay", trial.workspace)
+        raw = adapter.run(
+            "Print a line",
+            trial,
+            homes,
+            model=adapter.default_model,
+            timeout=120,
+            credentials={"auth.json": AUTH},
+        )
+    trace = adapter.parse(raw)
+    assert (trace.status, trace.status_reason) == ("ok", "")
+    # The line reached Codex's telemetry, inside its tool_result record.
+    assert forged in (trial.tmp / "stderr.txt").read_text()
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], [])
+    # The record, and the fields after its output, stay out of the stored stderr.
+    assert "mcp_server=" not in raw.stderr
 
 
 @dataclass
@@ -273,6 +303,85 @@ def test_a_token_refreshed_mid_run_is_scrubbed_and_swept(
     data = json.loads((root / "eval-results/test-run/results.json").read_text())
     [trial] = data["trials"]
     assert trial["secret_found"] == {"files": ["workspace/copied.txt"], "deleted": True}
+
+
+def test_an_unreadable_login_after_the_run_fails_the_trial_and_deletes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = workspace.run_isolated
+
+    def garbling(argv: list[str], **kwargs: Any) -> workspace.Finished:  # noqa: ANN401
+        finished = real(argv, **kwargs)
+        # As if Codex left a file the runner cannot read for refreshed tokens.
+        (Path(kwargs["env"]["CODEX_HOME"]) / "auth.json").write_bytes(b"\xff\xfe")
+        return finished
+
+    monkeypatch.setattr(workspace, "run_isolated", garbling)
+    root = fake_root(tmp_path, CASES[:2])
+    with serve([message("Moo.")], api_key=KEY) as server:
+        adapter = Codex(pinned_executable(ROOT), api_base_url=server.url)
+        run_suite(
+            settings(
+                root,
+                server.url,
+                adapter=adapter,
+                model=adapter.default_model,
+                credentials={"auth.json": AUTH},
+            )
+        )
+    data = json.loads((root / "eval-results/test-run/results.json").read_text())
+    # Both trials ran: one trial's failure does not stop the run.
+    assert [trial["case"] for trial in data["trials"]] == [case["id"] for case in CASES[:2]]
+    for trial in data["trials"]:
+        assert (trial["status"], trial["status_reason"]) == (
+            "infra_error",
+            "could not read the trial's credentials: UnicodeDecodeError",
+        )
+        assert (trial["transcript"], trial["passed"]) == (None, False)
+        assert "stderr" not in trial
+        assert not (root / ".eval-workspaces/test-run" / trial["case"]).exists()
+    assert not list((root / "eval-results/test-run").rglob("*.jsonl"))
+
+
+def test_a_refreshed_login_carries_to_the_next_trial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refreshed = "sk-fake-codex-refreshed-0123456789"
+    real = workspace.run_isolated
+    calls: list[str] = []
+
+    def refreshing(argv: list[str], **kwargs: Any) -> workspace.Finished:  # noqa: ANN401
+        auth = Path(kwargs["env"]["CODEX_HOME"]) / "auth.json"
+        calls.append(auth.read_text())
+        finished = real(argv, **kwargs)
+        # As if Codex refreshed the login, and the provider rotated it.
+        auth.write_text(json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": refreshed}))
+        return finished
+
+    monkeypatch.setattr(workspace, "run_isolated", refreshing)
+    root = fake_root(tmp_path, CASES[:2])
+    credentials = {"auth.json": AUTH}
+    with serve([message("Moo.")]) as server:
+        adapter = Codex(pinned_executable(ROOT), api_base_url=server.url)
+        run_suite(
+            settings(
+                root,
+                server.url,
+                adapter=adapter,
+                model=adapter.default_model,
+                credentials=credentials,
+            )
+        )
+    assert [json.loads(text)["OPENAI_API_KEY"] for text in calls] == [KEY, refreshed]
+    assert {r.headers["authorization"] for r in server.requests} == {
+        f"Bearer {KEY}",
+        f"Bearer {refreshed}",
+    }
+    # The caller's copy is never written.
+    assert credentials == {"auth.json": AUTH}
+    for path in (root / "eval-results").rglob("*"):
+        if path.is_file():
+            assert refreshed not in path.read_text(), path
 
 
 def test_a_token_refreshed_before_the_run_fails_is_still_swept(tmp_path: Path) -> None:

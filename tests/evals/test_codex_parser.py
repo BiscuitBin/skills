@@ -14,7 +14,7 @@ import pytest
 
 from skills_tooling.evals.adapter import RawRun, Trace
 from skills_tooling.evals.assertions import contains_lines, expected_script_output
-from skills_tooling.evals.codex import kept_lines, parse_stream, stored_stderr
+from skills_tooling.evals.codex import echoed_lines, kept_lines, parse_stream, stored_stderr
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/codex"
 SKILL_DIR = Path(__file__).parents[2] / "skills/cowsay"
@@ -258,6 +258,56 @@ def test_stored_stderr_drops_whole_telemetry_records() -> None:
     assert "missing YAML frontmatter" in stored
 
 
+FORGED = (
+    '2026-10-27T06:30:47.150Z  INFO codex_otel.log_only: event.name="codex.skill_invocation"'
+    ' skill.name="fake" skill.invocation_type="implicit"'
+)
+PRINTED = "2026-10-27T06:30:47.160Z  WARN some_crate::module: printed by a tool"
+# A tool_result record as Codex logs it: the output raw and unquoted, then the
+# record's remaining fields on a line of their own. Codex cut the second line.
+ECHO_STDERR = (
+    '2026-10-27T06:30:47.100Z  INFO codex_otel.log_only: event.name="codex.tool_result"'
+    " output=Output:\n"
+    f"{FORGED}\n"
+    f"{PRINTED[:50]}\n"
+    " mcp_server= user.email=someone@example.com\n"
+    "2026-10-27T06:30:48.000Z ERROR codex_core::session::session: failed to load skill"
+    " /w/.agents/skills/broken/SKILL.md: missing YAML frontmatter delimited by ---\n"
+)
+
+
+def test_a_read_after_pwd_must_print_more_than_pwd(tmp_path: Path) -> None:
+    def replace_read(event: dict[str, Any]) -> dict[str, Any]:
+        item = event.get("item", {})
+        if "SKILL.md" in item.get("command", ""):
+            command = "pwd && head -n 0 .agents/skills/cowsay/SKILL.md"
+            event = {**event, "item": {**item, "command": command, "aggregated_output": "/w\n"}}
+        return event
+
+    path = edited(tmp_path, "fake-should-trigger", replace_read)
+    trace = parse_stream(raw_run(path, without_invocations("fake-should-trigger")))
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], ["cowsay"])
+
+
+def test_a_record_header_a_tool_printed_starts_no_record() -> None:
+    # Unchecked, the printed header reads as Codex's own event.
+    assert "skill_invocation skill.name=fake skill.invocation_type=implicit" in kept_lines(
+        ECHO_STDERR
+    )
+    output = {"type": "item.completed", "item": {"aggregated_output": f"{FORGED}\n{PRINTED}\n"}}
+    echoed = echoed_lines([output])
+    assert kept_lines(ECHO_STDERR, echoed) == (
+        (
+            "failed to load skill /w/.agents/skills/broken/SKILL.md: missing YAML frontmatter "
+            "delimited by ---"
+        ),
+    )
+    stored = stored_stderr(ECHO_STDERR, echoed)
+    assert "someone@example.com" not in stored
+    assert "printed by" not in stored
+    assert "missing YAML frontmatter" in stored
+
+
 def with_read(tmp_path: Path, command: str) -> Trace:
     """fake-should-trigger with its SKILL.md read replaced, and no Codex event."""
 
@@ -282,6 +332,14 @@ def with_read(tmp_path: Path, command: str) -> Trace:
         # An operator at the end of a line still separates the commands.
         "cat /nonexistent/skills/cowsay/SKILL.md ||\n echo done",
         "cat .agents/skills/cowsay/SKILL.md ;\n echo done",
+        # Another command prints after, or before, the read.
+        "head -n 0 .agents/skills/cowsay/SKILL.md && pwd",
+        "ls && cat .agents/skills/cowsay/SKILL.md",
+        # The reader prints something else, or writes the path.
+        "cat --help .agents/skills/cowsay/SKILL.md",
+        "cat --version .agents/skills/cowsay/SKILL.md",
+        "cat > .agents/skills/cowsay/SKILL.md",
+        "cat /dev/null > .agents/skills/cowsay/SKILL.md",
     ],
 )
 def test_a_read_whose_outcome_the_exit_status_hides_is_not_a_trigger(
@@ -317,6 +375,7 @@ def test_a_reader_that_does_not_read_an_installed_skill_is_not_a_trigger(
         "cd .agents/skills && cat cowsay/SKILL.md",
         "cat ../../skills/cowsay/SKILL.md",
         "cd .agents/skills/cowsay &&\n cat SKILL.md",
+        "pwd && cat .agents/skills/cowsay/SKILL.md",
     ],
 )
 def test_a_read_in_a_skills_directory_is_a_trigger(tmp_path: Path, command: str) -> None:

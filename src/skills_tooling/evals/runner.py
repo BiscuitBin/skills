@@ -124,7 +124,11 @@ def _score(settings: RunSettings, case: Case, trace: Trace, trial: TrialPaths) -
 
 
 def _attempt(
-    settings: RunSettings, case: Case, trial: TrialPaths, secrets: list[str]
+    settings: RunSettings,
+    case: Case,
+    trial: TrialPaths,
+    secrets: list[str],
+    credentials: Mapping[str, str],
 ) -> dict[str, Any]:
     """Preflight, run, check and score one trial. Adds the run's new secrets to `secrets`."""
     adapter = settings.adapter
@@ -139,7 +143,7 @@ def _attempt(
         homes,
         model=settings.model,
         timeout=settings.timeout,
-        credentials=settings.credentials,
+        credentials=credentials,
     )
     _add_trial_secrets(adapter, trial, secrets)
     trace = adapter.parse(raw)
@@ -179,16 +183,36 @@ def _add_trial_secrets(adapter: Adapter, trial: TrialPaths, secrets: list[str]) 
     secrets += [value for value in adapter.trial_secrets(trial) if value not in secrets]
 
 
+def _collect_credentials(
+    adapter: Adapter, trial: TrialPaths, secrets: list[str], credentials: dict[str, str]
+) -> str:
+    """Add the trial's secrets and carry its login forward; why they could not be read, or ""."""
+    try:
+        _add_trial_secrets(adapter, trial, secrets)
+    except Exception as error:  # noqa: BLE001 -- the trial fails closed; the run goes on
+        # The type only: the message could quote the file.
+        return f"could not read the trial's credentials: {type(error).__name__}"
+    credentials |= adapter.trial_credentials(trial, credentials)
+    return ""
+
+
 def run_trial(
-    settings: RunSettings, case: Case, secrets: list[str] | None = None
+    settings: RunSettings,
+    case: Case,
+    secrets: list[str] | None = None,
+    credentials: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """One trial. A harness failure is recorded as an infrastructure error, not raised.
 
     `secrets` starts as the run's credential values and gains any the trial's
     run reports, such as a refreshed login, so the caller can scrub for them too.
+    `credentials` starts as the run's credential and becomes the trial's own
+    copy, so the next trial starts from a refreshed login.
     """
     if secrets is None:
         secrets = list(settings.secrets)
+    if credentials is None:
+        credentials = dict(settings.credentials)
     record: dict[str, Any] = {
         "case": case.id,
         "kind": case.kind,
@@ -202,25 +226,33 @@ def run_trial(
     trial: TrialPaths | None = None
     try:
         trial = workspace.create_trial(settings.workspaces_dir, settings.run_id, case.id)
-        record |= _attempt(settings, case, trial, secrets)
+        record |= _attempt(settings, case, trial, secrets, credentials)
     except Exception as error:  # noqa: BLE001 -- one trial's failure must not lose the run
         if trial is not None:
-            _add_trial_secrets(settings.adapter, trial, secrets)
+            _collect_credentials(settings.adapter, trial, secrets, credentials)
         reason = results.scrub(f"harness error: {type(error).__name__}: {error}", secrets)
         record |= _not_scored(case, reason, [])
     finally:
         if trial is not None:
             # Before teardown removes the trial's home, on every path.
-            _add_trial_secrets(settings.adapter, trial, secrets)
+            unreadable = _collect_credentials(settings.adapter, trial, secrets, credentials)
             workspace.teardown(trial)
             leaked = results.files_holding(trial.root, secrets)
-            if leaked:
+            if leaked or unreadable:
                 # Anywhere in the trial, not only the workspace, so all of it goes.
                 shutil.rmtree(trial.root, ignore_errors=True)
+            if leaked:
                 record["secret_found"] = {
                     "files": [path.relative_to(trial.root).as_posix() for path in leaked],
                     "deleted": not trial.root.exists(),
                 }
+            if unreadable:
+                # A token the sweep cannot know of may be in the evidence, so none is kept.
+                if record["transcript"] is not None:
+                    (settings.root / record["transcript"]).unlink(missing_ok=True)
+                record.pop("stderr", None)
+                record |= _not_scored(case, unreadable, [])
+                record["transcript"] = None
         record["finished_at"] = _now()
     record["passed"] = (
         record["secret_found"] is None
@@ -238,7 +270,8 @@ def run_suite(settings: RunSettings) -> int:
     cases = select_cases(suite.cases, settings.case_ids)
     started = _now()
     secrets = list(settings.secrets)
-    trials = [run_trial(settings, case, secrets) for case in cases]
+    credentials = dict(settings.credentials)
+    trials = [run_trial(settings, case, secrets, credentials) for case in cases]
     passed = all(trial["passed"] for trial in trials)
     data = {
         "run_id": settings.run_id,

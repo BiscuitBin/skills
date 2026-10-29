@@ -146,7 +146,19 @@ class Adapter(Protocol):
         """Credential values that appeared in the trial, such as a refreshed login.
 
         The runner reads these after the run and again before teardown, on
-        every path, and scrubs and sweeps for them too.
+        every path, and scrubs and sweeps for them too. Raises when they
+        cannot be read after the run, and the runner then fails the trial and
+        deletes it.
+        """
+        ...
+
+    def trial_credentials(
+        self, trial: TrialPaths, credentials: Mapping[str, str]
+    ) -> Mapping[str, str]:
+        """The credential the next trial starts from.
+
+        The trial's own copy if the agent refreshed it, else `credentials`. It
+        is never written back to the caller.
         """
         ...
 

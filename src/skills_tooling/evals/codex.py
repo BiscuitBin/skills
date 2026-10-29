@@ -22,7 +22,7 @@ from skills_tooling.evals.adapter import (
 from skills_tooling.evals.assertions import ASSIGNMENT, command_list, simple_commands
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Collection, Iterator, Mapping
 
     from skills_tooling.evals.adapter import TrialPaths
 
@@ -76,6 +76,11 @@ INVOCATION_FIELDS = ("skill.name", "skill.scope", "skill.invocation_type")
 # such as ls, test or echo, is not a read. awk is not one: whether it opens an
 # operand depends on its program, so an awk read is left to Codex's own event.
 READERS = {"cat", "head", "tail", "sed", "nl", "less", "more", "bat"}
+# A redirection can make a reader write the path, or send its output elsewhere.
+# Quoting is gone by the time the words are checked, so a quoted < or > counts too.
+REDIRECTION = re.compile(r"[<>]")
+# Flags that make a reader print help or its version instead of the file.
+NO_READ_FLAGS = {"--help", "--version", "-h", "-V"}
 # Codex wraps each command as `<shell> -c '<command>'`, or -lc for a login shell.
 SHELLS = {"bash", "zsh", "sh"}
 # Characters the shell expands, so the name in the text is not the directory read.
@@ -87,6 +92,7 @@ SKILLS_DIR = re.compile(r"skills$|^\.system$")
 # would scrub every occurrence of a common word.
 NOT_SECRET = {"auth_mode", "last_refresh"}
 SECRET_MIN_LENGTH = 20
+TRANSCRIPT = "transcript.jsonl"
 
 
 def pinned_executable(root: Path) -> Path:
@@ -146,11 +152,34 @@ class Codex:
         return [value for value in found if value]
 
     def trial_secrets(self, trial: TrialPaths) -> list[str]:
-        """The trial's auth.json as it is now: Codex rewrites it when it refreshes a login."""
-        try:
-            return self.secrets({"auth.json": (trial.home / ".codex/auth.json").read_text()})
-        except OSError:
+        """The trial's auth.json as it is now: Codex rewrites it when it refreshes a login.
+
+        There is none before `run` installs the login. After that, a missing,
+        unreadable or partial file raises, because a refreshed token in it
+        would escape the scrub and the sweep.
+        """
+        auth = trial.home / ".codex/auth.json"
+        if not auth.exists() and not (trial.tmp / TRANSCRIPT).exists():
             return []
+        text = auth.read_text()
+        json.loads(text)
+        return self.secrets({"auth.json": text})
+
+    def trial_credentials(
+        self, trial: TrialPaths, credentials: Mapping[str, str]
+    ) -> Mapping[str, str]:
+        """The trial's auth.json, so the next trial starts from a refreshed login.
+
+        A provider can rotate the refresh token, which would leave the caller's
+        copy unusable once its access token expires. The caller's file is never
+        written.
+        """
+        try:
+            text = (trial.home / ".codex/auth.json").read_text()
+            data = json.loads(text)
+        except OSError, ValueError:
+            return credentials
+        return {"auth.json": text} if isinstance(data, dict) else credentials
 
     def discovery_locations(self, trial: TrialPaths) -> list[Location]:
         ws, home = trial.workspace, trial.home
@@ -260,7 +289,7 @@ class Codex:
         auth = os.open(homes.agent_home / "auth.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(auth, "w") as file:
             file.write(credentials["auth.json"])
-        transcript = trial.tmp / "transcript.jsonl"
+        transcript = trial.tmp / TRANSCRIPT
         stderr = trial.tmp / "stderr.txt"
         argv = [
             str(self.executable),
@@ -292,13 +321,14 @@ class Codex:
             timeout=timeout,
         )
         logged = stderr.read_text(errors="replace")
+        echoed = echoed_lines(_read_events(transcript)[0])
         return RawRun(
             exit_code=finished.exit_code,
             timed_out=finished.timed_out,
             transcript=transcript,
             # Telemetry can name the account, so only the kept fields stay.
-            stderr=stored_stderr(logged),
-            debug_lines=kept_lines(logged),
+            stderr=stored_stderr(logged, echoed),
+            debug_lines=kept_lines(logged, echoed),
             python_calls=workspace.python_calls(trial),
             survivors=finished.survivors,
             elapsed=finished.elapsed,
@@ -351,39 +381,68 @@ def _target(header: str) -> str:
     return ""
 
 
-def _records(stderr: str) -> Iterator[tuple[bool, str]]:
-    """Each stderr line, and whether it belongs to a telemetry record.
+def echoed_lines(events: list[dict[str, Any]]) -> frozenset[str]:
+    """Lines in the event stream that look like the first line of a log record.
+
+    Codex copies a tool's output into its telemetry raw, unquoted, so such a
+    line in stderr may be text a tool printed rather than a record of Codex's.
+    """
+    found: set[str] = set()
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+        elif isinstance(value, str):
+            found.update(line for line in value.split("\n") if RECORD_START.match(line))
+
+    walk(events)
+    return frozenset(found)
+
+
+def _records(stderr: str, echoed: Collection[str]) -> Iterator[tuple[bool, bool, str]]:
+    """Each stderr line, whether it belongs to a telemetry record, and whether it starts one.
 
     A telemetry field can hold tool output or prompt text over several lines,
-    so the lines after a telemetry record's first line belong to it too.
+    so the lines after a telemetry record's first line belong to it too. A
+    line that is all or the start of an echoed line, or that an echoed line
+    starts with (Codex can truncate an output), continues the record above:
+    its text came from a tool, so it starts no record of its own.
     """
     telemetry = False
     for line in stderr.split("\n"):
-        if match := RECORD_START.match(line):
+        match = RECORD_START.match(line)
+        starts = match is not None and not any(
+            line.startswith(text) or text.startswith(line) for text in echoed
+        )
+        if match and starts:
             telemetry = _target(line[match.end() :]).startswith(TELEMETRY)
-        yield telemetry, line
+        yield telemetry, starts, line
 
 
-def kept_lines(stderr: str) -> tuple[str, ...]:
+def kept_lines(stderr: str, echoed: Collection[str] = ()) -> tuple[str, ...]:
     """The stderr lines the trace reads, reduced to the fields it needs.
 
     A failed skill load counts only from Codex's own log, never from a
     telemetry record, which can carry any text a tool printed.
     """
     kept = []
-    for telemetry, line in _records(stderr):
-        if telemetry and RECORD_START.match(line) and STARTS.search(line):
+    for telemetry, starts, line in _records(stderr, echoed):
+        if telemetry and starts and STARTS.search(line):
             kept.append(f"conversation_starts {_fields(line, STARTS_FIELDS)}")
-        elif telemetry and RECORD_START.match(line) and INVOCATION.search(line):
+        elif telemetry and starts and INVOCATION.search(line):
             kept.append(f"skill_invocation {_fields(line, INVOCATION_FIELDS)}")
         elif not telemetry and (match := FAILED_LOAD.search(line)):
             kept.append(match.group(1))
     return tuple(kept)
 
 
-def stored_stderr(stderr: str) -> str:
+def stored_stderr(stderr: str, echoed: Collection[str] = ()) -> str:
     """stderr without the telemetry records, which can name the account."""
-    return "\n".join(line for telemetry, line in _records(stderr) if not telemetry)
+    return "\n".join(line for telemetry, _, line in _records(stderr, echoed) if not telemetry)
 
 
 def _read_events(transcript: Path) -> tuple[list[dict[str, Any]], bool]:
@@ -454,22 +513,38 @@ def skills_read(command: str) -> list[str]:
     return skills
 
 
-def outcome_is_the_read(command: str) -> bool:
-    """Whether the command's exit status is every part's: only `&&` joins them.
+def outcome_is_the_read(command: str, output: str) -> bool:
+    """Whether the command's exit status and output show its read printed something.
 
-    After `||`, `;`, `&` or a pipe, a command can exit 0 and print something
-    whatever a read in it did.
+    Only `cd <dir>` and `pwd` may come before the read, joined by `&&`, and
+    the read comes last. `cd` prints nothing and `pwd` one line, so the output
+    must have a line more than the `pwd`s print. After `||`, `;`, `&` or a
+    pipe, or after any other command, a command can exit 0 and print something
+    whatever the read did. A redirection, or a help or version flag, can make a
+    reader not read. Codex's own implicit event covers every other shape.
     """
-    return all(operator in ("&&", "") for _, operator in command_list(command))
+    parts = command_list(command)
+    if not parts or any(operator not in ("&&", "") for _, operator in parts):
+        return False
+    *before, (read, _) = parts
+    pwds = sum(words == ["pwd"] for words, _ in before)
+    return (
+        all(words == ["pwd"] or (words[0] == "cd" and len(words) == 2) for words, _ in before)  # noqa: PLR2004 -- cd and its directory
+        and Path(read[0]).name in READERS
+        and not any(REDIRECTION.search(word) or word in NO_READ_FLAGS for word in read[1:])
+        and bool(output.strip())
+        and len(output.strip("\n").split("\n")) > pwds
+    )
 
 
 def parse_stream(raw: RawRun) -> Trace:
     """Normalise `codex exec --json` output and the kept stderr lines.
 
     The trigger rule: a completed command that reads <skill>/SKILL.md with a
-    reader program, exits 0 and prints something. Codex's own skill_invocation
-    events count too: `implicit` when it saw such a read, `explicit` for a
-    `$skill` mention, whose SKILL.md it injects without running a command.
+    reader program, exits 0, and whose output shows the read printed something
+    (see `outcome_is_the_read`). Codex's own skill_invocation events count too:
+    `implicit` when it saw such a read, `explicit` for a `$skill` mention,
+    whose SKILL.md it injects without running a command.
     """
     events, clean = _read_events(raw.transcript)
     triggered: list[str] = []
@@ -489,7 +564,7 @@ def parse_stream(raw: RawRun) -> Trace:
             commands.append(Command(command, ok, output))
             read = skills_read(command)
             invoked += read
-            if ok and output.strip() and outcome_is_the_read(command):
+            if ok and outcome_is_the_read(command, output):
                 triggered += read
     starts = ""
     for line in raw.debug_lines:
@@ -548,7 +623,9 @@ def _status_reason(raw: RawRun, *, completed: bool, last: Mapping[str, Any]) -> 
 def _entries(directory: Path) -> list[str]:
     try:
         return sorted(p.name for p in directory.iterdir())
-    except FileNotFoundError, NotADirectoryError, PermissionError:
+    except FileNotFoundError, NotADirectoryError:
+        # Not PermissionError: a location the check cannot list is unverified,
+        # and Codex may still open a known path in it.
         return []
 
 

@@ -107,6 +107,14 @@ class ClaudeCode:
         # The token lives only in the child's environment.
         return []
 
+    def trial_credentials(
+        self,
+        trial: TrialPaths,  # noqa: ARG002 -- the adapter interface
+        credentials: Mapping[str, str],
+    ) -> Mapping[str, str]:
+        # Claude Code never rewrites the token.
+        return credentials
+
     def discovery_locations(self, trial: TrialPaths) -> list[Location]:
         ws, home = trial.workspace, trial.home
         return [
