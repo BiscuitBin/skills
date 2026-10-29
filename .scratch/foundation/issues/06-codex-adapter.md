@@ -121,6 +121,35 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 
 No findings. The reviewer had no access to GitHub, so it checked the CI claims against the saved job logs. Triage confirmed them with `gh`: run 40777692982 is at `882b2f2` with both jobs green, and debug run 40614691505 is the failed run at `97fc0ee`.
 
+### PR review (GitHub Copilot)
+
+Copilot reviewed PR #8 twice, at `ae1c396` and earlier, with 7 inline findings and 1 "previously missed" one. Each was checked against the code; the false trigger from a printed header (2) was reproduced with the real pinned CLI first. Fixed in `121f50a`.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | high | If `trial_secrets` raises (a non-UTF-8 `auth.json`), teardown and the sweep are skipped and the suite aborts | valid | fixed: the runner records an infrastructure error, deletes the trial and its results transcript, and goes on |
+| 2 | medium | A line a tool printed inside a telemetry record passes for a record header: a false `skill_invocation`, or kept private fields | valid (reproduced: a printed header gave a `fake` trigger) | fixed: a stderr line that matches a line in the JSONL event stream, or a prefix either way, starts no record |
+| 3 | medium | `cat --help <path>` and `cat > <path> && echo done` count as reads | valid | fixed with 4 |
+| 4 | medium | `head -n 0 <path> && pwd` counts: the output is not the read's | valid | fixed: the read is last, after only `cd <dir>` and `pwd`, the output has a line more than the `pwd`s print, and the reader has no redirection or help or version flag. Codex's implicit event covers other shapes. The live `pwd && sed -n '1,240p' …/SKILL.md` still counts |
+| 5 | medium | A refreshed, rotated login is not carried to the next trial | valid | fixed: carried in memory (`Adapter.trial_credentials`); the caller's `auth.json` is never written |
+| 6 | high | A missing or unreadable `auth.json` after the run reads as no refreshed secrets | valid | fixed: after the login is installed, `trial_secrets` raises on a missing, unreadable or partial file, and 1 applies |
+| 7 | high | `PermissionError` makes an unlistable `/etc/codex` pass as empty | valid | fixed: the error ends the trial as an infrastructure error |
+| 8 | medium | A redirection target counts as a read operand | valid | fixed with 4 |
+
+#### Round four: the Copilot fixes
+
+- **Reviewer:** codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `ae1c396...121f50a`
+- **Findings:** `ai_tmp/review-20261029T064333Z-codex.md` · **Triage:** `ai_tmp/triage-20261029-06-copilot-fixes.md`
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | high | `read_text` turns a printed `\r` into a line break, so a header after it passes the echo check | valid (reproduced with the real CLI) | fixed in `773a57e`: stderr is decoded from bytes. The real-CLI test gains a `\r` form, which fails without the fix |
+| 2 | high | A transient credential-read failure does not force deletion | invalid | a later successful read adds the token before the sweep, and nothing rewrites `auth.json` once the process group is killed |
+| 3 | medium | `cd -` prints a directory, so `cd /tmp && cd - && head -n 0 <path>` counts | valid | fixed in `773a57e`: a `cd` operand starting with `-` is not allowed before a read |
+
+The round-four fixes were small, so there was no fifth round. The live eval has not been rerun since the trigger rule changed.
+
 ### Live run
 
 The user ran `just eval cowsay --agent codex` at 4d4c816 (run `20261027T224559Z-1535`, 2026-10-27 22:45:59 to 22:46:58 UTC). It passed all 9 cases, on `codex-cli 0.163.0` with `gpt-5.6-terra`. `credential_env` was `["CODEX_HOME"]`, every trial's contamination check passed, and no secret was found. No case needed an agent-specific expectation.
