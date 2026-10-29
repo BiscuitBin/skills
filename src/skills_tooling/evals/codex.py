@@ -320,7 +320,9 @@ class Codex:
             stderr=stderr,
             timeout=timeout,
         )
-        logged = stderr.read_text(errors="replace")
+        # Bytes, not read_text: universal newlines would turn a \r a tool printed
+        # into a line break, and the event stream's lines split only on \n.
+        logged = stderr.read_bytes().decode(errors="replace")
         echoed = echoed_lines(_read_events(transcript)[0])
         return RawRun(
             exit_code=finished.exit_code,
@@ -529,7 +531,12 @@ def outcome_is_the_read(command: str, output: str) -> bool:
     *before, (read, _) = parts
     pwds = sum(words == ["pwd"] for words, _ in before)
     return (
-        all(words == ["pwd"] or (words[0] == "cd" and len(words) == 2) for words, _ in before)  # noqa: PLR2004 -- cd and its directory
+        all(
+            words == ["pwd"]
+            # `cd -` prints the directory it changes to.
+            or (words[0] == "cd" and len(words) == 2 and not words[1].startswith("-"))  # noqa: PLR2004 -- cd and its directory
+            for words, _ in before
+        )
         and Path(read[0]).name in READERS
         and not any(REDIRECTION.search(word) or word in NO_READ_FLAGS for word in read[1:])
         and bool(output.strip())

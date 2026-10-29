@@ -335,6 +335,7 @@ def with_read(tmp_path: Path, command: str) -> Trace:
         # Another command prints after, or before, the read.
         "head -n 0 .agents/skills/cowsay/SKILL.md && pwd",
         "ls && cat .agents/skills/cowsay/SKILL.md",
+        "cd /tmp && cd - && head -n 0 .agents/skills/cowsay/SKILL.md",
         # The reader prints something else, or writes the path.
         "cat --help .agents/skills/cowsay/SKILL.md",
         "cat --version .agents/skills/cowsay/SKILL.md",
