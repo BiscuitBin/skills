@@ -134,6 +134,7 @@ def test_codexs_implicit_event_alone_is_not_a_trigger(tmp_path: Path) -> None:
     trace = parse_stream(raw_run(path, log("fake-should-trigger")))
     assert trace.commands == []
     assert (trace.skills_triggered, trace.skills_invoked) == ([], ["cowsay"])
+    assert trace.listed_skills == ["cowsay"]
 
 
 def test_codexs_implicit_event_for_a_script_run_is_not_a_trigger(tmp_path: Path) -> None:
@@ -156,12 +157,15 @@ def test_codexs_implicit_event_for_a_script_run_is_not_a_trigger(tmp_path: Path)
         # Run in the skill's directory as `workdir`, so the text cannot place it.
         ("cat SKILL.md", 0, ["cowsay"]),
         ("cat ../SKILL.md", 0, ["cowsay"]),
+        ('cat "$dir/cowsay/SKILL.md"', 0, ["cowsay"]),
         ("cat SKILL.md", 1, []),
+        # Placed, and not in a skills directory.
+        ("cat /tmp/cowsay/SKILL.md", 0, []),
         ("ls SKILL.md", 0, []),
         ("cat README.md", 0, []),
     ],
 )
-def test_codexs_implicit_event_needs_a_successful_read_of_a_skill_md(
+def test_codexs_implicit_event_needs_a_successful_read_of_an_unplaced_skill_md(
     tmp_path: Path, command: str, exit_code: int, triggered: list[str]
 ) -> None:
     def replace_read(event: dict[str, Any]) -> dict[str, Any]:
@@ -178,6 +182,19 @@ def test_codexs_implicit_event_needs_a_successful_read_of_a_skill_md(
     # Without Codex's event, the read names no skill.
     alone = parse_stream(raw_run(path, without_invocations("fake-should-trigger")))
     assert (alone.skills_triggered, alone.skills_invoked) == ([], [])
+
+
+def test_a_read_of_another_skill_does_not_back_codexs_implicit_event(tmp_path: Path) -> None:
+    def replace_read(event: dict[str, Any]) -> dict[str, Any]:
+        item = event.get("item", {})
+        if "SKILL.md" in item.get("command", ""):
+            event = {**event, "item": {**item, "command": "cat .agents/skills/other/SKILL.md"}}
+        return event
+
+    path = edited(tmp_path, "fake-should-trigger", replace_read)
+    trace = parse_stream(raw_run(path, log("fake-should-trigger")))
+    assert trace.skills_triggered == ["other"]
+    assert trace.listed_skills == ["cowsay"]
 
 
 def test_an_explicit_invocation_is_a_trigger_without_a_read() -> None:
@@ -381,12 +398,14 @@ def test_a_sandbox_denied_run_is_an_infrastructure_error() -> None:
     trace = parse("fake-sandbox-denied")
     assert trace.stream_completed
     assert trace.status == "infra_error"
-    assert trace.status_reason.startswith("sandbox denied 2 command(s)")
+    assert trace.status_reason.startswith("Codex reported 2 command(s) as denied by its sandbox")
     # Codex writes no command_execution item for a denied command.
     assert trace.commands == []
     # Codex logged its implicit event for the read before the sandbox denied it.
     assert trace.skills_triggered == []
     assert trace.skills_invoked == ["cowsay"]
+    # The event still shows Codex listed the skill.
+    assert trace.listed_skills == ["cowsay"]
 
 
 def test_a_read_after_pwd_must_print_more_than_pwd(tmp_path: Path) -> None:

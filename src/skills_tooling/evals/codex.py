@@ -76,7 +76,7 @@ INVOCATION_FIELDS = ("skill.name", "skill.scope", "skill.invocation_type")
 SANDBOX_FIELDS = ("tool_name", "call_id", "outcome")
 # Programs that print a file's contents. A command that only names the path,
 # such as ls, test or echo, is not a read. awk is not one: whether it opens an
-# operand depends on its program, so an awk read is left to Codex's own event.
+# operand depends on its program, so an awk read does not count.
 READERS = {"cat", "head", "tail", "sed", "nl", "less", "more", "bat"}
 # A redirection can make a reader write the path, or send its output elsewhere.
 # Quoting is gone by the time the words are checked, so a quoted < or > counts too.
@@ -503,31 +503,31 @@ def _read_paths(command: str) -> Iterator[Path]:
                 yield Path(os.path.normpath(cwd / word))
 
 
-def skills_read(command: str) -> list[str]:
-    """The skill of each SKILL.md in a skills directory a reader program names.
+def skills_read(command: str) -> tuple[list[str], bool]:
+    """The skill of each SKILL.md in a skills directory a reader program names,
+    and whether it names a SKILL.md whose skill directory the text cannot place.
 
     `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path counts only when
     its grandparent is a skills directory (`.agents/skills`, `skills`,
-    `.system`), so `/tmp/cowsay/SKILL.md` is not a skill. A path whose skill
-    directory the text cannot place (`../SKILL.md`, a glob, a variable) names
-    no skill; it can still back Codex's own implicit event (see `parse_stream`).
+    `.system`), so `/tmp/cowsay/SKILL.md` is not a skill, nor unplaceable. A
+    path the text cannot place (`SKILL.md` run in another `workdir`,
+    `../SKILL.md`, a glob, a variable) names no skill; it can still back
+    Codex's own implicit event (see `parse_stream`).
     """
     skills = []
+    unplaceable = False
     for path in _read_paths(command):
+        if path.name != "SKILL.md":
+            continue
         skill = path.parent.name
-        if (
-            path.name == "SKILL.md"
-            and skill not in ("", "..")
-            and not UNPLACEABLE.search(skill)
-            and SKILLS_DIR.search(path.parent.parent.name)
-        ):
+        if skill in ("", "..") or UNPLACEABLE.search(skill):
+            unplaceable = True
+        elif SKILLS_DIR.search(path.parent.parent.name):
             skills.append(skill)
-    return skills
-
-
-def reads_a_skill_md(command: str) -> bool:
-    """Whether a reader program names a file called SKILL.md, placeable or not."""
-    return any(path.name == "SKILL.md" for path in _read_paths(command))
+        elif UNPLACEABLE.search(path.parent.parent.name):
+            # `$dir/cowsay/SKILL.md`: the skill is named, its directory is not.
+            unplaceable = True
+    return skills, unplaceable
 
 
 def outcome_is_the_read(command: str, output: str) -> bool:
@@ -566,19 +566,22 @@ def parse_stream(raw: RawRun) -> Trace:
     reader program, exits 0, and whose output shows the read printed something
     (see `outcome_is_the_read`). Codex's own skill_invocation events count too:
     `explicit` for a `$skill` mention, whose SKILL.md it injects without
-    running a command, and `implicit` only when such a read of a file called
-    SKILL.md, placeable or not, succeeded. Codex logs `implicit` from the
-    command text before the command runs, and for a run of the skill's
-    scripts too, so the event alone shows no read.
+    running a command, and `implicit` only when such a read of the same skill,
+    or of a SKILL.md the text cannot place (see `skills_read`), succeeded.
+    Codex logs `implicit` from the command text before the command runs, and
+    for a run of the skill's scripts too, so the event alone shows no read.
+    Both events name a skill from Codex's own skill list, so every skill they
+    name is listed, read or not.
     """
     events, clean = _read_events(raw.transcript)
     triggered: list[str] = []
     invoked: list[str] = []
     implicit: list[str] = []
+    listed: list[str] = []
     commands: list[Command] = []
     final = ""
-    # Whether any completed command read a SKILL.md, for Codex's implicit event.
-    read_skill_md = False
+    # Whether a successful read named a SKILL.md the text cannot place.
+    read_unplaced = False
     for event in events:
         item = event.get("item")
         if event.get("type") != "item.completed" or not isinstance(item, dict):
@@ -590,11 +593,11 @@ def parse_stream(raw: RawRun) -> Trace:
             output = str(item.get("aggregated_output", ""))
             ok = item.get("status") == "completed" and item.get("exit_code") == 0
             commands.append(Command(command, ok, output))
-            read = skills_read(command)
+            read, unplaced = skills_read(command)
             invoked += read
             if ok and outcome_is_the_read(command, output):
                 triggered += read
-                read_skill_md = read_skill_md or reads_a_skill_md(command)
+                read_unplaced = read_unplaced or unplaced
     starts = ""
     denied = 0
     for line in raw.debug_lines:
@@ -607,11 +610,13 @@ def parse_stream(raw: RawRun) -> Trace:
             # The name may carry a plugin prefix: cowsay:cowsay.
             skill = fields.get("skill.name", "").rsplit(":", 1)[-1]
             invoked.append(skill)
+            listed.append(skill)
             if fields.get("skill.invocation_type") == "explicit":
                 triggered.append(skill)
             elif fields.get("skill.invocation_type") == "implicit":
                 implicit.append(skill)
-    if read_skill_md:
+    # A placed read already counts; an unplaced one backs every implicit event.
+    if read_unplaced:
         triggered += implicit
     started = dict(FIELD.findall(starts))
     last = events[-1] if events else {}
@@ -634,6 +639,7 @@ def parse_stream(raw: RawRun) -> Trace:
         visible_plugins=None,
         debug_lines=raw.debug_lines,
         python_calls=raw.python_calls,
+        listed_skills=list(dict.fromkeys(listed)),
     )
 
 
@@ -649,10 +655,11 @@ def _status_reason(  # noqa: PLR0911 -- one return per status, checked in order
         return "; ".join(failed)[:300]
     if denied:
         # A denied command leaves no command_execution item, so the trace
-        # cannot show what the agent ran.
+        # cannot show what the agent ran. Codex's test is a heuristic: a failed
+        # command whose output names a permission error counts too.
         return (
-            f"sandbox denied {denied} command(s), which the event stream omits;"
-            " see docs/reference/evals.md"
+            f"Codex reported {denied} command(s) as denied by its sandbox, which the"
+            " event stream omits; see docs/reference/evals.md"
         )
     if last.get("type") == "turn.failed":
         error = last.get("error")

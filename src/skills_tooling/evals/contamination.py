@@ -157,7 +157,7 @@ def check(  # noqa: PLR0913 -- everything one trial's check reads
             problems.append(f"the skill under test {skill!r} is not visible")
     discovered = set(trace.dynamic_commands) - (trace.initial_commands or frozenset())
     # A failed Skill call to a name that does not exist shows nothing leaked.
-    seen = visible | discovered | set(trace.skills_triggered)
+    seen = visible | discovered | set(trace.skills_triggered) | set(trace.listed_skills)
     if baseline and skill in seen:
         problems.append(f"the skill under test {skill!r} is visible in the baseline arm")
     extra = sorted(seen - allowed - installed - ({skill} if baseline else set()))
