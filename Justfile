@@ -176,7 +176,7 @@ agents-version:
 # the same version.
 [doc('Fail unless this is the pinned just.')]
 just-version:
-    @required='just 1.51.0'; found="$("{{ just_executable() }}" --version)"; \
+    @required='just 1.59.0'; found="$("{{ just_executable() }}" --version)"; \
     [ "$found" = "$required" ] || { printf '%s\n' "$required is required; found $found." >&2; exit 1; }
 
 [doc('The full gate, as CI runs it. Stops at the first recipe that fails.')]
