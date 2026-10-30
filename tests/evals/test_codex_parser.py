@@ -124,16 +124,60 @@ def test_a_read_that_never_completed_is_not_a_trigger(tmp_path: Path) -> None:
     assert trace.skills_triggered == []
 
 
-def test_codexs_implicit_event_alone_is_a_trigger(tmp_path: Path) -> None:
-    # Codex logs an implicit invocation when it sees a read of SKILL.md, which
-    # also covers a read the command text cannot place, such as one in `workdir`.
+def test_codexs_implicit_event_alone_is_not_a_trigger(tmp_path: Path) -> None:
+    # Codex logs an implicit invocation from the command text, before the
+    # command runs, so the event alone does not show a read succeeded.
+    def drop_commands(event: dict[str, Any]) -> dict[str, Any] | None:
+        return None if "command" in event.get("item", {}) else event
+
+    path = edited(tmp_path, "fake-should-trigger", drop_commands)
+    trace = parse_stream(raw_run(path, log("fake-should-trigger")))
+    assert trace.commands == []
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], ["cowsay"])
+
+
+def test_codexs_implicit_event_for_a_script_run_is_not_a_trigger(tmp_path: Path) -> None:
+    # Codex also logs it for a run of a script in the skill's directory.
     def drop_read(event: dict[str, Any]) -> dict[str, Any] | None:
         item = event.get("item", {})
         return None if "SKILL.md" in item.get("command", "") else event
 
     path = edited(tmp_path, "fake-should-trigger", drop_read)
     trace = parse_stream(raw_run(path, log("fake-should-trigger")))
-    assert trace.skills_triggered == ["cowsay"]
+    assert [c.command for c in trace.commands] == [
+        "python3 .agents/skills/cowsay/scripts/cowsay.py -- 'Ship it'"
+    ]
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], ["cowsay"])
+
+
+@pytest.mark.parametrize(
+    ("command", "exit_code", "triggered"),
+    [
+        # Run in the skill's directory as `workdir`, so the text cannot place it.
+        ("cat SKILL.md", 0, ["cowsay"]),
+        ("cat ../SKILL.md", 0, ["cowsay"]),
+        ("cat SKILL.md", 1, []),
+        ("ls SKILL.md", 0, []),
+        ("cat README.md", 0, []),
+    ],
+)
+def test_codexs_implicit_event_needs_a_successful_read_of_a_skill_md(
+    tmp_path: Path, command: str, exit_code: int, triggered: list[str]
+) -> None:
+    def replace_read(event: dict[str, Any]) -> dict[str, Any]:
+        item = event.get("item", {})
+        if "SKILL.md" in item.get("command", ""):
+            item = {**item, "command": command, "exit_code": exit_code}
+            event = {**event, "item": item}
+        return event
+
+    path = edited(tmp_path, "fake-should-trigger", replace_read)
+    trace = parse_stream(raw_run(path, log("fake-should-trigger")))
+    assert trace.skills_triggered == triggered
+    assert trace.skills_invoked == ["cowsay"]
+    # Without Codex's event, the read names no skill.
+    alone = parse_stream(raw_run(path, without_invocations("fake-should-trigger")))
+    assert (alone.skills_triggered, alone.skills_invoked) == ([], [])
 
 
 def test_an_explicit_invocation_is_a_trigger_without_a_read() -> None:
@@ -274,6 +318,75 @@ ECHO_STDERR = (
     "2026-10-27T06:30:48.000Z ERROR codex_core::session::session: failed to load skill"
     " /w/.agents/skills/broken/SKILL.md: missing YAML frontmatter delimited by ---\n"
 )
+
+
+# From the debug CI run 40614691505 (commits 8fe4d12 and 97fc0ee): the pinned
+# Codex on Ubuntu 24.04 with the AppArmor user-namespace restriction on, so
+# bubblewrap failed and Codex denied every command. The repeated fields at the
+# end of each record are cut.
+DENIED_STDERR = (
+    '2026-10-28T01:23:31.620462Z  INFO codex_otel.log_only: event.name="codex.skill_invocation"'
+    ' turn.id="01a1801a-d808-7362-aa17-49b62a972ca1" skill.name="cowsay:cowsay"'
+    ' skill.scope="repo" skill.invocation_type="implicit" auth_mode="ApiKey"\n'
+    '2026-10-28T01:23:31.634008Z  INFO codex_otel.log_only: event.name="codex.tool_decision"'
+    " tool_name=exec_command tool_namespace=functions"
+    " call_id=exec-b1cc59f7-b745-4e6e-ad6c-93975f6de99c decision=approved source=Config"
+    ' auth_mode="ApiKey"\n'
+    "2026-10-28T01:23:31.679174Z  WARN codex_sandboxing::violation: recorded sandbox violation:"
+    " resource=filesystem backend=linux_sandbox reason=operation_not_permitted path=unknown\n"
+    '2026-10-28T01:23:31.679224Z  INFO codex_otel.log_only: event.name="codex.sandbox_outcome"'
+    " tool_name=exec_command call_id=exec-b1cc59f7-b745-4e6e-ad6c-93975f6de99c outcome=denied"
+    ' initial_duration_ms=45 auth_mode="ApiKey"\n'
+    '2026-10-28T01:23:31.679303Z  INFO codex_otel.log_only: event.name="codex.tool_result"'
+    " tool_result_seq=1 tool_name=exec_command tool_namespace=functions"
+    " call_id=exec-b1cc59f7-b745-4e6e-ad6c-93975f6de99c duration_ms=58 success=true"
+    ' output_truncated=false agent_name=/root arguments={"cmd":"cat .agents/skills/cowsay/SKILL.md"}'
+    " output=Chunk ID: d79d1c\n"
+    "Wall time: 0.0000 seconds\n"
+    "Process exited with code 1\n"
+    "Original token count: 16\n"
+    "Output:\n"
+    "bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\n"
+    ' mcp_server= mcp_server_origin= auth_mode="ApiKey"\n'
+    '2026-10-28T01:23:31.680024Z  INFO codex_otel.log_only: event.name="codex.tool_result"'
+    " tool_result_seq=2 tool_name=exec tool_namespace=functions call_id=call_1 duration_ms=67"
+    " success=true output_truncated=false agent_name=/root arguments=const r = await"
+    ' tools.exec_command({cmd: "cat .agents/skills/cowsay/SKILL.md"}); text(r.output);'
+    " output=Script completed\n"
+    "Wall time 0.1 seconds\n"
+    "Output:\n"
+    "\n"
+    "bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\n"
+    ' mcp_server= mcp_server_origin= auth_mode="ApiKey"\n'
+)
+
+
+def test_a_sandbox_outcome_is_kept_without_the_tool_result() -> None:
+    assert kept_lines(DENIED_STDERR) == (
+        "skill_invocation skill.name=cowsay:cowsay skill.scope=repo skill.invocation_type=implicit",
+        (
+            "sandbox_outcome tool_name=exec_command"
+            " call_id=exec-b1cc59f7-b745-4e6e-ad6c-93975f6de99c outcome=denied"
+        ),
+    )
+    stored = stored_stderr(DENIED_STDERR)
+    assert "bwrap:" not in stored
+    assert "ApiKey" not in stored
+    assert "recorded sandbox violation" in stored
+
+
+def test_a_sandbox_denied_run_is_an_infrastructure_error() -> None:
+    # The same run's event stream. The error events are real: the fake API
+    # refuses Codex's websocket, and Codex falls back to HTTPS.
+    trace = parse("fake-sandbox-denied")
+    assert trace.stream_completed
+    assert trace.status == "infra_error"
+    assert trace.status_reason.startswith("sandbox denied 2 command(s)")
+    # Codex writes no command_execution item for a denied command.
+    assert trace.commands == []
+    # Codex logged its implicit event for the read before the sandbox denied it.
+    assert trace.skills_triggered == []
+    assert trace.skills_invoked == ["cowsay"]
 
 
 def test_a_read_after_pwd_must_print_more_than_pwd(tmp_path: Path) -> None:

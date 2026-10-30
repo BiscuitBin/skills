@@ -1,0 +1,4 @@
+conversation_starts app.version=0.163.0 model=gpt-5.6-terra
+skill_invocation skill.name=cowsay:cowsay skill.scope=repo skill.invocation_type=implicit
+sandbox_outcome tool_name=exec_command call_id=exec-b1cc59f7-b745-4e6e-ad6c-93975f6de99c outcome=denied
+sandbox_outcome tool_name=exec_command call_id=exec-4f00e04c-b0bc-42bc-8c79-e992f2b00ac0 outcome=denied
