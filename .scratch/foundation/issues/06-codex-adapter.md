@@ -148,7 +148,7 @@ Copilot reviewed PR #8 twice, at `ae1c396` and earlier, with 7 inline findings a
 | 2 | high | A transient credential-read failure does not force deletion | invalid | a later successful read adds the token before the sweep, and nothing rewrites `auth.json` once the process group is killed |
 | 3 | medium | `cd -` prints a directory, so `cd /tmp && cd - && head -n 0 <path>` counts | valid | fixed in `773a57e`: a `cd` operand starting with `-` is not allowed before a read |
 
-The round-four fixes were small, so there was no fifth round. The live eval has not been rerun since the trigger rule changed.
+The round-four fixes were small, so there was no fifth round. The live rerun after the trigger-rule change passed; see **Live run**.
 
 ### Live run
 
@@ -162,3 +162,5 @@ The user ran `just eval cowsay --agent codex` at 4d4c816 (run `20261027T224559Z-
 | behaviour-ship-it, behaviour-wrapped-text | true → true | all 4 assertions passed in each, including `script_ran` and `final_contains_script_output` |
 
 Four live transcripts are fixtures in `tests/fixtures/evals/codex/live-*.jsonl`, driving tests in `tests/evals/test_codex_parser.py`. `results.json` keeps no stderr events, so each `.log` holds only the `conversation_starts` line, rebuilt from the `cli_version` and `model` the run recorded. The explicit-case test pairs the live transcript with the event line recorded in `fake-explicit.log`.
+
+The user reran it at `a5673ac`, after the Copilot fixes changed the trigger rule (run `20261030T005642Z-327e`, 2026-10-30 00:56:42 to 00:57:57 UTC). It passed all 9 cases again, with the same CLI, model and `credential_env`; every contamination check passed and no secret was found. Four of the five reads were now `pwd && sed -n '1,240p' .agents/skills/cowsay/SKILL.md`, which counts because the output has more lines than `pwd` prints. trigger-talking-cow read it with `sed` alone, and trigger-explicit-invocation again ran no read and rested on the `explicit` event.
