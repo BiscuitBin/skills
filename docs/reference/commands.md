@@ -17,7 +17,7 @@ Every command goes through `just`. Run `just` on its own to list the recipes.
 | `test` | Runs pytest, records JUnit results (including installation modes) in `ai_tmp/pytest.xml`, and shows captured output from passing tests in the CI log. |
 | `validate-skills` | Validates every shipped skill and dev skill against the [validator rules](skill-validator.md). Errors fail; warnings pass. |
 | `validate-evals` | Validates every `evals/*/evals.json` against the [eval case schema](evals.md#case-schema). It calls no agent. |
-| `eval <skill> --agent claude` | Runs a skill's eval cases against the pinned agent and writes `eval-results/<run-id>/results.json`. It needs `CLAUDE_CODE_OAUTH_TOKEN` and calls a paid model, so it is never part of `check`. Takes `--case`, `--model` and `--timeout`. See [evals](evals.md). |
+| `eval <skill> --agent claude\|codex` | Runs a skill's eval cases against the pinned agent and writes `eval-results/<run-id>/results.json`. It needs `CLAUDE_CODE_OAUTH_TOKEN` (Claude Code) or a Codex login in the project's `CODEX_HOME` (Codex), and calls a paid model, so it is never part of `check`. Takes `--case`, `--model` and `--timeout`. See [evals](evals.md). |
 | `validate-distribution` | Checks marketplace sources and versions, requires committed install sources, then runs pinned Claude Code's strict validation on the marketplace and each shipped plugin. See [distribution](distribution.md). |
 | `agents-version` | Prints the version of each pinned agent CLI (Claude Code, Codex and Pi), run from `node_modules/.bin` with isolated homes under `.tools/agent-homes/`. |
 | `just-version` | Fails unless the running just is the pinned version. |

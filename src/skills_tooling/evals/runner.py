@@ -52,7 +52,7 @@ class RunSettings:
 
     @property
     def secrets(self) -> list[str]:
-        return [value for value in self.credentials.values() if value]
+        return self.adapter.secrets(self.credentials)
 
 
 def new_run_id() -> str:
@@ -123,8 +123,14 @@ def _score(settings: RunSettings, case: Case, trace: Trace, trial: TrialPaths) -
     }
 
 
-def _attempt(settings: RunSettings, case: Case, trial: TrialPaths) -> dict[str, Any]:
-    """Preflight, run, check and score one trial."""
+def _attempt(
+    settings: RunSettings,
+    case: Case,
+    trial: TrialPaths,
+    secrets: list[str],
+    credentials: Mapping[str, str],
+) -> dict[str, Any]:
+    """Preflight, run, check and score one trial. Adds the run's new secrets to `secrets`."""
     adapter = settings.adapter
     homes = adapter.prepare_homes(trial)
     adapter.install_skill(settings.root / "skills" / settings.skill, trial.workspace)
@@ -137,8 +143,9 @@ def _attempt(settings: RunSettings, case: Case, trial: TrialPaths) -> dict[str, 
         homes,
         model=settings.model,
         timeout=settings.timeout,
-        credentials=settings.credentials,
+        credentials=credentials,
     )
+    _add_trial_secrets(adapter, trial, secrets)
     trace = adapter.parse(raw)
     contamination = check(
         adapter,
@@ -150,12 +157,12 @@ def _attempt(settings: RunSettings, case: Case, trial: TrialPaths) -> dict[str, 
         system_root=settings.system_root,
     )
     transcript = settings.results_dir / "transcripts" / f"{case.id}.jsonl"
-    results.write_text(transcript, raw.transcript.read_text(errors="replace"), settings.secrets)
+    results.write_text(transcript, raw.transcript.read_text(errors="replace"), secrets)
     try:
         scored = _score(settings, case, trace, trial)
     except Exception as error:  # noqa: BLE001 -- keep the run's evidence when scoring breaks
         reason = f"harness error while scoring: {type(error).__name__}: {error}"
-        scored = _not_scored(case, results.scrub(reason, settings.secrets), [])
+        scored = _not_scored(case, results.scrub(reason, secrets), [])
     return {
         "cli_version": trace.cli_version,
         # The model the agent reports running, which a --model alias resolves to.
@@ -168,12 +175,44 @@ def _attempt(settings: RunSettings, case: Case, trial: TrialPaths) -> dict[str, 
             "notes": contamination.notes,
         },
         "transcript": transcript.relative_to(settings.root).as_posix(),
-        "stderr": results.scrub(raw.stderr[-2000:], settings.secrets),
+        "stderr": results.scrub(raw.stderr[-2000:], secrets),
     }
 
 
-def run_trial(settings: RunSettings, case: Case) -> dict[str, Any]:
-    """One trial. A harness failure is recorded as an infrastructure error, not raised."""
+def _add_trial_secrets(adapter: Adapter, trial: TrialPaths, secrets: list[str]) -> None:
+    secrets += [value for value in adapter.trial_secrets(trial) if value not in secrets]
+
+
+def _collect_credentials(
+    adapter: Adapter, trial: TrialPaths, secrets: list[str], credentials: dict[str, str]
+) -> str:
+    """Add the trial's secrets and carry its login forward; why they could not be read, or ""."""
+    try:
+        _add_trial_secrets(adapter, trial, secrets)
+    except Exception as error:  # noqa: BLE001 -- the trial fails closed; the run goes on
+        # The type only: the message could quote the file.
+        return f"could not read the trial's credentials: {type(error).__name__}"
+    credentials |= adapter.trial_credentials(trial, credentials)
+    return ""
+
+
+def run_trial(
+    settings: RunSettings,
+    case: Case,
+    secrets: list[str] | None = None,
+    credentials: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """One trial. A harness failure is recorded as an infrastructure error, not raised.
+
+    `secrets` starts as the run's credential values and gains any the trial's
+    run reports, such as a refreshed login, so the caller can scrub for them too.
+    `credentials` starts as the run's credential and becomes the trial's own
+    copy, so the next trial starts from a refreshed login.
+    """
+    if secrets is None:
+        secrets = list(settings.secrets)
+    if credentials is None:
+        credentials = dict(settings.credentials)
     record: dict[str, Any] = {
         "case": case.id,
         "kind": case.kind,
@@ -187,21 +226,33 @@ def run_trial(settings: RunSettings, case: Case) -> dict[str, Any]:
     trial: TrialPaths | None = None
     try:
         trial = workspace.create_trial(settings.workspaces_dir, settings.run_id, case.id)
-        record |= _attempt(settings, case, trial)
+        record |= _attempt(settings, case, trial, secrets, credentials)
     except Exception as error:  # noqa: BLE001 -- one trial's failure must not lose the run
-        reason = results.scrub(f"harness error: {type(error).__name__}: {error}", settings.secrets)
+        if trial is not None:
+            _collect_credentials(settings.adapter, trial, secrets, credentials)
+        reason = results.scrub(f"harness error: {type(error).__name__}: {error}", secrets)
         record |= _not_scored(case, reason, [])
     finally:
         if trial is not None:
+            # Before teardown removes the trial's home, on every path.
+            unreadable = _collect_credentials(settings.adapter, trial, secrets, credentials)
             workspace.teardown(trial)
-            leaked = results.files_holding(trial.root, settings.secrets)
-            if leaked:
+            leaked = results.files_holding(trial.root, secrets)
+            if leaked or unreadable:
                 # Anywhere in the trial, not only the workspace, so all of it goes.
                 shutil.rmtree(trial.root, ignore_errors=True)
+            if leaked:
                 record["secret_found"] = {
                     "files": [path.relative_to(trial.root).as_posix() for path in leaked],
                     "deleted": not trial.root.exists(),
                 }
+            if unreadable:
+                # A token the sweep cannot know of may be in the evidence, so none is kept.
+                if record["transcript"] is not None:
+                    (settings.root / record["transcript"]).unlink(missing_ok=True)
+                record.pop("stderr", None)
+                record |= _not_scored(case, unreadable, [])
+                record["transcript"] = None
         record["finished_at"] = _now()
     record["passed"] = (
         record["secret_found"] is None
@@ -218,7 +269,9 @@ def run_suite(settings: RunSettings) -> int:
     suite = load_suite(settings.root, settings.skill)
     cases = select_cases(suite.cases, settings.case_ids)
     started = _now()
-    trials = [run_trial(settings, case) for case in cases]
+    secrets = list(settings.secrets)
+    credentials = dict(settings.credentials)
+    trials = [run_trial(settings, case, secrets, credentials) for case in cases]
     passed = all(trial["passed"] for trial in trials)
     data = {
         "run_id": settings.run_id,
@@ -232,9 +285,9 @@ def run_suite(settings: RunSettings) -> int:
         "trials": trials,
     }
     path = settings.results_dir / "results.json"
-    results.write_json(path, data, settings.secrets)
+    results.write_json(path, data, secrets)
     try:
-        results.verify_clean(settings.results_dir, settings.secrets)
+        results.verify_clean(settings.results_dir, secrets)
     except results.SecretLeakError as error:
         print(f"eval: {error}")
         return 1
@@ -242,7 +295,7 @@ def run_suite(settings: RunSettings) -> int:
         verdict = "PASS" if trial["passed"] else "FAIL"
         reason = "" if trial["passed"] else f": {_why(trial)}"
         # The record holds the agent's own error text, so it is scrubbed like the files.
-        print(results.scrub(f"{verdict} {trial['case']}{reason}", settings.secrets))
+        print(results.scrub(f"{verdict} {trial['case']}{reason}", secrets))
     print(f"Results: {path.relative_to(settings.root)}")
     return 0 if passed else 1
 

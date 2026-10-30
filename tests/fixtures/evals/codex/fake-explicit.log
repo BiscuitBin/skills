@@ -1,0 +1,2 @@
+conversation_starts app.version=0.163.0 model=gpt-5.6-terra
+skill_invocation skill.name=cowsay:cowsay skill.scope=repo skill.invocation_type=explicit

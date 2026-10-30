@@ -19,7 +19,8 @@ if TYPE_CHECKING:
     from skills_tooling.evals.cases import Assertion
 
 PYTHON = re.compile(r"python(?:3(?:\.\d+)?)?")
-OPERATORS = {";", "&&", "||", "|", "&", "\n"}
+PUNCTUATION = set(";&|\n")
+OPERATOR_PIECE = re.compile(r"&&|\|\||;;|\|&|[;&|\n]")
 # Words that run the command after them; leading NAME=value assignments are skipped too.
 PREFIXES = {"env", "exec", "command", "time", "nohup"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
@@ -72,22 +73,42 @@ def contains_lines(text: str, expected: str) -> bool:
     return any(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1))
 
 
-def _simple_commands(command: str) -> Iterator[list[str]]:
+def _operator(token: str) -> str | None:
+    """The operator a punctuation token stands for, or None for a word.
+
+    The lexer returns adjacent punctuation as one token, so `||` at the end of a
+    line arrives as `||\n`. A newline after an operator only continues the line.
+    """
+    if not token or set(token) - PUNCTUATION:
+        return None
+    pieces = OPERATOR_PIECE.findall(token)
+    return next((piece for piece in pieces if piece != "\n"), "\n")
+
+
+def command_list(command: str) -> list[tuple[list[str], str]]:
+    """Each simple command with the operator that follows it ("" for the last)."""
     lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
     lexer.whitespace = " \t\r"
+    found: list[tuple[list[str], str]] = []
     current: list[str] = []
     try:
         for token in lexer:
-            if token in OPERATORS:
+            if (operator := _operator(token)) is not None:
                 if current:
-                    yield current
+                    found.append((current, operator))
                 current = []
             else:
                 current.append(token)
     except ValueError:  # unbalanced quotes: the shell would not have run it either
-        return
+        return []
     if current:
-        yield current
+        found.append((current, ""))
+    return found
+
+
+def simple_commands(command: str) -> Iterator[list[str]]:
+    for words, _ in command_list(command):
+        yield words
 
 
 def _script_argument(words: list[str]) -> tuple[str, list[str]] | None:
@@ -137,7 +158,7 @@ def _same_script(argument: str, script: str) -> bool:
 
 
 def _runs_script(command: Command, script: str) -> bool:
-    for words in _simple_commands(command.command):
+    for words in simple_commands(command.command):
         found = _script_argument(words)
         if found is not None and _same_script(found[0], script):
             return True

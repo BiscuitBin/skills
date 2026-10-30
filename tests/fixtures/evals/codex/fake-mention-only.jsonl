@@ -1,0 +1,11 @@
+{"type":"thread.started","thread_id":"01a17f06-dea5-77a3-ba97-89852c15ff55"}
+{"type":"turn.started"}
+{"type":"error","message":"Reconnecting... 2/5 (unexpected status 404 Not Found: Unknown error, url: ws://127.0.0.1:55521/v1/responses)"}
+{"type":"error","message":"Reconnecting... 3/5 (unexpected status 404 Not Found: Unknown error, url: ws://127.0.0.1:55521/v1/responses)"}
+{"type":"error","message":"Reconnecting... 4/5 (unexpected status 404 Not Found: Unknown error, url: ws://127.0.0.1:55521/v1/responses)"}
+{"type":"error","message":"Reconnecting... 5/5 (unexpected status 404 Not Found: Unknown error, url: ws://127.0.0.1:55521/v1/responses)"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Falling back from WebSockets to HTTPS transport. unexpected status 404 Not Found: Unknown error, url: ws://127.0.0.1:55521/v1/responses"}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -c 'ls -l .agents/skills/cowsay/SKILL.md && echo .agents/skills/cowsay/SKILL.md'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -c 'ls -l .agents/skills/cowsay/SKILL.md && echo .agents/skills/cowsay/SKILL.md'","aggregated_output":"-rw-r--r--@ 1 scutting  staff  1136 Oct 26 23:22 .agents/skills/cowsay/SKILL.md\n.agents/skills/cowsay/SKILL.md\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Found it."}}
+{"type":"turn.completed","usage":{"input_tokens":2,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":2,"reasoning_output_tokens":0}}

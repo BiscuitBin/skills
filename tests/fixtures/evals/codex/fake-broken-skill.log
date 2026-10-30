@@ -1,0 +1,2 @@
+conversation_starts app.version=0.163.0 model=gpt-5.6-terra
+failed to load skill <trial>/workspace/.agents/skills/broken/SKILL.md: missing YAML frontmatter delimited by ---

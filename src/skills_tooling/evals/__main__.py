@@ -4,9 +4,12 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from skills_tooling.evals.adapter import CredentialError
 from skills_tooling.evals.cases import CaseError, load_suite, validate_all
 from skills_tooling.evals.claude_code import ClaudeCode
+from skills_tooling.evals.codex import Codex, pinned_executable
 from skills_tooling.evals.contamination import default_never_appear
 from skills_tooling.evals.runner import (
     RunSettings,
@@ -15,6 +18,9 @@ from skills_tooling.evals.runner import (
     run_suite,
     select_cases,
 )
+
+if TYPE_CHECKING:
+    from skills_tooling.evals.adapter import Adapter
 
 USAGE = 2
 
@@ -30,18 +36,20 @@ def validate(root: Path) -> int:
     return 0
 
 
+def adapter_for(agent: str, root: Path) -> Adapter:
+    if agent == "codex":
+        return Codex(pinned_executable(root))
+    return ClaudeCode(root / "node_modules/.bin/claude")
+
+
 def run(args: argparse.Namespace) -> int:
     root: Path = args.root.resolve()
-    adapter = ClaudeCode(root / "node_modules/.bin/claude")
-    # The token is read here and handed only to the child's environment.
-    credentials = {name: os.environ.get(name, "") for name in adapter.credential_env}
-    missing = [name for name, value in credentials.items() if not value]
-    if missing:
-        print(
-            f"eval: {', '.join(missing)} is not set. Live evals need an authenticated agent: "
-            "run `claude setup-token` and export the token. See docs/reference/evals.md.",
-            file=sys.stderr,
-        )
+    # The credential is read here and handed only to the trial.
+    try:
+        adapter = adapter_for(args.agent, root)
+        credentials = adapter.read_credentials(os.environ)
+    except (CredentialError, FileNotFoundError) as error:
+        print(f"eval: {error}", file=sys.stderr)
         return USAGE
     try:
         suite = load_suite(root, args.skill)
@@ -51,8 +59,7 @@ def run(args: argparse.Namespace) -> int:
         return USAGE
     if not adapter.executable.is_file():
         print(
-            f"eval: the pinned CLI {root / 'node_modules/.bin/claude'} is missing; "
-            "run just initialize.",
+            f"eval: the pinned CLI {adapter.executable} is missing; run just initialize.",
             file=sys.stderr,
         )
         return USAGE
@@ -77,11 +84,14 @@ def main() -> None:
     check.add_argument("--root", type=Path, default=Path.cwd())
     live = commands.add_parser("run", help="Run a skill's eval cases against an agent.")
     live.add_argument("skill", help="The skill under test, as in evals/<skill>/.")
-    live.add_argument("--agent", choices=["claude"], required=True)
+    live.add_argument("--agent", choices=["claude", "codex"], required=True)
     live.add_argument(
         "--case", action="append", default=[], help="Run only this case (repeatable)."
     )
-    live.add_argument("--model", help=f"Default: {ClaudeCode.default_model}.")
+    live.add_argument(
+        "--model",
+        help=f"Default: {ClaudeCode.default_model} (claude), {Codex.default_model} (codex).",
+    )
     live.add_argument("--timeout", type=float, default=300.0, help="Seconds per trial.")
     live.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
