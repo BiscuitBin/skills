@@ -58,6 +58,8 @@ def test_trial_records_trigger_command_and_final_message(tmp_path: Path) -> None
     trace = adapter.parse(raw)
     assert (trace.status, trace.status_reason) == ("ok", "")
     assert trace.skills_triggered == ["cowsay"]
+    # A working sandbox denies none of the agent's commands.
+    assert not [line for line in raw.debug_lines if "outcome=denied" in line]
     assert [(c.command, c.ok) for c in trace.commands][1] == (command, True)
     assert "< Ship it >" in trace.commands[1].output
     assert trace.final_message == "Here is your cow."

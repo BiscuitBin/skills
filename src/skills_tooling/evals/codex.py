@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import yaml
+
 from skills_tooling.evals import workspace
 from skills_tooling.evals.adapter import (
     Command,
@@ -65,6 +67,7 @@ NATIVE = {
 }
 STARTS = re.compile(r'event\.name="codex\.conversation_starts"')
 INVOCATION = re.compile(r'event\.name="codex\.skill_invocation"')
+SANDBOX_OUTCOME = re.compile(r'event\.name="codex\.sandbox_outcome"')
 FIELD = re.compile(r'(?<![\w.])([\w.]+)=("(?:[^"\\]|\\.)*"|\S+)')
 FAILED_LOAD = re.compile(r"(failed to load skill .*)$", re.IGNORECASE)
 # A log record starts with a timestamp; lines without one continue the record above.
@@ -72,9 +75,10 @@ RECORD_START = re.compile(r"^\d{4}-\d\d-\d\dT\S+\s+(TRACE|DEBUG|INFO|WARN|ERROR)
 TELEMETRY = "codex_otel"
 STARTS_FIELDS = ("app.version", "model")
 INVOCATION_FIELDS = ("skill.name", "skill.scope", "skill.invocation_type")
+SANDBOX_FIELDS = ("tool_name", "call_id", "outcome")
 # Programs that print a file's contents. A command that only names the path,
 # such as ls, test or echo, is not a read. awk is not one: whether it opens an
-# operand depends on its program, so an awk read is left to Codex's own event.
+# operand depends on its program, so an awk read does not count.
 READERS = {"cat", "head", "tail", "sed", "nl", "less", "more", "bat"}
 # A redirection can make a reader write the path, or send its output elsewhere.
 # Quoting is gone by the time the words are checked, so a quoted < or > counts too.
@@ -437,6 +441,8 @@ def kept_lines(stderr: str, echoed: Collection[str] = ()) -> tuple[str, ...]:
             kept.append(f"conversation_starts {_fields(line, STARTS_FIELDS)}")
         elif telemetry and starts and INVOCATION.search(line):
             kept.append(f"skill_invocation {_fields(line, INVOCATION_FIELDS)}")
+        elif telemetry and starts and SANDBOX_OUTCOME.search(line):
+            kept.append(f"sandbox_outcome {_fields(line, SANDBOX_FIELDS)}")
         elif not telemetry and (match := FAILED_LOAD.search(line)):
             kept.append(match.group(1))
     return tuple(kept)
@@ -481,19 +487,13 @@ def unwrap(command: str) -> str:
     return command
 
 
-def skills_read(command: str) -> list[str]:
-    """The skill of each SKILL.md in a skills directory a reader program names.
+def _read_paths(command: str) -> Iterator[Path]:
+    """Each file a reader program names, after any `cd <dir>` before it.
 
-    `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path counts only when
-    its grandparent is a skills directory (`.agents/skills`, `skills`,
-    `.system`), so `/tmp/cowsay/SKILL.md` is not a skill. A path named by
-    anything other than a reader, such as `ls`, `test` or `echo`, or as a
-    `name=value` assignment, is not a read. A path whose skill directory the
-    text cannot place (`../SKILL.md`, a glob, a variable) names no skill;
-    Codex's own implicit event still covers it.
+    A path named by anything other than a reader, such as `ls`, `test` or
+    `echo`, or as a `name=value` assignment, is not a read.
     """
     cwd = Path()
-    skills = []
     for words, _ in command_list(command):
         if words[0] == "cd" and len(words) == 2:  # noqa: PLR2004 -- cd and its directory
             cwd = cwd / words[1]
@@ -501,18 +501,63 @@ def skills_read(command: str) -> list[str]:
         if Path(words[0]).name not in READERS:
             continue
         for word in words[1:]:
-            if word.startswith("-") or ASSIGNMENT.fullmatch(word):
-                continue
-            path = Path(os.path.normpath(cwd / word))
-            skill = path.parent.name
-            if (
-                path.name == "SKILL.md"
-                and skill not in ("", "..")
-                and not UNPLACEABLE.search(skill)
-                and SKILLS_DIR.search(path.parent.parent.name)
-            ):
-                skills.append(skill)
-    return skills
+            if not word.startswith("-") and not ASSIGNMENT.fullmatch(word):
+                yield Path(os.path.normpath(cwd / word))
+
+
+def skills_read(command: str) -> tuple[list[str], bool]:
+    """The skill of each SKILL.md in a skills directory a reader program names,
+    and whether it names a SKILL.md whose skill directory the text cannot place.
+
+    `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path counts only when
+    its grandparent is a skills directory (`.agents/skills`, `skills`,
+    `.system`), so `/tmp/cowsay/SKILL.md` is not a skill, nor unplaceable. A
+    path the text cannot place (`SKILL.md` or `cowsay/SKILL.md` run in another
+    `workdir`, `../SKILL.md`, a glob, a variable) names no skill; it can still back
+    Codex's own implicit event (see `parse_stream`).
+    """
+    skills = []
+    unplaceable = False
+    for path in _read_paths(command):
+        if path.name != "SKILL.md":
+            continue
+        skill = path.parent.name
+        if skill in ("", "..") or UNPLACEABLE.search(skill):
+            unplaceable = True
+        elif SKILLS_DIR.search(path.parent.parent.name):
+            skills.append(skill)
+        elif UNPLACEABLE.search(path.parent.parent.name) or (
+            not path.is_absolute() and path.parent.parent.name in ("", "..")
+        ):
+            # `$dir/cowsay/SKILL.md`, or `cowsay/SKILL.md` run in the skills
+            # directory: the skill is named, its directory is not.
+            unplaceable = True
+    return skills, unplaceable
+
+
+def frontmatter_name(output: str, skip: int) -> str | None:
+    """The YAML `name` in the frontmatter that opens a read's output, past `skip` lines.
+
+    Frontmatter opens a file, as the validator requires, and output that runs
+    several files together does not show where the next one starts, so only
+    the first file's counts. A partial read (`head -n 3`) may stop before the
+    closing `---`.
+    """
+    lines = output.split("\n")[skip:]
+    if not lines or lines[0].strip() != "---":
+        return None
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), len(lines))
+    try:
+        data = yaml.safe_load("\n".join(lines[1:end]))
+    except yaml.YAMLError:
+        return None
+    name = data.get("name") if isinstance(data, dict) else None
+    return name if isinstance(name, str) else None
+
+
+def _pwds(command: str) -> int:
+    """How many lines the `pwd`s before a command's last part print."""
+    return sum(words == ["pwd"] for words, _ in command_list(command)[:-1])
 
 
 def outcome_is_the_read(command: str, output: str) -> bool:
@@ -523,13 +568,12 @@ def outcome_is_the_read(command: str, output: str) -> bool:
     must have a line more than the `pwd`s print. After `||`, `;`, `&` or a
     pipe, or after any other command, a command can exit 0 and print something
     whatever the read did. A redirection, or a help or version flag, can make a
-    reader not read. Codex's own implicit event covers every other shape.
+    reader not read. Every other shape is not a read the trace can confirm.
     """
     parts = command_list(command)
     if not parts or any(operator not in ("&&", "") for _, operator in parts):
         return False
     *before, (read, _) = parts
-    pwds = sum(words == ["pwd"] for words, _ in before)
     return (
         all(
             words == ["pwd"]
@@ -540,7 +584,7 @@ def outcome_is_the_read(command: str, output: str) -> bool:
         and Path(read[0]).name in READERS
         and not any(REDIRECTION.search(word) or word in NO_READ_FLAGS for word in read[1:])
         and bool(output.strip())
-        and len(output.strip("\n").split("\n")) > pwds
+        and len(output.strip("\n").split("\n")) > _pwds(command)
     )
 
 
@@ -550,14 +594,24 @@ def parse_stream(raw: RawRun) -> Trace:
     The trigger rule: a completed command that reads <skill>/SKILL.md with a
     reader program, exits 0, and whose output shows the read printed something
     (see `outcome_is_the_read`). Codex's own skill_invocation events count too:
-    `implicit` when it saw such a read, `explicit` for a `$skill` mention,
-    whose SKILL.md it injects without running a command.
+    `explicit` for a `$skill` mention, whose SKILL.md it injects without
+    running a command, and `implicit` only when such a read of the same skill
+    succeeded, or a read of a SKILL.md the text cannot place (see
+    `skills_read`) printed frontmatter naming the skill (see `frontmatter_name`).
+    Codex logs `implicit` from the command text before the command runs, and
+    for a run of the skill's scripts too, so the event alone shows no read.
+    Both events name a skill from Codex's own skill list, so every skill they
+    name is listed, read or not.
     """
     events, clean = _read_events(raw.transcript)
     triggered: list[str] = []
     invoked: list[str] = []
+    implicit: list[str] = []
+    listed: list[str] = []
     commands: list[Command] = []
     final = ""
+    # The frontmatter names that successful reads of unplaced SKILL.md files printed.
+    unplaced_names: set[str] = set()
     for event in events:
         item = event.get("item")
         if event.get("type") != "item.completed" or not isinstance(item, dict):
@@ -569,25 +623,35 @@ def parse_stream(raw: RawRun) -> Trace:
             output = str(item.get("aggregated_output", ""))
             ok = item.get("status") == "completed" and item.get("exit_code") == 0
             commands.append(Command(command, ok, output))
-            read = skills_read(command)
+            read, unplaced = skills_read(command)
             invoked += read
             if ok and outcome_is_the_read(command, output):
                 triggered += read
+                if unplaced and (name := frontmatter_name(output, _pwds(command))):
+                    unplaced_names.add(name)
     starts = ""
+    denied = 0
     for line in raw.debug_lines:
+        fields = dict(FIELD.findall(line))
         if line.startswith("conversation_starts ") and not starts:
             starts = line
+        elif line.startswith("sandbox_outcome "):
+            denied += fields.get("outcome") == "denied"
         elif line.startswith("skill_invocation "):
-            fields = dict(FIELD.findall(line))
             # The name may carry a plugin prefix: cowsay:cowsay.
             skill = fields.get("skill.name", "").rsplit(":", 1)[-1]
             invoked.append(skill)
-            if fields.get("skill.invocation_type") in ("explicit", "implicit"):
+            listed.append(skill)
+            if fields.get("skill.invocation_type") == "explicit":
                 triggered.append(skill)
+            elif fields.get("skill.invocation_type") == "implicit":
+                implicit.append(skill)
+    # A placed read already counts; an unplaced one backs the skill it printed.
+    triggered += [skill for skill in implicit if skill in unplaced_names]
     started = dict(FIELD.findall(starts))
     last = events[-1] if events else {}
     completed = clean and last.get("type") == "turn.completed"
-    reason = _status_reason(raw, completed=completed, last=last)
+    reason = _status_reason(raw, completed=completed, last=last, denied=denied)
     return Trace(
         # A read and Codex's event for it are one trigger.
         skills_triggered=list(dict.fromkeys(triggered)),
@@ -605,10 +669,13 @@ def parse_stream(raw: RawRun) -> Trace:
         visible_plugins=None,
         debug_lines=raw.debug_lines,
         python_calls=raw.python_calls,
+        listed_skills=list(dict.fromkeys(listed)),
     )
 
 
-def _status_reason(raw: RawRun, *, completed: bool, last: Mapping[str, Any]) -> str:  # noqa: PLR0911 -- one return per status, checked in order
+def _status_reason(  # noqa: PLR0911 -- one return per status, checked in order
+    raw: RawRun, *, completed: bool, last: Mapping[str, Any], denied: int
+) -> str:
     if raw.timed_out:
         return f"timed out after {raw.elapsed:.0f}s"
     if raw.survivors:
@@ -616,6 +683,14 @@ def _status_reason(raw: RawRun, *, completed: bool, last: Mapping[str, Any]) -> 
     failed = [line for line in raw.debug_lines if FAILED_LOAD.match(line)]
     if failed:
         return "; ".join(failed)[:300]
+    if denied:
+        # A denied command leaves no command_execution item, so the trace
+        # cannot show what the agent ran. Codex's test is a heuristic: a failed
+        # command whose output names a permission error counts too.
+        return (
+            f"Codex reported {denied} command(s) as denied by its sandbox, which the"
+            " event stream omits; see docs/reference/evals.md"
+        )
     if last.get("type") == "turn.failed":
         error = last.get("error")
         text = error.get("message", "") if isinstance(error, dict) else ""

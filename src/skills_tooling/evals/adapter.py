@@ -106,6 +106,9 @@ class Trace:
     dynamic_commands: list[str] = field(default_factory=list)
     debug_lines: tuple[str, ...] = ()
     python_calls: tuple[PythonCall, ...] = ()
+    # Skills the agent's own events name from its skill list, read or not:
+    # evidence a skill was visible, not that it triggered.
+    listed_skills: list[str] = field(default_factory=list)
 
 
 class CredentialError(Exception):

@@ -6,6 +6,7 @@ themselves after the run. Each test plants one canary and shows the check fails.
 
 import json
 import os
+import shutil
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,7 +16,7 @@ import pytest
 from skills_tooling.evals import workspace
 from skills_tooling.evals.codex import BUILTIN_SKILLS, SYSTEM_MARKER, Codex, pinned_executable
 from skills_tooling.evals.contamination import NeverAppear, check, preflight
-from tests.evals.test_codex_parser import parse
+from tests.evals.test_codex_parser import log, parse
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -139,6 +140,35 @@ def test_reading_a_never_appear_skill_fails(trial: TrialPaths) -> None:
         system_root=trial.root / "system-root",
     ).problems
     assert "never-appear skill 'review' (dev skill) is visible" in found
+
+
+def test_a_never_appear_skill_codex_lists_fails_without_a_read(trial: TrialPaths) -> None:
+    # Codex logs an implicit event only for a skill in its own list, so the
+    # event shows the skill was visible even when no read backs a trigger.
+    event = "skill_invocation skill.name=review skill.scope=repo skill.invocation_type=implicit"
+    observed = parse(
+        "fake-should-not-trigger", debug_lines=(*log("fake-should-not-trigger"), event)
+    )
+    assert observed.skills_triggered == []
+    forbidden = NeverAppear(skills={"review": "dev skill"}, instruction_files=())
+    found = check(
+        ADAPTER,
+        observed,
+        skill="cowsay",
+        baseline=False,
+        trial=trial,
+        never=forbidden,
+        system_root=trial.root / "system-root",
+    ).problems
+    assert "never-appear skill 'review' (dev skill) is visible" in found
+
+
+def test_a_baseline_where_codex_lists_the_skill_fails(trial: TrialPaths) -> None:
+    shutil.rmtree(trial.workspace / ".agents/skills/cowsay")
+    # A sandbox-denied read: Codex listed cowsay, though nothing read it.
+    assert problems(trial, "fake-sandbox-denied", baseline=True) == [
+        "the skill under test 'cowsay' is visible in the baseline arm"
+    ]
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root lists any directory")
