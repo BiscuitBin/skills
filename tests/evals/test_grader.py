@@ -1,6 +1,7 @@
 """The LLM grader: reply validation, blinded material, disclosure, and grade() end to end."""
 
 import json
+import os
 import random
 import re
 import shlex
@@ -558,6 +559,7 @@ def run_grade(  # noqa: PLR0913 -- the test's knobs, each with a default
     key: str = "behaviour-ship-it/skill-1",
     timeout: float = 30.0,
     rng: random.Random | None = None,
+    run_secrets: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     trial = trial or agent_trial(tmp_path, key)
     settings = GraderSettings(
@@ -577,6 +579,7 @@ def run_grade(  # noqa: PLR0913 -- the test's knobs, each with a default
         skills_dir=".claude/skills",
         skill_dir=ROOT / "skills/cowsay",
         rng=rng,
+        run_secrets=run_secrets,
     )
 
 
@@ -675,6 +678,52 @@ def test_a_reply_too_deep_or_too_long_to_read_is_invalid_not_raised(tmp_path: Pa
     assert grading["grader"]["status"] == "invalid_reply"
     assert grading["grader"]["status_reason"].startswith("not valid JSON: ")
     assert [e["passed"] for e in grading["expectations"]] == [False, False]
+
+
+def test_a_credential_the_redaction_would_rejoin_never_reaches_the_grader(
+    tmp_path: Path,
+) -> None:
+    # Redaction removes a workspace path and joins the text on either side, so the
+    # finished material is scrubbed of the run's secrets, in both calls.
+    split = f"{TOKEN[:12]}.eval-workspaces/x/y/z/{TOKEN[12:]}"
+    case = ship_it(Expectation(COW), Expectation("The agent ran echo.", blinded=False))
+    trace = a_trace(f"Done: {split}", [Command(command=f"echo {split}", ok=True, output=split)])
+    fake = fake_grader(tmp_path / "grader")
+    run_grade(tmp_path, fake, case=case, trace=trace, run_secrets=(TOKEN,))
+    prompts = fake.prompts()
+    assert len(prompts) == 2
+    for prompt in prompts:
+        assert TOKEN not in prompt
+        assert "[REDACTED]" in prompt
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+def test_an_unreadable_file_or_directory_is_listed_and_the_trial_still_graded(
+    tmp_path: Path,
+) -> None:
+    # The agent can lock its own output; that must not drop its trial from the denominators.
+    trial = agent_trial(tmp_path)
+    ws = trial.workspace
+    (ws / "locked").mkdir()
+    (ws / "locked/x.txt").write_text("hi\n")
+    (ws / "sealed.txt").write_text("hi\n")
+    (ws / "locked").chmod(0)
+    (ws / "sealed.txt").chmod(0)
+    try:
+        material = blinded_material(
+            "Moo.", ws, trial_root=trial.root, skills_dir=".claude/skills", skill="cowsay"
+        )
+        grading = run_grade(tmp_path, fake_grader(tmp_path / "grader"), trial=trial)
+    finally:
+        (ws / "locked").chmod(0o755)
+        (ws / "sealed.txt").chmod(0o644)
+    assert material.endswith(
+        "## Output files\n\n"
+        "### locked (unreadable, not shown)\n\n"
+        "### sealed.txt (unreadable, not shown)"
+    )
+    assert grading["grader"]["status"] == "ok"
+    assert grading["grader"]["calls"] == 1
 
 
 def test_a_nul_in_the_material_is_replaced_so_the_trial_is_still_graded(tmp_path: Path) -> None:

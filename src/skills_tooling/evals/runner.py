@@ -119,10 +119,8 @@ def schedule(cases: list[Case], trials: int, *, baseline: bool) -> list[Planned]
 
 
 def grader_calls(case: Case) -> int:
-    """The grader calls one trial of the case makes: a second for unblinded expectations."""
-    if not case.expectations:
-        return 0
-    return 1 + any(not e.blinded for e in case.expectations)
+    """The grader calls one trial of the case makes: one per nonempty group, blinded and not."""
+    return sum(any(e.blinded is blinded for e in case.expectations) for blinded in (True, False))
 
 
 def describe_plan(  # noqa: PLR0913 -- every figure the plan prints
@@ -468,6 +466,7 @@ def _grade(
             skill=settings.skill,
             skills_dir=settings.adapter.skills_dir,
             skill_dir=settings.root / "skills" / settings.skill,
+            run_secrets=secrets,
         )
     except Exception:  # noqa: BLE001 -- a harness bug in grading must not lose the run
         # No grading file: the benchmark counts the trial as a grader error.
@@ -523,22 +522,24 @@ def run_suite(settings: RunSettings) -> int:
     trials = [run_trial(settings, p, secrets, credentials) for p in planned]
     passed = all(t["passed"] if t["arm"] == "skill" else t["valid"] for t in trials)
     skipped = [case.id for case in cases if settings.baseline and not in_baseline(case)]
+    # The grader that ran, if any case had expectations to grade.
+    used = settings.grader if any(case.expectations for case in cases) else None
+    credential_env = list(settings.adapter.credential_env)
+    if used is not None:
+        # The grader is Claude for every agent, so a Codex run reads its token too.
+        credential_env += [n for n in used.credentials if n not in credential_env]
     data = {
         "run_id": settings.run_id,
         "skill": settings.skill,
         "agent": settings.adapter.name,
         "requested_model": settings.model,
-        "credential_env": list(settings.adapter.credential_env),
+        "credential_env": credential_env,
         "started_at": started,
         "finished_at": _now(),
         "passed": passed,
         "trials_per_case": settings.trials,
         "baseline": settings.baseline,
-        "grader_model_requested": (
-            settings.grader.model
-            if settings.grader is not None and any(case.expectations for case in cases)
-            else None
-        ),
+        "grader_model_requested": used.model if used is not None else None,
         "cases": [
             {
                 "id": case.id,

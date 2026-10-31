@@ -5,7 +5,9 @@ references. Every exclusion is counted and shown, never folded in as a 0.
 """
 
 import hashlib
+import os
 import statistics
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeIs
@@ -103,15 +105,17 @@ def _has_verdicts(
 ) -> TypeIs[Mapping[str, Any]]:
     """Whether the grading holds a verdict on exactly the case's rubric.
 
-    A file that lists other expectations, or none, or no known status, cannot be
-    scored against the case, so it is a grader error, like a missing file: it
-    never changes the denominator or the expectation counts.
+    A file that lists other expectations, or none, or no known status, or a null
+    verdict (a grader_error's), cannot be scored against the case, so it is a
+    grader error, like a missing file: it never changes the denominator or the
+    expectation counts.
     """
     return (
         grading is not None
         and grading["grader"].get("status") in VERDICT_STATUSES
         and [e["text"] for e in grading["expectations"]]
         == [e["text"] for e in case["expectations"]]
+        and all(e["passed"] is not None for e in grading["expectations"])
     )
 
 
@@ -257,6 +261,13 @@ def _notes(
         notes.append(
             f"grader errors excluded: {skill['n_grader_error']} (skill)"
             f" / {baseline['n_grader_error']} (baseline)"
+        )
+    # An exclusion can depend on the arm: under Codex, a baseline agent that tries
+    # to install the tool it lacks can trip the sandbox's denial rule.
+    if skill["n_infra_error"] or baseline["n_infra_error"]:
+        notes.append(
+            f"infra errors excluded: {skill['n_infra_error']} (skill)"
+            f" / {baseline['n_infra_error']} (baseline)"
         )
     if skill["n_arm_disclosed"] or baseline["n_arm_disclosed"]:
         graded = delta["graded_pass_rate"]
@@ -483,11 +494,31 @@ def git_state(root: Path) -> dict[str, Any]:
     if toplevel.returncode != 0 or Path(toplevel.stdout.strip()).resolve() != root.resolve():
         return {"git_commit": None, "git_dirty": None}
     head = workspace.git("rev-parse", "HEAD", cwd=root)
-    status = workspace.git("status", "--porcelain", cwd=root)
+    excludes = _global_excludes()
+    ignore = ("-c", f"core.excludesFile={excludes}") if excludes is not None else ()
+    status = workspace.git(*ignore, "status", "--porcelain", cwd=root)
     return {
         "git_commit": head.stdout.strip() if head.returncode == 0 else None,
         "git_dirty": bool(status.stdout.strip()) if status.returncode == 0 else None,
     }
+
+
+def _global_excludes() -> Path | None:
+    """The user's global ignore file, which the harness's isolated git calls never read.
+
+    Without it, a file only the user's own git ignores would make the tree dirty.
+    """
+    configured = subprocess.run(
+        ["git", "config", "--global", "--path", "core.excludesFile"],  # noqa: S607 -- as workspace.git
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if found := configured.stdout.strip():
+        path = Path(found)
+    else:
+        path = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "git/ignore"
+    return path if path.is_file() else None
 
 
 def provenance(root: Path, skill: str) -> dict[str, Any]:

@@ -2,11 +2,16 @@
 
 import json
 import os
+import sys
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
+from skills_tooling.evals import __main__ as evals_cli
+from skills_tooling.evals.cases import Case, Expectation
 from skills_tooling.evals.claude_code import ClaudeCode
 from skills_tooling.evals.grader import GraderSettings
-from skills_tooling.evals.runner import run_suite
+from skills_tooling.evals.runner import describe_plan, run_suite
 from tests.evals.fake_anthropic import Turn, serve, text, tool
 from tests.evals.test_grader import FakeGrader, fake_grader
 from tests.evals.test_runner import ROOT, TOKEN, fake_root, results, run_cli, settings
@@ -14,7 +19,7 @@ from tests.evals.test_runner import ROOT, TOKEN, fake_root, results, run_cli, se
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
+    from skills_tooling.evals.runner import RunSettings
 
 NO_TRIGGER = "Tell me three facts about cows."
 MOO = "Have a cow say: moo"
@@ -266,6 +271,26 @@ def test_a_token_in_the_trace_never_reaches_the_grader(tmp_path: Path) -> None:
     assert not [p for p in written if TOKEN in p.read_text()]
 
 
+def test_a_token_in_an_output_file_name_never_reaches_the_grader(tmp_path: Path) -> None:
+    # The sweep reads names as well as contents: the trial goes, and is never graded.
+    write = tool(
+        "Bash", {"command": f"echo moo > '{TOKEN}.txt'", "description": "Save"}, "toolu_2"
+    )
+    script = {MOO: [tool("Skill", {"skill": "cowsay"}, "toolu_1"), write, text(COW)]}
+    fake = fake_grader(tmp_path / "grader", verdicts=PASS_BOTH)
+    with serve(script) as server:
+        exit_code = graded_run(tmp_path, server.url, fake, case_ids=("behaviour-moo",))
+    root = tmp_path / "repo"
+    (trial,) = results(root)["trials"]
+    assert exit_code == 1
+    assert fake.prompts() == []
+    assert trial["secret_found"] == {"files": ["workspace/[REDACTED].txt"], "deleted": True}
+    assert (trial["valid"], trial["grading"]) == (False, None)
+    assert not (root / ".eval-workspaces/test-run/behaviour-moo/skill-1").exists()
+    written = [p for p in (root / "eval-results").rglob("*") if p.is_file()]
+    assert not [p for p in written if TOKEN in p.read_text()]
+
+
 def test_a_grader_reply_utf_8_cannot_encode_is_written_with_replacements(tmp_path: Path) -> None:
     fake = fake_grader(tmp_path / "grader", verdicts=PASS_BOTH, notes="\ud800")
     with serve(SCRIPT) as server:
@@ -347,6 +372,57 @@ def test_the_dry_run_plans_the_repos_cowsay_suite_with_its_grader_calls() -> Non
     assert "baseline arm: 6 agent calls" in result.stdout
     assert "grader calls: at most 12 (claude-opus-5-5)" in result.stdout
     assert "spend cap: $45.00" in result.stdout
+
+
+def test_a_transcript_only_rubric_plans_one_grader_call_per_trial() -> None:
+    case = Case(
+        id="behaviour-echo",
+        kind="behaviour",
+        prompt="Echo moo.",
+        should_trigger=True,
+        expected_output=None,
+        assertions=(),
+        expectations=(Expectation("The agent ran echo.", blinded=False),),
+    )
+    plan = describe_plan(
+        "cowsay",
+        "codex",
+        [case],
+        trials=1,
+        baseline=False,
+        grader_model="claude-opus-5-5",
+        agent_budget_usd=None,
+    )
+    assert "grader calls: at most 1 (claude-opus-5-5)" in plan
+    assert "spend cap: $1.00 for the grader" in plan
+
+
+@pytest.mark.parametrize(
+    ("flags", "model"),
+    [((), "claude-opus-5-5"), (("--grader-model", "claude-sonnet-5-5"), "claude-sonnet-5-5")],
+)
+def test_the_grader_model_defaults_to_opus_and_the_flag_chooses_another(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flags: tuple[str, ...], model: str
+) -> None:
+    root = fake_root(tmp_path, GRADED_CASES)
+    (root / "node_modules/.bin").mkdir(parents=True)
+    (root / "node_modules/.bin/claude").touch()
+    started: list[RunSettings] = []
+
+    def run_suite(settings: RunSettings) -> int:
+        started.append(settings)
+        return 0
+
+    monkeypatch.setattr(evals_cli, "run_suite", run_suite)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", TOKEN)
+    argv = ["evals", "run", "cowsay", "--agent", "claude", "--root", str(root), *flags]
+    monkeypatch.setattr(sys, "argv", argv)
+    with pytest.raises(SystemExit) as exited:
+        evals_cli.main()
+    assert exited.value.code == 0
+    (settings,) = started
+    assert settings.grader is not None
+    assert settings.grader.model == model
 
 
 def test_a_codex_run_with_expectations_needs_the_graders_token(tmp_path: Path) -> None:

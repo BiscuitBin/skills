@@ -134,6 +134,19 @@ def test_the_grader_error_note_names_an_error_in_either_arm_alone() -> None:
     assert "grader errors excluded: 1 (skill) / 0 (baseline)" in notes
 
 
+def test_an_infra_error_in_either_arm_is_noted_on_the_delta() -> None:
+    # Under Codex, a baseline agent that tries to install the tool it lacks can trip
+    # the sandbox's denial rule, so an exclusion can depend on the arm.
+    notes = aggregate(*load("paired"))["agents"]["claude"]["cases"][SHIP]["notes"]
+    assert not any(note.startswith("infra errors") for note in notes)
+    run, gradings = load("paired")
+    for trial in run["trials"]:
+        if (trial["case"], trial["arm"], trial["trial"]) == (SHIP, "baseline", 1):
+            trial["status"] = "infra_error"
+    notes = aggregate(run, gradings)["agents"]["claude"]["cases"][SHIP]["notes"]
+    assert "infra errors excluded: 0 (skill) / 1 (baseline)" in notes
+
+
 def test_a_case_skipped_in_the_baseline_has_no_baseline_and_an_empty_delta() -> None:
     case = aggregate(*load("paired"))["agents"]["claude"]["cases"]["should-trigger"]
     assert case["baseline"] == "skipped"
@@ -251,6 +264,11 @@ def no_passed(grading: dict[str, Any]) -> None:
     del grading["expectations"][0]["passed"]
 
 
+def null_verdict(grading: dict[str, Any]) -> None:
+    # null is a grader error's; skill-1 is an ok grading.
+    grading["expectations"][0]["passed"] = None
+
+
 def no_disclosure(grading: dict[str, Any]) -> None:
     del grading["arm_disclosed"]
 
@@ -276,6 +294,7 @@ def not_an_object(grading: dict[str, Any]) -> None:
         no_expectations_key,
         untexted_expectation,
         no_passed,
+        null_verdict,
         no_disclosure,
         not_an_object,
     ],
@@ -671,6 +690,31 @@ def test_git_state_reads_the_commit_and_turns_dirty_with_an_untracked_file(
     repo = committed_repo(tmp_path)
     head = workspace.git("rev-parse", "HEAD", cwd=repo).stdout.strip()
     assert len(head) == 40
+    assert git_state(repo) == {"git_commit": head, "git_dirty": False}
+    (repo / "notes.txt").write_text("untracked\n")
+    assert git_state(repo) == {"git_commit": head, "git_dirty": True}
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_git_state_honours_the_users_global_ignore_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, configured: bool
+) -> None:
+    # The harness's own git calls skip the user's config; a file the user's git
+    # ignores must not make the tree look dirty.
+    repo = committed_repo(tmp_path)
+    head = workspace.git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    config = tmp_path / "gitconfig"
+    if configured:
+        ignore = tmp_path / "my-ignore"
+        config.write_text(f"[core]\n\texcludesFile = {ignore}\n")
+    else:
+        ignore = tmp_path / "xdg/git/ignore"
+        ignore.parent.mkdir(parents=True)
+        config.write_text("")
+    ignore.write_text("local.json\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    (repo / "local.json").write_text("{}\n")
     assert git_state(repo) == {"git_commit": head, "git_dirty": False}
     (repo / "notes.txt").write_text("untracked\n")
     assert git_state(repo) == {"git_commit": head, "git_dirty": True}

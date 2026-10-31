@@ -72,6 +72,19 @@ def test_a_file_that_still_holds_a_secret_is_deleted_and_rejected(tmp_path: Path
     assert not leaked.exists()
 
 
+def test_a_file_whose_path_holds_a_secret_is_deleted_and_rejected(tmp_path: Path) -> None:
+    # The grader lists every output file by its path, so a name can carry a secret too.
+    named, nested = tmp_path / f"{SECRET}.txt", tmp_path / f"d-{SECRET}" / "a.txt"
+    nested.parent.mkdir()
+    named.write_text("moo\n")
+    nested.write_text("moo\n")
+    (tmp_path / f"link-{SECRET}").symlink_to(named)
+    with pytest.raises(SecretLeakError) as raised:
+        verify_clean(tmp_path, [SECRET])
+    assert SECRET not in str(raised.value)
+    assert [p.name for p in tmp_path.rglob("*")] == [f"d-{SECRET}"]
+
+
 def test_the_agents_bash_commands_never_see_the_token(tmp_path: Path) -> None:
     # The harness hands the token only to the CLI; the CLI must not pass it on
     # to the processes its Bash tool starts. Checked on the unscrubbed trace.

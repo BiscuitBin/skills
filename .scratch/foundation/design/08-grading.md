@@ -111,16 +111,16 @@ node_modules/.bin/claude -p <user prompt> --system-prompt <grader system prompt>
 - Timeout: 300 seconds per call. A timeout is a `grader_error`.
 - `--json-schema` is not used: the harness validates the reply itself (§4.5), which it would have to do anyway, and the fake API already supports text replies.
 
-**Model:** `--grader-model`, default `claude-opus-5-5`. The grader is always Claude, whatever `--agent` is. For a Claude Code run the grader uses the same `CLAUDE_CODE_OAUTH_TOKEN` the agent does, so one export covers both. A Codex run whose selected cases carry expectations needs `CLAUDE_CODE_OAUTH_TOKEN` as well, and without it the run is a usage error before anything starts. The token joins the run's secrets, so the scrub and the sweep cover `grading.json`, `results.json` and the transcripts.
+**Model:** `--grader-model`, default `claude-opus-5-5`. The grader is always Claude, whatever `--agent` is. For a Claude Code run the grader uses the same `CLAUDE_CODE_OAUTH_TOKEN` the agent does, so one export covers both. A Codex run whose selected cases carry expectations needs `CLAUDE_CODE_OAUTH_TOKEN` as well, and without it the run is a usage error before anything starts. The token joins the run's secrets, so the scrub and the sweep cover `grading.json`, `results.json` and the transcripts, and `results.json`'s `credential_env` lists it.
 
-**When it runs:** after the trial's teardown and secret sweep, only for a trial whose case has expectations and which is scorable: status ok, contamination passed, no secret found. Grading a contaminated or broken trial would spend money on a result the benchmark discards. Because it runs after the sweep, a workspace that held a credential never reaches the grader. The sweep never sees the transcript, so the grader gets the trace with the run's secrets scrubbed from the final message and from every command and its output. A grader failure never turns the trial into an `infra_error`; it is recorded as the grading's own status.
+**When it runs:** after the trial's teardown and secret sweep, only for a trial whose case has expectations and which is scorable: status ok, contamination passed, no secret found. Grading a contaminated or broken trial would spend money on a result the benchmark discards. Because it runs after the sweep, which reads file paths as well as contents, a workspace that held a credential never reaches the grader. The sweep never sees the transcript, so the grader gets the trace with the run's secrets scrubbed from the final message and from every command and its output. Each finished material is scrubbed of the run's secrets once more, after redaction: removing a path joins the text on either side, which could rebuild a credential split around it. A grader failure never turns the trial into an `infra_error`; it is recorded as the grading's own status.
 
 ### 4.2 Blinded material
 
 Built from what both arms produce in the same shape:
 
 1. **The final message**, from the trace.
-2. **Output files:** every file in the workspace except `.git/` and the adapter's `skills_dir` tree (which exists only in the skill arm, and is excluded in both). Symlinks are listed, never followed. Each file is capped at 20 KB and the total at 80 KB, and the final message at 20 KB; truncation is noted. Caps are in UTF-8 bytes after redaction, so the whole user prompt always fits one Linux argument (128 KiB); a prompt that would not fit is a `grader_error` without a call. A file that is not valid UTF-8 is listed by name and size only. A NUL in the material is replaced by U+FFFD, since a NUL cannot pass through an argument. So is a lone surrogate, in the material and in the reply's evidence and notes, since UTF-8 cannot encode one and the grading file could not be written. With nothing written, the section says "No files were written."
+2. **Output files:** every file in the workspace except `.git/` and the adapter's `skills_dir` tree (which exists only in the skill arm, and is excluded in both). Symlinks are listed, never followed. A file or directory the agent left unreadable is listed by name: the material must not be able to turn its own trial into a `grader_error` (§4.5). Each file is capped at 20 KB and the total at 80 KB, and the final message at 20 KB; truncation is noted. Caps are in UTF-8 bytes after redaction, so the whole user prompt always fits one Linux argument (128 KiB); a prompt that would not fit is a `grader_error` without a call. A file that is not valid UTF-8 is listed by name and size only. A NUL in the material is replaced by U+FFFD, since a NUL cannot pass through an argument. So is a lone surrogate, in the material and in the reply's evidence and notes, since UTF-8 cannot encode one and the grading file could not be written. With nothing written, the section says "No files were written."
 
 Redaction, applied identically in both arms to the final message and file contents and paths:
 
@@ -273,7 +273,7 @@ Per expectation, across trials: `{text, blinded, skill: {passed, n}, baseline: {
 
 ### 5.2 Delta
 
-`delta = skill mean − baseline mean`, for `deterministic_pass_rate`, `graded_pass_rate` and `outcome_pass_rate` only, reported with both arms' `n`. It is `null` when either side has `n = 0` or the case was skipped in the baseline. Skill-use metrics and trigger accuracy have no delta.
+`delta = skill mean − baseline mean`, for `deterministic_pass_rate`, `graded_pass_rate` and `outcome_pass_rate` only, reported with both arms' `n`. Each metric's delta is `{value, n_skill, n_baseline}`, and `value` is `null` when either side has `n = 0`. A case skipped in the baseline, and every case of a run without one, has an empty delta (`{}`). Skill-use metrics and trigger accuracy have no delta.
 
 **Intention to treat.** A skill-arm trial in which the skill did not trigger still counts in the skill arm's outcome metrics. The treatment is "the skill is installed"; whether it triggers is part of what is measured. Excluding non-triggering trials would inflate the delta.
 
@@ -291,6 +291,7 @@ Per expectation, across trials: `{text, blinded, skill: {passed, n}, baseline: {
   - "non-discriminating" for an expectation that passed in every trial with a verdict in both arms, each arm having at least one
   - "unequal n" when the two arms' n differ for a delta
   - "grader errors excluded: k (skill) / k (baseline)" on a graded or outcome delta where either arm has a grader error
+  - "infra errors excluded: k (skill) / k (baseline)" on a delta where either arm has an infrastructure error. An exclusion can depend on the arm: under Codex, a baseline agent that tries to install the tool it lacks can trip the sandbox's denial rule (ticket 13).
   - "arm disclosed to the grader in k of n trials (skill) / k of n (baseline)" on a graded delta where either count is above 0
 - No significance test or confidence interval is reported. With a handful of trials per arm, the delta and the two spreads are descriptive: the report says so.
 
@@ -304,7 +305,7 @@ Recorded at run start in `results.json` and copied into `benchmark.json`:
 
 - `agent`, `skill`, `requested_model`; the agent CLI versions and run models (the distinct values reported by the trials)
 - `grader_model_requested`, and the grader models and CLI versions reported by the grader calls
-- `git_commit` (`git rev-parse HEAD`) and `git_dirty` (`git status --porcelain` is nonempty; eval outputs are gitignored), or `null` outside a git repo
+- `git_commit` (`git rev-parse HEAD`) and `git_dirty` (`git status --porcelain` is nonempty; eval outputs are gitignored; git runs without the user's config, except their global ignore file), or `null` outside a git repo
 - `skill_sha256`: SHA-256 over the sorted relative paths and bytes of `skills/<skill>/`, excluding `__pycache__`
 - `evals_sha256`: SHA-256 of `evals/<skill>/evals.json`, which holds the cases and the rubric
 - `grader_prompt_sha256` (§4.4)

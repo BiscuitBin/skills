@@ -16,7 +16,7 @@ from dataclasses import dataclass, replace
 from string import Template
 from typing import TYPE_CHECKING, Any
 
-from skills_tooling.evals import workspace
+from skills_tooling.evals import results, workspace
 from skills_tooling.evals.adapter import RawRun
 from skills_tooling.evals.claude_code import BUDGET_USD, ClaudeCode, parse_stream
 
@@ -70,6 +70,7 @@ FRAMING = {
     "file_truncated": Template("### $name (truncated to $shown of $size bytes)\n\n$text"),
     "symlink": Template("### $name (symlink, not followed)"),
     "not_utf8": Template("### $name (not UTF-8, $size bytes; not shown)"),
+    "unreadable": Template("### $name (unreadable, not shown)"),
     "files_left_out": Template("(the total cap was reached; files not shown: $count)"),
     "no_files": Template("No files were written."),
     "truncated": Template("$text\n(truncated to $shown of $size bytes)"),
@@ -200,7 +201,7 @@ def blinded_material(
     """The final message and every file written, redacted the same way in both arms.
 
     .git and the skills_dir tree (only the skill arm has one) are left out.
-    Symlinks are listed, never followed.
+    Symlinks are listed, never followed, and so is anything the agent left unreadable.
     """
 
     def scrub(text: str) -> str:
@@ -228,8 +229,9 @@ def _file_entry(path: Path, name: str, scrub: Callable[[str], str], room: int) -
     """One output file's section in at most room bytes; None if not even its heading fits."""
     if path.is_symlink():
         entry = FRAMING["symlink"].substitute(name=name)
+    elif (data := _read(path)) is None:
+        entry = FRAMING["unreadable"].substitute(name=name)
     else:
-        data = path.read_bytes()
         try:
             text = scrub(data.decode())
         except UnicodeDecodeError:
@@ -250,6 +252,18 @@ def _file_entry(path: Path, name: str, scrub: Callable[[str], str], room: int) -
                     name=name, shown=_size(shown), size=size, text=shown
                 )
     return entry if _size(entry) <= room else None
+
+
+def _read(path: Path) -> bytes | None:
+    """The file's bytes, or None if it cannot be read.
+
+    The agent can lock its own output, and _written passes on a directory it
+    could not list: neither may make the trial a grader_error.
+    """
+    try:
+        return path.read_bytes()
+    except OSError:
+        return None
 
 
 def _size(text: str) -> int:
@@ -309,7 +323,10 @@ def transcript_material(trace: Trace, *, trial_root: Path, skills_dir: str, skil
 
 
 def _written(directory: Path, excluded: set[Path]) -> list[Path]:
-    """Regular files and symlinks under directory, sorted, without entering a symlink."""
+    """Regular files and symlinks under directory, sorted, without entering a symlink.
+
+    A subdirectory that cannot be listed is returned itself, to be shown as unreadable.
+    """
     found: list[Path] = []
     for entry in directory.iterdir():
         if entry in excluded:
@@ -318,7 +335,10 @@ def _written(directory: Path, excluded: set[Path]) -> list[Path]:
         if entry.is_symlink() or entry.is_file():
             found.append(entry)
         elif entry.is_dir():
-            found += _written(entry, excluded)
+            try:
+                found += _written(entry, excluded)
+            except OSError:
+                found.append(entry)
     return sorted(found, key=lambda path: path.relative_to(directory).as_posix())
 
 
@@ -489,11 +509,14 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
     skills_dir: str,
     skill_dir: Path,
     rng: random.Random | None = None,
+    run_secrets: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Grade one trial's expectations: the grading.json content. Never raises for grader failures.
 
     Blinded expectations are judged from the final message and output files;
-    needs_transcript ones from the normalised trace, in a second call.
+    needs_transcript ones from the normalised trace, in a second call. Each
+    material is scrubbed of run_secrets once it is built: redaction joins the
+    text on either side of a path it removes, which can rebuild a split secret.
     """
     started = time.monotonic()
     draw = rng or secrets.SystemRandom()
@@ -517,7 +540,7 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
                         trace, trial_root=trial.root, skills_dir=skills_dir, skill=skill
                     )
                 )
-                groups.append((indices, material))
+                groups.append((indices, results.scrub(material, run_secrets)))
     except OSError as error:
         reason = f"could not read the trial's files: {error}"
         outcomes.append(_Outcome("grader_error", reason, called=False))

@@ -12,8 +12,10 @@ import pytest
 from skills_tooling.evals import workspace
 from skills_tooling.evals.codex import Codex, pinned_executable
 from skills_tooling.evals.contamination import NeverAppear, check
+from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import run_suite
 from tests.evals.fake_openai import message, serve, shell
+from tests.evals.test_grader import fake_grader
 from tests.evals.test_runner import CASES, COW, fake_root, settings
 
 if TYPE_CHECKING:
@@ -275,6 +277,32 @@ def test_a_run_records_the_version_and_model_and_never_the_key(tmp_path: Path) -
     # The trial's home, with its auth.json, is gone; only the workspace is kept.
     kept = root / ".eval-workspaces/test-run" / trial["case"] / "skill-1"
     assert [p.name for p in kept.iterdir()] == ["workspace"]
+
+
+def test_a_graded_codex_run_records_the_graders_credential_too(tmp_path: Path) -> None:
+    # The grader is Claude for every agent, so a Codex run also reads its token.
+    root = fake_root(tmp_path, [{**CASES[2], "expectations": ["A cow appears."]}])
+    fake = fake_grader(tmp_path / "grader")
+    grader = GraderSettings(
+        executable=fake.executable,
+        model="claude-opus-5-5",
+        credentials={"CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-fake-codex-grader"},
+    )
+    with serve([message(f"```text\n{COW}```")], api_key=KEY) as server:
+        adapter = Codex(pinned_executable(ROOT), api_base_url=server.url)
+        run_suite(
+            settings(
+                root,
+                server.url,
+                adapter=adapter,
+                model=adapter.default_model,
+                credentials={"auth.json": AUTH},
+                grader=grader,
+            )
+        )
+    assert len(fake.prompts()) == 1
+    data = json.loads((root / "eval-results/test-run/results.json").read_text())
+    assert data["credential_env"] == ["CODEX_HOME", "CLAUDE_CODE_OAUTH_TOKEN"]
 
 
 def test_a_token_refreshed_mid_run_is_scrubbed_and_swept(
