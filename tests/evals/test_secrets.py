@@ -41,6 +41,7 @@ def test_a_fake_token_reaches_the_api_but_not_the_results(tmp_path: Path) -> Non
     assert server.requests[0].headers["Authorization"] == f"Bearer {SECRET}"
     written = [p for p in (root / "eval-results").rglob("*") if p.is_file()]
     assert {p.relative_to(root / "eval-results/test-run").as_posix() for p in written} == {
+        "benchmark.json",
         "results.json",
         "transcripts/trigger-moo/skill-1.jsonl",
     }

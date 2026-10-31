@@ -11,6 +11,7 @@ from skills_tooling.evals.cases import CaseError, load_suite, validate_all
 from skills_tooling.evals.claude_code import BUDGET_USD, ClaudeCode
 from skills_tooling.evals.codex import Codex, pinned_executable
 from skills_tooling.evals.contamination import default_never_appear
+from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import (
     RunSettings,
     UsageError,
@@ -22,6 +23,7 @@ from skills_tooling.evals.runner import (
 
 if TYPE_CHECKING:
     from skills_tooling.evals.adapter import Adapter
+    from skills_tooling.evals.cases import Case
 
 USAGE = 2
 GRADER_MODEL = "claude-opus-5-5"
@@ -44,6 +46,19 @@ def adapter_for(agent: str, root: Path) -> Adapter:
     return ClaudeCode(root / "node_modules/.bin/claude")
 
 
+def describe(args: argparse.Namespace, cases: list[Case]) -> str:
+    return describe_plan(
+        args.skill,
+        args.agent,
+        cases,
+        trials=args.trials,
+        baseline=args.baseline,
+        grader_model=args.grader_model,
+        # Only Claude Code takes a per-call budget.
+        agent_budget_usd=float(BUDGET_USD) if args.agent == "claude" else None,
+    )
+
+
 def plan(args: argparse.Namespace) -> int:
     """Print the calls a run would make. Reads no credential and writes nothing."""
     root: Path = args.root.resolve()
@@ -53,19 +68,26 @@ def plan(args: argparse.Namespace) -> int:
     except (CaseError, UsageError, FileNotFoundError) as error:
         print(f"eval: {error}", file=sys.stderr)
         return USAGE
-    print(
-        describe_plan(
-            args.skill,
-            args.agent,
-            cases,
-            trials=args.trials,
-            baseline=args.baseline,
-            grader_model=args.grader_model,
-            # Only Claude Code takes a per-call budget.
-            agent_budget_usd=float(BUDGET_USD) if args.agent == "claude" else None,
-        )
-    )
+    print(describe(args, cases))
     return 0
+
+
+def grader_settings(
+    args: argparse.Namespace, root: Path, cases: list[Case]
+) -> GraderSettings | None:
+    """The grader, when a selected case has expectations; raises CredentialError without its token.
+
+    The grader is always Claude, so a Codex run reads CLAUDE_CODE_OAUTH_TOKEN too.
+    """
+    if not any(case.expectations for case in cases):
+        return None
+    claude = ClaudeCode(root / "node_modules/.bin/claude")
+    try:
+        credentials = claude.read_credentials(os.environ)
+    except CredentialError as error:
+        msg = f"the grader runs on Claude Code for every agent: {error}"
+        raise CredentialError(msg) from error
+    return GraderSettings(claude.executable, args.grader_model, credentials)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -81,16 +103,16 @@ def run(args: argparse.Namespace) -> int:
         return USAGE
     try:
         suite = load_suite(root, args.skill)
-        select_cases(suite.cases, tuple(args.case))
-    except (CaseError, UsageError, FileNotFoundError) as error:
+        cases = select_cases(suite.cases, tuple(args.case))
+        grader = grader_settings(args, root, cases)
+    except (CaseError, UsageError, FileNotFoundError, CredentialError) as error:
         print(f"eval: {error}", file=sys.stderr)
         return USAGE
-    if not adapter.executable.is_file():
-        print(
-            f"eval: the pinned CLI {adapter.executable} is missing; run just initialize.",
-            file=sys.stderr,
-        )
-        return USAGE
+    pinned = [adapter.executable] + ([grader.executable] if grader is not None else [])
+    for path in pinned:
+        if not path.is_file():
+            print(f"eval: the pinned CLI {path} is missing; run just initialize.", file=sys.stderr)
+            return USAGE
     settings = RunSettings(
         root=root,
         skill=args.skill,
@@ -103,7 +125,9 @@ def run(args: argparse.Namespace) -> int:
         never=default_never_appear(root, args.skill),
         trials=args.trials,
         baseline=args.baseline,
+        grader=grader,
     )
+    print(describe(args, cases))
     return run_suite(settings)
 
 

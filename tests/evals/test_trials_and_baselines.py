@@ -5,9 +5,11 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from skills_tooling.evals.claude_code import ClaudeCode
+from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import run_suite
 from tests.evals.fake_anthropic import Turn, serve, text, tool
-from tests.evals.test_runner import ROOT, fake_root, results, run_cli, settings
+from tests.evals.test_grader import FakeGrader, fake_grader
+from tests.evals.test_runner import ROOT, TOKEN, fake_root, results, run_cli, settings
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -144,3 +146,129 @@ def test_the_dry_run_prints_the_plan_without_a_token_and_writes_nothing(tmp_path
     assert "spend cap: $9.00" in result.stdout
     assert not (root / "eval-results").exists()
     assert not (root / ".eval-workspaces").exists()
+
+
+GRADED_CASES: list[dict[str, Any]] = [
+    CASES[0],
+    {**CASES[1], "expectations": ["A cow appears.", "The bubble says moo."]},
+]
+PASS_BOTH = {
+    "A cow appears.": {"passed": True, "evidence": "The cow is drawn.", "quote": "(oo)"},
+    "The bubble says moo.": {"passed": True, "evidence": "It says moo.", "quote": "< moo >"},
+}
+
+
+def graded_run(tmp_path: Path, server_url: str, fake: FakeGrader, **overrides: object) -> Any:  # noqa: ANN401
+    grader = GraderSettings(
+        executable=fake.executable,
+        model="claude-opus-5-5",
+        credentials={"CLAUDE_CODE_OAUTH_TOKEN": TOKEN},
+    )
+    return run_suite(
+        settings(fake_root(tmp_path, GRADED_CASES), server_url, grader=grader, **overrides)
+    )
+
+
+def test_graded_trials_write_a_grading_per_trial_and_a_benchmark(tmp_path: Path) -> None:
+    fake = fake_grader(tmp_path / "grader", verdicts=PASS_BOTH)
+    with serve(SCRIPT) as server:
+        exit_code = graded_run(tmp_path, server.url, fake, trials=2, baseline=True)
+    root = tmp_path / "repo"
+    data = results(root)
+    assert exit_code == 0, json.dumps(data, indent=2)
+    # Two trials in each arm of the graded case; the trigger case is never graded.
+    assert len(fake.calls()) == 4
+    assert data["grader_model_requested"] == "claude-opus-5-5"
+    for trial in data["trials"]:
+        if trial["case"] == "no-trigger-facts":
+            assert (trial["grading"], trial["graded"]) == (None, None)
+            continue
+        key = f"{trial['arm']}-{trial['trial']}"
+        assert trial["grading"] == f"eval-results/test-run/grading/behaviour-moo/{key}.json"
+        assert trial["graded"] == {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "total": 2,
+            "pass_rate": 1.0,
+            "arm_disclosed": False,
+        }
+        grading = json.loads((root / trial["grading"]).read_text())
+        assert [(e["text"], e["passed"], e["blinded"]) for e in grading["expectations"]] == [
+            ("A cow appears.", True, True),
+            ("The bubble says moo.", True, True),
+        ]
+    provenance = data["provenance"]
+    assert len(provenance["skill_sha256"]) == len(provenance["evals_sha256"]) == 64
+    assert len(provenance["grader_prompt_sha256"]) == 64
+    benchmark = json.loads((root / "eval-results/test-run/benchmark.json").read_text())
+    case = benchmark["agents"]["claude"]["cases"]["behaviour-moo"]
+    assert case["delta"]["graded_pass_rate"] == {"value": 0.0, "n_skill": 2, "n_baseline": 2}
+    assert case["skill"]["metrics"]["trigger_accuracy"]["mean"] == 1.0
+    assert case["baseline"]["metrics"]["trigger_accuracy"] == "not_applicable"
+    assert benchmark["provenance"]["grader_models"] == ["claude-opus-5-5"]
+    written = [p for p in (root / "eval-results").rglob("*") if p.is_file()]
+    assert not [p for p in written if TOKEN in p.read_text()]
+
+
+def test_a_failed_expectation_fails_a_skill_trial_but_not_a_baseline_trial(
+    tmp_path: Path,
+) -> None:
+    verdicts = {**PASS_BOTH, "The bubble says moo.": {"passed": False, "evidence": "No."}}
+    fake = fake_grader(tmp_path / "grader", verdicts=verdicts)
+    with serve(SCRIPT) as server:
+        assert (
+            graded_run(tmp_path, server.url, fake, baseline=True, case_ids=("behaviour-moo",)) == 1
+        )
+    by_arm = {t["arm"]: t for t in results(tmp_path / "repo")["trials"]}
+    assert by_arm["skill"]["graded"]["failed"] == 1
+    assert by_arm["skill"]["passed"] is False
+    assert (by_arm["baseline"]["passed"], by_arm["baseline"]["valid"]) == (None, True)
+
+
+def test_a_grader_error_invalidates_a_baseline_trial(tmp_path: Path) -> None:
+    fake = fake_grader(tmp_path / "grader", mode="fail")
+    with serve(SCRIPT) as server:
+        assert (
+            graded_run(tmp_path, server.url, fake, baseline=True, case_ids=("behaviour-moo",)) == 1
+        )
+    by_arm = {t["arm"]: t for t in results(tmp_path / "repo")["trials"]}
+    assert by_arm["baseline"]["graded"]["status"] == "grader_error"
+    assert by_arm["baseline"]["valid"] is False
+    assert by_arm["skill"]["passed"] is False
+
+
+def test_the_dry_run_plans_the_repos_cowsay_suite_with_its_grader_calls() -> None:
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CODE_OAUTH_TOKEN"}
+    result = run_cli(
+        "cowsay",
+        "--agent",
+        "claude",
+        "--trials",
+        "3",
+        "--baseline",
+        "--dry-run",
+        "--root",
+        str(ROOT),
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    # Nine cases in the skill arm; the two behaviour cases in the baseline; each graded trial once.
+    assert "skill arm: 27 agent calls" in result.stdout
+    assert "baseline arm: 6 agent calls" in result.stdout
+    assert "grader calls: at most 12 (claude-opus-5-5)" in result.stdout
+    assert "spend cap: $45.00" in result.stdout
+
+
+def test_a_codex_run_with_expectations_needs_the_graders_token(tmp_path: Path) -> None:
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    (home / "auth.json").write_text('{"auth_mode": "apikey", "OPENAI_API_KEY": "sk-fake"}')
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CODE_OAUTH_TOKEN"}
+    env["CODEX_HOME"] = str(home)
+    root = fake_root(tmp_path, GRADED_CASES)
+    result = run_cli("cowsay", "--agent", "codex", "--root", str(root), env=env)
+    assert result.returncode == 2
+    assert "CLAUDE_CODE_OAUTH_TOKEN" in result.stderr
+    assert "grader" in result.stderr
+    assert not (root / "eval-results").exists()

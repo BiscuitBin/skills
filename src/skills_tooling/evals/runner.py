@@ -6,6 +6,7 @@ workspace and homes, the preflight, the headless run, the contamination check,
 then scoring. A trial with an infrastructure error is recorded but never scored.
 """
 
+import json
 import secrets
 import shutil
 from dataclasses import dataclass
@@ -13,9 +14,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from skills_tooling.evals import results, workspace
+from skills_tooling.evals import benchmark, grader, results, workspace
 from skills_tooling.evals.assertions import evaluate
 from skills_tooling.evals.cases import load_suite
+from skills_tooling.evals.claude_code import BUDGET_USD
 from skills_tooling.evals.contamination import check, preflight
 
 if TYPE_CHECKING:
@@ -24,10 +26,11 @@ if TYPE_CHECKING:
     from skills_tooling.evals.adapter import Adapter, Trace, TrialPaths
     from skills_tooling.evals.cases import Assertion, Case
     from skills_tooling.evals.contamination import NeverAppear
+    from skills_tooling.evals.grader import GraderSettings
 
 Arm = Literal["skill", "baseline"]
-# The grader's --max-budget-usd, per call.
-GRADER_BUDGET_USD = 1.0
+# The grader runs on Claude Code, with its --max-budget-usd per call.
+GRADER_BUDGET_USD = float(BUDGET_USD)
 
 
 class UsageError(Exception):
@@ -48,6 +51,8 @@ class RunSettings:
     system_root: Path = Path("/")
     trials: int = 1
     baseline: bool = False
+    # Grades rubric expectations; None only when no selected case has any.
+    grader: GraderSettings | None = None
 
     @property
     def results_dir(self) -> Path:
@@ -59,7 +64,11 @@ class RunSettings:
 
     @property
     def secrets(self) -> list[str]:
-        return self.adapter.secrets(self.credentials)
+        found = self.adapter.secrets(self.credentials)
+        if self.grader is not None:
+            # A Codex run's grader holds a second credential.
+            found += [v for v in self.grader.credentials.values() if v and v not in found]
+        return found
 
 
 def new_run_id() -> str:
@@ -367,9 +376,10 @@ def run_trial(
         "graded": None,
     }
     trial: TrialPaths | None = None
+    trace: Trace | None = None
     try:
         trial = workspace.create_trial(settings.workspaces_dir, settings.run_id, planned.key)
-        scored, _trace = _attempt(settings, planned, trial, secrets, credentials)
+        scored, trace = _attempt(settings, planned, trial, secrets, credentials)
         record |= scored
     except Exception as error:  # noqa: BLE001 -- one trial's failure must not lose the run
         if trial is not None:
@@ -398,15 +408,83 @@ def run_trial(
                 record |= _not_scored(case, planned.arm, unreadable, [])
                 record["transcript"] = None
         record["finished_at"] = _now()
-    record["valid"] = _scorable(record)
+    # After the sweep, so a workspace that held a credential never reaches the grader.
+    if trial is not None and trace is not None and case.expectations and _scorable(record):
+        record |= _grade(settings, planned, trace, trial, secrets)
+    graded = record["graded"]
+    record["valid"] = _scorable(record) and (graded is None or graded["status"] != "grader_error")
     record["passed"] = (
         record["valid"]
         and record["trigger"]["matched"] is True
         and all(a["result"] == "passed" for a in record["assertions"])
+        and (graded is None or (graded["status"] == "ok" and graded["failed"] == 0))
         if planned.arm == "skill"
         else None
     )
     return record
+
+
+def _grade(
+    settings: RunSettings,
+    planned: Planned,
+    trace: Trace,
+    trial: TrialPaths,
+    secrets: list[str],
+) -> dict[str, Any]:
+    """Grade the trial's expectations and write its grading file. Never raises."""
+    total = len(planned.case.expectations)
+    no_grading = {
+        "status": "grader_error",
+        "passed": 0,
+        "failed": 0,
+        "total": total,
+        "pass_rate": None,
+        "arm_disclosed": False,
+    }
+    if settings.grader is None:
+        return {"grading": None, "graded": no_grading}
+    try:
+        grading = grader.grade(
+            settings.grader,
+            case=planned.case,
+            trace=trace,
+            trial=trial,
+            workspaces_dir=settings.workspaces_dir,
+            run_id=settings.run_id,
+            key=planned.key,
+            skill=settings.skill,
+            skills_dir=settings.adapter.skills_dir,
+            skill_dir=settings.root / "skills" / settings.skill,
+        )
+    except Exception:  # noqa: BLE001 -- a harness bug in grading must not lose the run
+        # No grading file: the benchmark counts the trial as a grader error.
+        return {"grading": None, "graded": no_grading}
+    path = settings.results_dir / "grading" / f"{planned.key}.json"
+    results.write_json(path, grading, secrets)
+    summary = grading["summary"]
+    return {
+        "grading": path.relative_to(settings.root).as_posix(),
+        "graded": {
+            "status": grading["grader"]["status"],
+            "passed": summary["passed"],
+            "failed": summary["failed"],
+            "total": summary["total"],
+            "pass_rate": summary["pass_rate"],
+            "arm_disclosed": grading["arm_disclosed"],
+        },
+    }
+
+
+def _load_gradings(root: Path, trials: list[dict[str, Any]]) -> dict[str, Any]:
+    """Each trial's grading file, read back; None for one that is missing or unreadable."""
+    gradings: dict[str, Any] = {}
+    for trial in trials:
+        if (path := trial["grading"]) is not None:
+            try:
+                gradings[path] = json.loads((root / path).read_text())
+            except OSError, ValueError:
+                gradings[path] = None
+    return gradings
 
 
 def run_suite(settings: RunSettings) -> int:
@@ -416,6 +494,11 @@ def run_suite(settings: RunSettings) -> int:
     started = _now()
     secrets = list(settings.secrets)
     credentials = dict(settings.credentials)
+    # Recorded before any trial runs, so it describes what the run started from.
+    provenance = {
+        **benchmark.provenance(settings.root, settings.skill),
+        "grader_prompt_sha256": grader.prompt_sha256(),
+    }
     planned = schedule(cases, settings.trials, baseline=settings.baseline)
     trials = [run_trial(settings, p, secrets, credentials) for p in planned]
     passed = all(t["passed"] if t["arm"] == "skill" else t["valid"] for t in trials)
@@ -431,6 +514,11 @@ def run_suite(settings: RunSettings) -> int:
         "passed": passed,
         "trials_per_case": settings.trials,
         "baseline": settings.baseline,
+        "grader_model_requested": (
+            settings.grader.model
+            if settings.grader is not None and any(case.expectations for case in cases)
+            else None
+        ),
         "cases": [
             {
                 "id": case.id,
@@ -444,10 +532,13 @@ def run_suite(settings: RunSettings) -> int:
             for case in cases
         ],
         "skipped_in_baseline": skipped,
+        "provenance": provenance,
         "trials": trials,
     }
     path = settings.results_dir / "results.json"
     results.write_json(path, data, secrets)
+    summary = benchmark.aggregate(data, _load_gradings(settings.root, trials))
+    results.write_json(settings.results_dir / "benchmark.json", summary, secrets)
     try:
         results.verify_clean(settings.results_dir, secrets)
     except results.SecretLeakError as error:
@@ -464,7 +555,9 @@ def run_suite(settings: RunSettings) -> int:
         reason = "" if ok else f": {_why(trial)}"
         # The record holds the agent's own error text, so it is scrubbed like the files.
         print(results.scrub(f"{verdict} {label}{reason}", secrets))
+    print(results.scrub(benchmark.table(summary), secrets))
     print(f"Results: {path.relative_to(settings.root)}")
+    print(f"Benchmark: {(settings.results_dir / 'benchmark.json').relative_to(settings.root)}")
     return 0 if passed else 1
 
 
