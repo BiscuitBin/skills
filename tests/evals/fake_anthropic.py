@@ -103,10 +103,16 @@ def _stream(turn: Turn, model: str, number: int) -> bytes:
 def _script_for(request: dict[str, Any], turns: Script) -> list[Turn]:
     if isinstance(turns, list):
         return turns
+    system = request.get("system", "")
+    if isinstance(system, list):
+        system = "".join(str(b.get("text", "")) for b in system if isinstance(b, dict))
     asked = json.dumps(request.get("messages", [])[:1])
-    for prompt, script in turns.items():
-        if json.dumps(prompt)[1:-1] in asked:
-            return script
+    # The system prompt first: a grader's user prompt quotes the case prompt,
+    # so only its system header tells the two apart.
+    for searched, escaped in ((str(system), False), (asked, True)):
+        for prompt, script in turns.items():
+            if (json.dumps(prompt)[1:-1] if escaped else prompt) in searched:
+                return script
     return [text("No script for this prompt.")]
 
 
@@ -115,7 +121,8 @@ def serve(turns: Script) -> Iterator[FakeAnthropic]:
     """Serve the scripted turns on a free local port until the block exits.
 
     `turns` is one script for every request, or a script per prompt: the first
-    prompt found in the request's first message picks the script.
+    key found in the request's system prompt, else in its first message, picks
+    the script.
     """
     recorded: list[Request] = []
 
