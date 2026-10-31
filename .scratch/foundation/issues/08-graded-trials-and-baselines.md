@@ -11,7 +11,7 @@ Grading output follows skill-creator's shapes, described in the research notes (
 
 **Blocked by:** 05 (Eval harness tracer bullet: cowsay on Claude Code).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Authenticated Claude Code access and access to the configured grader model are required for the live benchmark. The grader defaults to Opus 5.5 (`claude-opus-5-5`) but is configurable; this does not constrain the implementing agent. Cross-model review is also required.
 
@@ -19,31 +19,31 @@ Grading output follows skill-creator's shapes, described in the research notes (
 
 **Trials and baselines:**
 
-- [ ] `just eval` accepts a trial count and a baseline switch. A dry-run mode prints the planned number of agent and grader calls before anything is spent.
-- [ ] A baseline run uses the same isolation as a with-skill run but installs no skill. The contamination check proves no skill was visible apart from the pinned agent's built-in skills, using the same recorded allowlist as the with-skill arm (ticket 05).
+- [x] `just eval` accepts a trial count and a baseline switch. A dry-run mode prints the planned number of agent and grader calls before anything is spent.
+- [x] A baseline run uses the same isolation as a with-skill run but installs no skill. The contamination check proves no skill was visible apart from the pinned agent's built-in skills, using the same recorded allowlist as the with-skill arm (ticket 05).
 
 **Grader:**
 
-- [ ] Cases can carry rubric expectations alongside their deterministic assertions.
-- [ ] The grader writes one grading file per run, shaped like skill-creator's, with each expectation's text, verdict and evidence.
-- [ ] The grader model is configurable and defaults to Opus 5.5 (`claude-opus-5-5`). The model used is recorded with the results.
-- [ ] The grader judges rubric expectations from the run's final message and output files, with skill calls and skill paths removed, so it cannot tell which arm it is grading. Any expectation that needs the full transcript is marked unblinded in the results.
-- [ ] The grader treats graded material as data, not instructions.
+- [x] Cases can carry rubric expectations alongside their deterministic assertions.
+- [x] The grader writes one grading file per run, shaped like skill-creator's, with each expectation's text, verdict and evidence.
+- [x] The grader model is configurable and defaults to Opus 5.5 (`claude-opus-5-5`). The model used is recorded with the results.
+- [x] The grader judges rubric expectations from the run's final message and output files, with skill calls and skill paths removed, so it cannot tell which arm it is grading. Any expectation that needs the full transcript is marked unblinded in the results.
+- [x] The grader treats graded material as data, not instructions.
 
 **Benchmark:**
 
-- [ ] For each agent and case, the benchmark reports:
+- [x] For each agent and case, the benchmark reports:
   - trigger accuracy: the share of trials whose trigger outcome matched the case's expectation
   - deterministic pass rate
   - graded pass rate
   - mean ± stddev across trials
   - the delta between with-skill and baseline, computed over outcome assertions and rubric expectations only. Skill-use assertions (skill triggered, script was run) are reported separately and shown as not applicable for the baseline.
-- [ ] It records the agent CLI versions, the run models, the grader model, the repo commit and whether the tree was dirty, and a content hash of the skill and of its eval cases and rubric.
+- [x] It records the agent CLI versions, the run models, the grader model, the repo commit and whether the tree was dirty, and a content hash of the skill and of its eval cases and rubric.
 
 **Tests and live run:**
 
-- [ ] The aggregation maths and the grader-output parsing are unit-tested against fixtures, including edge cases: one trial, all trials failing, a missing grading file, and a graded output that tells the grader to pass everything. That last one is either rejected by grader-output validation or marked failed. These tests run in `just check` without credentials.
-- [ ] A live run of cowsay on Claude Code (several trials, with baseline) produces a benchmark, summarised in the completion notes. If the outcome delta is not positive, say so and explain why. Do not change cases or rubrics just to get a positive delta.
+- [x] The aggregation maths and the grader-output parsing are unit-tested against fixtures, including edge cases: one trial, all trials failing, a missing grading file, and a graded output that tells the grader to pass everything. That last one is either rejected by grader-output validation or marked failed. These tests run in `just check` without credentials.
+- [x] A live run of cowsay on Claude Code (several trials, with baseline) produces a benchmark, summarised in the completion notes. If the outcome delta is not positive, say so and explain why. Do not change cases or rubrics just to get a positive delta.
 
 ## Review checkpoints
 
@@ -61,7 +61,61 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 
 ### Live run
 
-Pending: the user runs `just eval cowsay --agent claude --trials <N> --baseline` in their own terminal, holding the token. The benchmark summary goes here.
+The user ran `just eval cowsay --agent claude --trials 10 --baseline` in their own terminal, holding the token. The run was `20261031T183632Z-1aef`, from 18:36 to 18:49 UTC on 2026-10-31, and the overall result was `passed: true`.
+
+**Provenance** (`benchmark.json`):
+
+| Field | Value |
+| --- | --- |
+| Commit | 226d7b7 |
+| Dirty | false |
+| Agent CLI | Claude Code 2.1.309 |
+| Run model | `claude-sonnet-5-5` |
+| Grader | `claude-opus-5-5`, requested and reported, through CLI 2.1.309 |
+| `skill_sha256` | `b505fdd6…` |
+| `evals_sha256` | `50a3864a…` |
+| `grader_prompt_sha256` | `85c2b2d6…` |
+
+**Health:**
+
+- There were 110 trials: 90 with the skill and 20 in the baseline.
+- Every trial ended `ok`. None was contaminated and none had a secret found.
+- The 40 gradings had no grader errors, no invalid replies, no rejections and no arm disclosures.
+- The `order` field runs from 0 to 109 and alternates the arms each trial.
+- The `_grader/` directories were removed after grading.
+- A search for `sk-ant-` over `eval-results/<run>/` and `.eval-workspaces/<run>/`, binary files included, found nothing.
+- The 7 trigger-only cases were skipped in the baseline, as designed. So the delta rests on the 2 behaviour cases.
+
+**Results**, as means over 10 trials per arm:
+
+| Case | Arm | Trigger | Skill use | Deterministic | Graded | Outcome |
+| --- | --- | --- | --- | --- | --- | --- |
+| behaviour-ship-it | skill | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| behaviour-ship-it | baseline | n/a | n/a | 0.40 ± 0.21 | 1.00 ± 0.00 | 0.76 ± 0.08 |
+| behaviour-wrapped-text | skill | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| behaviour-wrapped-text | baseline | n/a | n/a | 0.05 ± 0.16 | 0.50 ± 0.45 | 0.32 ± 0.30 |
+
+- Trigger accuracy was 1.00 on all 9 cases (90 of 90), so no trigger was flaky.
+- Pooled over both cases, the deltas (skill − baseline) are:
+  - deterministic: +0.78
+  - graded: +0.25
+  - outcome: +0.46
+
+**What the delta does and doesn't show.** The delta is positive, but it is smaller than the deterministic number suggests, and it depends on the case:
+
+- **The deterministic delta partly measures use of the script, not quality.** `final_contains_script_output` requires the exact bytes that the skill's script produces. A baseline cow drawn by hand can look right and still fail it. That check failed in all 20 baseline trials. That accounts for most of the deterministic delta.
+- **On `behaviour-ship-it`, the rubric doesn't discriminate.** The graded delta is 0.00. All 10 baseline trials found no `cowsay` binary, drew the cow by hand, and passed all three expectations. The benchmark flags all three expectations as non-discriminating. For a short single-line message, the skill adds nothing a grader can see.
+- **On `behaviour-wrapped-text`, the skill helps.** The graded delta is +0.50. In 4 of 10 baseline trials (6, 7, 9 and 10), the agent stopped to ask whether to install `cowsay` and drew nothing, so those trials scored 0/3. Of the 6 baseline trials that drew a cow, 4 failed at least one expectation. They either didn't wrap the bubble or split a word. The skill arm scored 3/3 in every trial.
+- **The spreads are descriptive.** There is no significance test, and baseline variance on wrapped-text is high (± 0.45).
+- **The rubric was frozen before the run and has not been changed since.** The non-discriminating `behaviour-ship-it` expectations are a finding for whoever next edits the cases, not something to fix here.
+- **Blinding held, but only partly.** No grading disclosed the arm. However, several baseline grader notes say the agent "reported that cowsay was not installed". The outcome itself reveals the arm, which is the residual risk ADR 0012 records.
+
+**Writes outside the project.** Two baseline trials of `behaviour-wrapped-text` installed the PyPI `cowsay` package into the host's `/tmp`:
+
+- trial 1: `pip3 install --target /tmp/cowsay-pkg`
+- trial 5: `python3 -m venv /tmp/cowvenv`
+
+The Claude Code adapter runs with `--permission-mode dontAsk --allowedTools Skill Read Bash` (ticket 05), so its Bash can write anywhere the user can. `TMPDIR` points into the trial, but a literal `/tmp` path bypasses it. Trial 8 used `mktemp -d` and stayed inside the trial. Both directories are still on the host. No later trial in this run used them, but a later baseline trial could find them. This is recorded per AGENTS.md. Confining the adapter's Bash is a follow-up below. Before this run, nothing had triggered it: only the baseline arm, with no skill installed, goes looking for a tool to install.
 
 ### Toolchain
 
@@ -128,3 +182,5 @@ Findings: `ai_tmp/code-review-08.md`. Each was checked by two independent verifi
 - Some tests assert on `Verdict.claimed` or on CPython's JSON error text.
 - `redact()` still handles the old keyed `_grader/<case>/<arm>-<n>` path shape, which no longer occurs.
 - If two grader calls ever report different models, note both in `grader.notes` (implementation review #4, optional).
+- Confine the Claude Code adapter's Bash to the trial, for example with Claude Code's sandbox settings. In the live run, two baseline trials wrote to the host's `/tmp` (see Live run).
+- `behaviour-ship-it`'s three expectations didn't discriminate between the arms in the live run. A future case edit could add one that does, without tuning it to this run's delta.
