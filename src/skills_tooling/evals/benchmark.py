@@ -82,6 +82,8 @@ def _well_formed(grading: object) -> bool:
     return (
         isinstance(grader, dict)
         and isinstance(grader.get("status"), str)
+        and isinstance(grader.get("model"), str)
+        and isinstance(grader.get("cli_version"), str)
         and isinstance(grading.get("arm_disclosed"), bool)
         and isinstance(expectations, list)
         and all(

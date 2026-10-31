@@ -226,6 +226,71 @@ def test_a_failed_expectation_fails_a_skill_trial_but_not_a_baseline_trial(
     assert (by_arm["baseline"]["passed"], by_arm["baseline"]["valid"]) == (None, True)
 
 
+def test_a_token_in_the_trace_never_reaches_the_grader(tmp_path: Path) -> None:
+    # The agent echoes the run's token in a command and in its final message: the
+    # transcript call sees both, the blinded call the final message.
+    cases = [
+        {
+            **CASES[1],
+            "expectations": [
+                "A cow appears.",
+                {"text": "The agent ran echo.", "needs_transcript": True},
+            ],
+        }
+    ]
+    script = {
+        MOO: [
+            tool("Skill", {"skill": "cowsay"}, "toolu_1"),
+            tool("Bash", {"command": f"echo {TOKEN}", "description": "Echo"}, "toolu_2"),
+            text(f"Your token is {TOKEN}.\n{COW}"),
+        ]
+    }
+    fake = fake_grader(tmp_path / "grader", verdicts=PASS_BOTH)
+    grader = GraderSettings(
+        executable=fake.executable,
+        model="claude-opus-5-5",
+        credentials={"CLAUDE_CODE_OAUTH_TOKEN": TOKEN},
+    )
+    root = fake_root(tmp_path, cases)
+    with serve(script) as server:
+        run_suite(settings(root, server.url, grader=grader))
+    prompts = fake.prompts()
+    assert len(prompts) == 2
+    for prompt in prompts:
+        assert TOKEN not in prompt
+        assert "[REDACTED]" in prompt
+    written = [p for p in (root / "eval-results").rglob("*") if p.is_file()]
+    assert not [p for p in written if TOKEN in p.read_text()]
+
+
+def test_a_grader_reply_utf_8_cannot_encode_is_written_with_replacements(tmp_path: Path) -> None:
+    fake = fake_grader(tmp_path / "grader", verdicts=PASS_BOTH, notes="\ud800")
+    with serve(SCRIPT) as server:
+        exit_code = graded_run(tmp_path, server.url, fake, case_ids=("behaviour-moo",))
+    root = tmp_path / "repo"
+    data = results(root)
+    assert exit_code == 0, json.dumps(data, indent=2)
+    grading = json.loads((root / data["trials"][0]["grading"]).read_text(encoding="utf-8"))
+    assert grading["grader"]["notes"] == "�"
+    assert (root / "eval-results/test-run/benchmark.json").exists()
+
+
+def test_a_grading_that_cannot_be_written_is_a_grader_error_not_a_lost_run(
+    tmp_path: Path,
+) -> None:
+    fake = fake_grader(tmp_path / "grader", verdicts=PASS_BOTH)
+    blocker = tmp_path / "repo/eval-results/test-run/grading"
+    blocker.parent.mkdir(parents=True)
+    blocker.write_text("not a directory")
+    with serve(SCRIPT) as server:
+        exit_code = graded_run(tmp_path, server.url, fake, case_ids=("behaviour-moo",))
+    data = results(tmp_path / "repo")
+    assert exit_code == 1
+    (trial,) = data["trials"]
+    assert (trial["grading"], trial["graded"]["status"]) == (None, "grader_error")
+    assert (tmp_path / "repo/eval-results/test-run/benchmark.json").exists()
+
+
 def test_a_grader_error_invalidates_a_baseline_trial(tmp_path: Path) -> None:
     fake = fake_grader(tmp_path / "grader", mode="fail")
     with serve(SCRIPT) as server:

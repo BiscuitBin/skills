@@ -9,7 +9,8 @@ then scoring. A trial with an infrastructure error is recorded but never scored.
 import json
 import secrets
 import shutil
-from dataclasses import dataclass
+from contextlib import suppress
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -408,9 +409,10 @@ def run_trial(
                 record |= _not_scored(case, planned.arm, unreadable, [])
                 record["transcript"] = None
         record["finished_at"] = _now()
-    # After the sweep, so a workspace that held a credential never reaches the grader.
+    # After the sweep, so a workspace that held a credential never reaches the
+    # grader, and with the trace scrubbed: the sweep never sees the transcript.
     if trial is not None and trace is not None and case.expectations and _scorable(record):
-        record |= _grade(settings, planned, trace, trial, secrets)
+        record |= _grade(settings, planned, _scrubbed(trace, secrets), trial, secrets)
     graded = record["graded"]
     record["valid"] = _scorable(record) and (graded is None or graded["status"] != "grader_error")
     record["passed"] = (
@@ -422,6 +424,22 @@ def run_trial(
         else None
     )
     return record
+
+
+def _scrubbed(trace: Trace, secrets: list[str]) -> Trace:
+    """The trace with the run's secrets removed from everything the grader may see."""
+    return replace(
+        trace,
+        final_message=results.scrub(trace.final_message, secrets),
+        commands=[
+            replace(
+                command,
+                command=results.scrub(command.command, secrets),
+                output=results.scrub(command.output, secrets),
+            )
+            for command in trace.commands
+        ],
+    )
 
 
 def _grade(
@@ -460,7 +478,14 @@ def _grade(
         # No grading file: the benchmark counts the trial as a grader error.
         return {"grading": None, "graded": no_grading}
     path = settings.results_dir / "grading" / f"{planned.key}.json"
-    results.write_json(path, grading, secrets)
+    try:
+        results.write_json(path, grading, secrets)
+    except OSError, ValueError:
+        # No grading file, as above. A partial one is removed if it can be;
+        # either way the trial no longer points at it.
+        with suppress(OSError):
+            path.unlink(missing_ok=True)
+        return {"grading": None, "graded": no_grading}
     summary = grading["summary"]
     return {
         "grading": path.relative_to(settings.root).as_posix(),

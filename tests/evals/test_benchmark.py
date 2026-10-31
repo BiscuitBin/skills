@@ -223,6 +223,18 @@ def no_status(grading: dict[str, Any]) -> None:
     del grading["grader"]["status"]
 
 
+def no_grader_model(grading: dict[str, Any]) -> None:
+    del grading["grader"]["model"]
+
+
+def no_grader_cli_version(grading: dict[str, Any]) -> None:
+    del grading["grader"]["cli_version"]
+
+
+def unhashable_grader_model(grading: dict[str, Any]) -> None:
+    grading["grader"]["model"] = ["claude-opus-5-5"]
+
+
 def no_grader(grading: dict[str, Any]) -> None:
     del grading["grader"]
 
@@ -257,6 +269,9 @@ def not_an_object(grading: dict[str, Any]) -> None:
         renamed_expectation,
         extra_expectation,
         no_status,
+        no_grader_model,
+        no_grader_cli_version,
+        unhashable_grader_model,
         no_grader,
         no_expectations_key,
         untexted_expectation,

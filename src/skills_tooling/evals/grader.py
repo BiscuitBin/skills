@@ -361,6 +361,7 @@ def _parse(reply: str, sent_ids: Sequence[str], material: str) -> tuple[dict[str
     if not isinstance(notes, str):
         msg = "notes must be a string"
         raise InvalidReply(msg)
+    notes = UNSENDABLE.sub("\ufffd", notes)
     items = data["expectations"]
     if not isinstance(items, list):
         msg = "expectations must be a list"
@@ -422,7 +423,7 @@ def _item(item: object, where: str) -> tuple[str, bool, str, str | None]:
     if quote is not None and not isinstance(quote, str):
         msg = f"{where}: quote must be a string or null"
         raise InvalidReply(msg)
-    return item_id, passed, evidence, quote
+    return item_id, passed, UNSENDABLE.sub("\ufffd", evidence), quote
 
 
 def _check_ids(got: list[str], sent: Sequence[str]) -> None:

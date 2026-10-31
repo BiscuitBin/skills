@@ -147,6 +147,16 @@ def test_a_reply_json_cannot_read_safely_is_invalid(text: str, reason: str) -> N
     assert raised.value.reason.startswith(reason), raised.value.reason
 
 
+def test_a_lone_surrogate_in_a_reply_is_replaced_so_the_grading_can_be_written() -> None:
+    # JSON's \ud800 escape decodes to a character UTF-8 has no encoding for.
+    reply = (
+        r'{"expectations": [{"id": "e1", "passed": false, "evidence": "\ud800"}, ' + FAILS + "]}"
+    )
+    verdicts = parse_grading(reply, ["e1", "e2"], MATERIAL)
+    assert verdicts["e1"].evidence == "�"
+    json.dumps(verdicts["e1"].evidence, ensure_ascii=False).encode()
+
+
 @pytest.mark.parametrize(
     "name",
     [
