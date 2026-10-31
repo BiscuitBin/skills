@@ -101,7 +101,12 @@ def test_a_passing_run_records_every_trial_and_exits_zero(tmp_path: Path) -> Non
         "claude-sonnet-5-5",
         "ok",
     )
-    assert trial["trigger"] == {"expected": True, "actual": True, "matched": True}
+    assert trial["trigger"] == {
+        "expected": True,
+        "actual": True,
+        "matched": True,
+        "applicable": True,
+    }
     assert trial["contamination"]["passed"] is True
     assert [(a["type"], a["result"]) for a in trial["assertions"]] == [
         ("skill_triggered", "passed"),
@@ -113,11 +118,12 @@ def test_a_passing_run_records_every_trial_and_exits_zero(tmp_path: Path) -> Non
         "expected": False,
         "actual": False,
         "matched": True,
+        "applicable": True,
     }
     transcript = root / trial["transcript"]
     assert transcript.is_file()
     assert transcript.is_relative_to(root / "eval-results/test-run/transcripts")
-    kept = root / ".eval-workspaces/test-run/behaviour-ship-it"
+    kept = root / ".eval-workspaces/test-run/behaviour-ship-it/skill-1"
     assert [p.name for p in kept.iterdir()] == ["workspace"]
 
 
@@ -128,7 +134,12 @@ def test_a_wrong_trigger_fails_the_run(tmp_path: Path) -> None:
     with serve(script) as server:
         assert run_suite(settings(root, server.url, case_ids=("no-trigger-facts",))) == 1
     [trial] = results(root)["trials"]
-    assert trial["trigger"] == {"expected": False, "actual": True, "matched": False}
+    assert trial["trigger"] == {
+        "expected": False,
+        "actual": True,
+        "matched": False,
+        "applicable": True,
+    }
 
 
 def test_an_infrastructure_error_is_not_scored(tmp_path: Path) -> None:
@@ -227,9 +238,9 @@ def test_a_harness_error_in_one_trial_is_recorded_and_the_rest_still_run(tmp_pat
     assert by_case["trigger-moo"]["status"] == "infra_error"
     assert "simulated harness failure" in by_case["trigger-moo"]["status_reason"]
     assert by_case["no-trigger-facts"]["passed"] is True
-    assert [p.name for p in (root / ".eval-workspaces/test-run/trigger-moo").iterdir()] == [
-        "workspace"
-    ]
+    assert [
+        p.name for p in (root / ".eval-workspaces/test-run/trigger-moo/skill-1").iterdir()
+    ] == ["workspace"]
 
 
 def test_the_command_refuses_to_start_without_the_pinned_cli(tmp_path: Path) -> None:

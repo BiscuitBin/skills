@@ -257,7 +257,12 @@ def test_a_run_records_the_version_and_model_and_never_the_key(tmp_path: Path) -
     assert (data["agent"], data["credential_env"]) == ("codex", ["CODEX_HOME"])
     [trial] = data["trials"]
     assert (trial["cli_version"], trial["model"]) == ("0.163.0", "gpt-5.6-terra")
-    assert trial["trigger"] == {"expected": True, "actual": True, "matched": True}
+    assert trial["trigger"] == {
+        "expected": True,
+        "actual": True,
+        "matched": True,
+        "applicable": True,
+    }
     assert [a["result"] for a in trial["assertions"]] == ["passed"] * 3
     assert trial["contamination"]["passed"] is True
     written = [p for p in (root / "eval-results").rglob("*") if p.is_file()]
@@ -266,7 +271,7 @@ def test_a_run_records_the_version_and_model_and_never_the_key(tmp_path: Path) -
     transcript = root / trial["transcript"]
     assert "[REDACTED]" in transcript.read_text()
     # The trial's home, with its auth.json, is gone; only the workspace is kept.
-    kept = root / ".eval-workspaces/test-run" / trial["case"]
+    kept = root / ".eval-workspaces/test-run" / trial["case"] / "skill-1"
     assert [p.name for p in kept.iterdir()] == ["workspace"]
 
 
@@ -342,7 +347,7 @@ def test_an_unreadable_login_after_the_run_fails_the_trial_and_deletes_it(
         )
         assert (trial["transcript"], trial["passed"]) == (None, False)
         assert "stderr" not in trial
-        assert not (root / ".eval-workspaces/test-run" / trial["case"]).exists()
+        assert not (root / ".eval-workspaces/test-run" / trial["case"] / "skill-1").exists()
     assert not list((root / "eval-results/test-run").rglob("*.jsonl"))
 
 

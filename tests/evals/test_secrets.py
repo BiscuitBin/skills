@@ -40,13 +40,17 @@ def test_a_fake_token_reaches_the_api_but_not_the_results(tmp_path: Path) -> Non
     assert exit_code == 0
     assert server.requests[0].headers["Authorization"] == f"Bearer {SECRET}"
     written = [p for p in (root / "eval-results").rglob("*") if p.is_file()]
-    assert {p.name for p in written} == {"results.json", "trigger-moo.jsonl"}
+    assert {p.relative_to(root / "eval-results/test-run").as_posix() for p in written} == {
+        "results.json",
+        "transcripts/trigger-moo/skill-1.jsonl",
+    }
     for path in written:
         assert SECRET not in path.read_text(), path
     assert (
-        "[REDACTED]" in (root / "eval-results/test-run/transcripts/trigger-moo.jsonl").read_text()
+        "[REDACTED]"
+        in (root / "eval-results/test-run/transcripts/trigger-moo/skill-1.jsonl").read_text()
     )
-    trial = root / ".eval-workspaces/test-run/trigger-moo"
+    trial = root / ".eval-workspaces/test-run/trigger-moo/skill-1"
     assert [p.name for p in trial.iterdir()] == ["workspace"]
     for path in trial.rglob("*"):
         if path.is_file():
@@ -122,7 +126,7 @@ def test_a_secret_left_outside_the_workspace_deletes_the_trial_and_fails_it(
     [trial] = json.loads((root / "eval-results/test-run/results.json").read_text())["trials"]
     assert trial["passed"] is False
     assert trial["secret_found"] == {"files": ["token.txt"], "deleted": True}
-    assert not (root / ".eval-workspaces/test-run/trigger-moo").exists()
+    assert not (root / ".eval-workspaces/test-run/trigger-moo/skill-1").exists()
     assert "secret found in the trial directory" in capsys.readouterr().out
 
 
