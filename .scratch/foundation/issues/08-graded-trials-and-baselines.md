@@ -115,7 +115,7 @@ The user ran `just eval cowsay --agent claude --trials 10 --baseline` in their o
 - trial 1: `pip3 install --target /tmp/cowsay-pkg`
 - trial 5: `python3 -m venv /tmp/cowvenv`
 
-The Claude Code adapter runs with `--permission-mode dontAsk --allowedTools Skill Read Bash` (ticket 05), so its Bash can write anywhere the user can. `TMPDIR` points into the trial, but a literal `/tmp` path bypasses it. Trial 8 used `mktemp -d` and stayed inside the trial. Both directories are still on the host. No later trial in this run used them, but a later baseline trial could find them. This is recorded per AGENTS.md. Confining the adapter's Bash is a follow-up below. Before this run, nothing had triggered it: only the baseline arm, with no skill installed, goes looking for a tool to install.
+The Claude Code adapter runs with `--permission-mode dontAsk --allowedTools Skill Read Bash` (ticket 05), so its Bash can write anywhere the user can. `TMPDIR` points into the trial, but a literal `/tmp` path bypasses it. Trial 8 used `mktemp -d` and stayed inside the trial. No later trial in this run used them, and both were deleted after the run, at the user's request. The host's pip cache was not touched. This is recorded per AGENTS.md. Confining the adapter's Bash is a follow-up below. Before this run, nothing had triggered it: only the baseline arm, with no skill installed, goes looking for a tool to install.
 
 ### Toolchain
 
