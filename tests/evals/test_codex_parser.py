@@ -237,11 +237,16 @@ SCRIPT_RUN = ("python3 .agents/skills/cowsay/scripts/cowsay.py -- hi", 0, "< hi 
         # A retry in the skill's directory, as `workdir`, printed its frontmatter.
         ([FAILED_READ, ("cat SKILL.md", 0, COWSAY_HEAD)], ["cowsay"]),
         ([("pwd && cat SKILL.md", 0, f"/w/.agents/skills/cowsay\n{COWSAY_HEAD}")], ["cowsay"]),
-        (
-            [("cat .agents/skills/*/SKILL.md", 0, f"---\nname: other\n---\n{COWSAY_HEAD}")],
-            ["cowsay"],
-        ),
+        # A glob in a trial prints the one installed skill.
+        ([("cat .agents/skills/*/SKILL.md", 0, COWSAY_HEAD)], ["cowsay"]),
+        # Output that runs files together shows only where the first one starts.
+        ([("cat .agents/skills/*/SKILL.md", 0, f"---\nname: other\n---\n{COWSAY_HEAD}")], []),
+        # The name is a YAML value, as the validator reads it.
         ([("cat SKILL.md", 0, "---\nname: 'cowsay'\n---\n")], ["cowsay"]),
+        ([("cat SKILL.md", 0, "---\nname: cowsay # the skill\n---\n")], ["cowsay"]),
+        ([("head -n 2 SKILL.md", 0, "---\nname: cowsay\n")], ["cowsay"]),
+        # Frontmatter opens the file: a block after a rule in the body is not it.
+        ([("cat SKILL.md", 0, "# Notes\n\n---\nname: cowsay\n---\n")], []),
     ],
 )
 def test_an_unplaced_read_backs_the_implicit_event_of_the_skill_it_printed(

@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import yaml
+
 from skills_tooling.evals import workspace
 from skills_tooling.evals.adapter import (
     Command,
@@ -89,8 +91,6 @@ SHELLS = {"bash", "zsh", "sh"}
 UNPLACEABLE = re.compile(r"[*?\[\]{}$~`]")
 # The directory a skill directory sits in: .agents/skills, skills, dev-skills, .system.
 SKILLS_DIR = re.compile(r"skills$|^\.system$")
-# A frontmatter `name:` line, its value optionally quoted.
-FRONTMATTER_NAME = re.compile(r"""name:\s*["']?(.*?)["']?\s*""")
 # auth.json fields that are not secret. Short strings are not secret either:
 # keys, tokens and account ids are long, and a short label such as a plan name
 # would scrub every occurrence of a common word.
@@ -532,18 +532,29 @@ def skills_read(command: str) -> tuple[list[str], bool]:
     return skills, unplaceable
 
 
-def frontmatter_names(output: str) -> list[str]:
-    """The `name` in each `---` frontmatter block a read printed.
+def frontmatter_name(output: str, skip: int) -> str | None:
+    """The YAML `name` in the frontmatter that opens a read's output, past `skip` lines.
 
-    A glob read prints several files, so every block counts.
+    Frontmatter opens a file, as the validator requires, and output that runs
+    several files together does not show where the next one starts, so only
+    the first file's counts. A partial read (`head -n 3`) may stop before the
+    closing `---`.
     """
-    names, inside = [], False
-    for line in output.split("\n"):
-        if line.rstrip() == "---":
-            inside = not inside
-        elif inside and (match := FRONTMATTER_NAME.fullmatch(line)):
-            names.append(match.group(1))
-    return names
+    lines = output.split("\n")[skip:]
+    if not lines or lines[0].strip() != "---":
+        return None
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), len(lines))
+    try:
+        data = yaml.safe_load("\n".join(lines[1:end]))
+    except yaml.YAMLError:
+        return None
+    name = data.get("name") if isinstance(data, dict) else None
+    return name if isinstance(name, str) else None
+
+
+def _pwds(command: str) -> int:
+    """How many lines the `pwd`s before a command's last part print."""
+    return sum(words == ["pwd"] for words, _ in command_list(command)[:-1])
 
 
 def outcome_is_the_read(command: str, output: str) -> bool:
@@ -560,7 +571,6 @@ def outcome_is_the_read(command: str, output: str) -> bool:
     if not parts or any(operator not in ("&&", "") for _, operator in parts):
         return False
     *before, (read, _) = parts
-    pwds = sum(words == ["pwd"] for words, _ in before)
     return (
         all(
             words == ["pwd"]
@@ -571,7 +581,7 @@ def outcome_is_the_read(command: str, output: str) -> bool:
         and Path(read[0]).name in READERS
         and not any(REDIRECTION.search(word) or word in NO_READ_FLAGS for word in read[1:])
         and bool(output.strip())
-        and len(output.strip("\n").split("\n")) > pwds
+        and len(output.strip("\n").split("\n")) > _pwds(command)
     )
 
 
@@ -584,7 +594,7 @@ def parse_stream(raw: RawRun) -> Trace:
     `explicit` for a `$skill` mention, whose SKILL.md it injects without
     running a command, and `implicit` only when such a read of the same skill
     succeeded, or a read of a SKILL.md the text cannot place (see
-    `skills_read`) printed frontmatter naming the skill.
+    `skills_read`) printed frontmatter naming the skill (see `frontmatter_name`).
     Codex logs `implicit` from the command text before the command runs, and
     for a run of the skill's scripts too, so the event alone shows no read.
     Both events name a skill from Codex's own skill list, so every skill they
@@ -614,8 +624,8 @@ def parse_stream(raw: RawRun) -> Trace:
             invoked += read
             if ok and outcome_is_the_read(command, output):
                 triggered += read
-                if unplaced:
-                    unplaced_names.update(frontmatter_names(output))
+                if unplaced and (name := frontmatter_name(output, _pwds(command))):
+                    unplaced_names.add(name)
     starts = ""
     denied = 0
     for line in raw.debug_lines:
