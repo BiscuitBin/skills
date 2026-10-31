@@ -51,6 +51,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 ### Residual risk
 
 - **Unplaced reads pair by printed name.** An unplaced read that starts past the frontmatter (`sed -n '20,60p' SKILL.md` in the skill's `workdir`) backs no event, and a file elsewhere that carries the skill's frontmatter would back it. This assumes Codex's `skill.name` is the frontmatter `name`, which the Agent Skills format requires to match the directory name.
+- **Unplaced reads must open with the frontmatter.** Output that concatenates several files backs only the first file's skill, and decorated output never opens with `---`: an unplaced `nl SKILL.md` (`nl` is a reader), `cat -n SKILL.md` or `bat SKILL.md` with its default decorations backs no event. Placed reads are unaffected.
 - **Heuristic denials.** Codex reports an ordinary failed command as denied when its output contains a permission keyword, so a skill whose normal flow prints `Permission denied` and exits nonzero is an `infra_error` on every Codex trial.
 - **Narrower than before.** A read that Codex flags `implicit` but whose shape fails `outcome_is_the_read` (piped, after `||` or `;`, `2>/dev/null`, `awk`) used to trigger through the event and no longer does. Ticket 06 left those shapes to Codex's event. The recorded live runs used plain `sed -n` and `pwd && sed -n` reads, which still trigger without the event.
 - **Toolchain in this session.** The machine's `uv` (0.13.6) and `just` (1.59.0) are newer than the pins, so `just initialize` and `just check` stop at their version gates. The pinned `uv 0.13.4` and `just 1.51.0` were fetched into the project's uv cache (`uvx`, `UV_CACHE_DIR` under `.tools/`) and copied to `.tools/pinned-bin/`, which was put first on `PATH`. Nothing was installed outside the project.
@@ -95,3 +96,5 @@ Reviewed `main...fab4667`.
 | --- | --- | --- | --- | --- |
 | 1 | medium (triage: low) | A YAML comment on the `name:` line (`name: cowsay # the skill`) stayed in the matched name, so a valid skill's unplaced read backed nothing | valid | fixed: the block is parsed with `yaml.safe_load`, as the validator does |
 | 2 | medium (triage: low) | Toggling on every `---` line let a Markdown rule in a body misalign the blocks: a later file's frontmatter was skipped, or a body block counted | valid | fixed: only a block that opens the output, after any `pwd` lines, counts. Output that runs several files together counts its first file's frontmatter only; a trial holds one installed skill |
+
+No third round: the skill asks for one re-review when fixes are substantial, and round 2's fixes were narrow.
