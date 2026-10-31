@@ -173,6 +173,29 @@ Findings: `ai_tmp/code-review-08.md`. Each was checked by two independent verifi
 | 9 | The skill-file walk is repeated per trial and duplicates `tree_sha256`'s filter | low, maintainability | Follow-up |
 | 10 | `_scorable` repeats the benchmark's exclusion rule | valid (low) | Fixed in df98abf: the runner uses `benchmark.exclusion` |
 
+### PR review (#10)
+
+- **Reviewers:** GitHub Copilot's pull request reviewer (3 comments), then a multi-lens review by Claude Code (`claude-opus-5-5`) over the PR diff. That review used 5 lenses, then an independent reproduce agent and refute agent for every finding, Copilot's included.
+- **Reviewed:** the PR at e98e452, after `main` (ticket 13) was merged in
+- **Effect on the live run:** none. The run predates these fixes, and none of its trials had a secret-named file, an unreadable file, a null verdict or an infrastructure error. The new framing line for unreadable entries changes `grader_prompt_sha256` for later runs.
+- **Findings:** `ai_tmp/pr10-copilot-comments.md`, `ai_tmp/pr10-review-agents.json` · **Triage:** `ai_tmp/triage-pr10.md` · **Fixed in:** 883a9fb
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| C1 | medium | A credential in an output file name reaches the grader: the sweep read contents only | valid | The sweep reads paths too, so such a trial is deleted and never graded |
+| C2 | low | A null `passed` in a grading with verdicts counts as failed, not as a grader error | valid | `_has_verdicts` requires a boolean verdict |
+| C3 | low | The plan counts 2 grader calls for a rubric that is all `needs_transcript` | valid | One call per nonempty expectation group |
+| O1 | low | A Codex baseline trial that tries to install the missing tool trips the ticket 13 denial rule, becomes `infra_error` and is excluded, which biases the baseline | valid (low) | The delta now notes infra-error exclusions per arm. Ticket 13's classification is unchanged; follow-up below |
+| O2 | medium | A directory the agent makes unreadable turns grading into an excluded `grader_error` | valid | Unreadable files and directories are listed by name, and the trial is graded |
+| O3 | low | The reference doc says the `needs_transcript` material includes output files | valid (docs) | Docs corrected: commands and the final message only |
+| O4 | low | `skill_sha256` and the disclosure list skip a symlinked directory that installation copies | valid in fact, but the validator rejects references that escape the skill | Deferred to the shared skill-file-list follow-up |
+| O5 | low | Redaction runs after the scrub and can rejoin a credential split around a workspace path | valid | Each finished material is scrubbed of the run's secrets |
+| O6 | low | `"notes": null` makes the reply `invalid_reply` | invalid | No change: the design types `notes` as an optional string, and validation is strict by decision (ADR 0012) |
+| O7 | low | A Codex run needs the Claude token for the grader; the recipe comment, the credentials table and `credential_env` omitted it | valid | Docs updated; `credential_env` lists the grader's token |
+| O8 | low | A skipped case's delta is `{}`, but the docs said `null` | valid (docs) | The docs and design now describe the shape the code and its test use |
+| O9 | low | `git_dirty` ignored the user's global gitignore | valid | `git_state` passes the user's global excludes file to its isolated git |
+| O10 | low | No test covered `--grader-model` | valid (test gap) | Test added for the default and for a chosen model |
+
 **Follow-ups:**
 
 - Read output files with a bounded prefix (code review #8), keeping the reported size and the cap-after-redaction rule.
@@ -184,3 +207,5 @@ Findings: `ai_tmp/code-review-08.md`. Each was checked by two independent verifi
 - If two grader calls ever report different models, note both in `grader.notes` (implementation review #4, optional).
 - Confine the Claude Code adapter's Bash to the trial, for example with Claude Code's sandbox settings. In the live run, two baseline trials wrote to the host's `/tmp` (see Live run).
 - `behaviour-ship-it`'s three expectations didn't discriminate between the arms in the live run. A future case edit could add one that does, without tuning it to this run's delta.
+- Decide whether a Codex trial that completed (`turn.completed`, exit 0) but had a command denied should still be scored, at least in the baseline (PR review O1). Until then the delta notes such exclusions.
+- Have the shared skill-file list helper follow symlinked directories, as installation does (PR review O4).
