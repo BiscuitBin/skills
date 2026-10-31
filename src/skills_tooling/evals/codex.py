@@ -512,8 +512,8 @@ def skills_read(command: str) -> tuple[list[str], bool]:
     `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path counts only when
     its grandparent is a skills directory (`.agents/skills`, `skills`,
     `.system`), so `/tmp/cowsay/SKILL.md` is not a skill, nor unplaceable. A
-    path the text cannot place (`SKILL.md` run in another `workdir`,
-    `../SKILL.md`, a glob, a variable) names no skill; it can still back
+    path the text cannot place (`SKILL.md` or `cowsay/SKILL.md` run in another
+    `workdir`, `../SKILL.md`, a glob, a variable) names no skill; it can still back
     Codex's own implicit event (see `parse_stream`).
     """
     skills = []
@@ -526,8 +526,11 @@ def skills_read(command: str) -> tuple[list[str], bool]:
             unplaceable = True
         elif SKILLS_DIR.search(path.parent.parent.name):
             skills.append(skill)
-        elif UNPLACEABLE.search(path.parent.parent.name):
-            # `$dir/cowsay/SKILL.md`: the skill is named, its directory is not.
+        elif UNPLACEABLE.search(path.parent.parent.name) or (
+            not path.is_absolute() and path.parent.parent.name in ("", "..")
+        ):
+            # `$dir/cowsay/SKILL.md`, or `cowsay/SKILL.md` run in the skills
+            # directory: the skill is named, its directory is not.
             unplaceable = True
     return skills, unplaceable
 

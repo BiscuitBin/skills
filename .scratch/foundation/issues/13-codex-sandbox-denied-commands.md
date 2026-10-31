@@ -98,3 +98,12 @@ Reviewed `main...fab4667`.
 | 2 | medium (triage: low) | Toggling on every `---` line let a Markdown rule in a body misalign the blocks: a later file's frontmatter was skipped, or a body block counted | valid | fixed: only a block that opens the output, after any `pwd` lines, counts. Output that runs several files together counts its first file's frontmatter only; a trial holds one installed skill |
 
 No third round: the skill asks for one re-review when fixes are substantial, and round 2's fixes were narrow.
+
+### PR review (#9)
+
+- **Codex** (GitHub, `3a2f4c5`): no findings.
+- **Copilot** (GitHub, `3a2f4c5`): one finding.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | A relative path whose skills directory is not in the text (`cat cowsay/SKILL.md` with the skills directory as `workdir`, `cat ../cowsay/SKILL.md` from beside it) was neither placed nor unplaced, so it backed no implicit event | valid: the grandparent's name is `""` or `..`, which neither test matched | fixed: such a relative path counts as unplaced; an absolute one (`/cowsay/SKILL.md`, grandparent `/`) still does not. Four regression cases added |

@@ -158,9 +158,14 @@ def test_codexs_implicit_event_for_a_script_run_is_not_a_trigger(tmp_path: Path)
         ("cat SKILL.md", 0, ["cowsay"]),
         ("cat ../SKILL.md", 0, ["cowsay"]),
         ('cat "$dir/cowsay/SKILL.md"', 0, ["cowsay"]),
+        # Run in the skills directory, or beside it, as `workdir`.
+        ("cat cowsay/SKILL.md", 0, ["cowsay"]),
+        ("cd cowsay && cat SKILL.md", 0, ["cowsay"]),
+        ("cat ../cowsay/SKILL.md", 0, ["cowsay"]),
         ("cat SKILL.md", 1, []),
         # Placed, and not in a skills directory.
         ("cat /tmp/cowsay/SKILL.md", 0, []),
+        ("cat /cowsay/SKILL.md", 0, []),
         ("ls SKILL.md", 0, []),
         ("cat README.md", 0, []),
     ],
