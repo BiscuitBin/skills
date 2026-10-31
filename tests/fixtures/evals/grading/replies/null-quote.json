@@ -1,0 +1,6 @@
+{
+  "expectations": [
+    { "id": "e1", "passed": true, "evidence": "The cow is there.", "quote": null },
+    { "id": "e2", "passed": false, "evidence": "no" }
+  ]
+}

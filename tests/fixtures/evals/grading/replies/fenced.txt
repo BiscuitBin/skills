@@ -1,0 +1,3 @@
+```json
+{"expectations": [{"id": "e1", "passed": true, "evidence": "The bubble holds the text.", "quote": "<   Ship it,\n team! >"}, {"id": "e2", "passed": false, "evidence": "No second line."}]}
+```

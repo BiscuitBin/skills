@@ -151,9 +151,10 @@ validate-evals:
     uv run --frozen python -m skills_tooling.evals validate
 
 # Live: it calls a paid model, needs CLAUDE_CODE_OAUTH_TOKEN (claude) or a Codex
-# login in the project's CODEX_HOME (codex), and is never part of check or PR CI
+# login in the project's CODEX_HOME (codex), plus CLAUDE_CODE_OAUTH_TOKEN for the
+# grader when the cases carry expectations, and is never part of check or PR CI
 # (docs/adr/0004-eval-tiers-and-ci.md).
-[doc("Run a skill's eval cases against a pinned agent: `just eval cowsay --agent claude|codex [--case ID]`.")]
+[doc("Run a skill's eval cases against a pinned agent: `just eval cowsay --agent claude|codex [--case ID] [--trials N] [--baseline] [--dry-run]`.")]
 eval +args:
     uv run --frozen python -m skills_tooling.evals run "$@"
 
@@ -176,7 +177,7 @@ agents-version:
 # the same version.
 [doc('Fail unless this is the pinned just.')]
 just-version:
-    @required='just 1.51.0'; found="$("{{ just_executable() }}" --version)"; \
+    @required='just 1.59.0'; found="$("{{ just_executable() }}" --version)"; \
     [ "$found" = "$required" ] || { printf '%s\n' "$required is required; found $found." >&2; exit 1; }
 
 [doc('The full gate, as CI runs it. Stops at the first recipe that fails.')]

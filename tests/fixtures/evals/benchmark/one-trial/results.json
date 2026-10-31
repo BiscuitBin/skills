@@ -1,0 +1,110 @@
+{
+  "run_id": "20261030T120000Z-0001",
+  "skill": "cowsay",
+  "agent": "claude",
+  "requested_model": "claude-sonnet-5-5",
+  "credential_env": ["CLAUDE_CODE_OAUTH_TOKEN"],
+  "started_at": "2026-10-30T12:00:00.000+00:00",
+  "finished_at": "2026-10-30T12:30:00.000+00:00",
+  "passed": false,
+  "trials_per_case": 1,
+  "baseline": false,
+  "grader_model_requested": "claude-opus-5-5",
+  "cases": [
+    {
+      "id": "behaviour-ship-it",
+      "kind": "behaviour",
+      "should_trigger": true,
+      "expectations": [
+        {
+          "text": "The response shows an ASCII-art cow together with a speech bubble.",
+          "blinded": true
+        },
+        {
+          "text": "The speech bubble contains the text 'Ship it, team!' exactly, with the same capitalisation and punctuation.",
+          "blinded": true
+        },
+        {
+          "text": "The cow and its speech bubble are shown in a code block or other monospaced formatting, so the art stays aligned.",
+          "blinded": true
+        }
+      ],
+      "in_baseline": false
+    }
+  ],
+  "skipped_in_baseline": [],
+  "provenance": {
+    "git_commit": "fb1d9ce0000000000000000000000000000000ab",
+    "git_dirty": false,
+    "skill_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "evals_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "grader_prompt_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "trials": [
+    {
+      "case": "behaviour-ship-it",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "skill",
+      "trial": 1,
+      "order": 0,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": "2.1.309",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "status_reason": "",
+      "trigger": {
+        "expected": true,
+        "actual": true,
+        "matched": true,
+        "applicable": true
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "skill_triggered",
+          "class": "skill_use",
+          "result": "passed",
+          "evidence": ""
+        },
+        {
+          "type": "script_ran",
+          "class": "skill_use",
+          "result": "passed",
+          "evidence": ""
+        },
+        {
+          "type": "final_contains_script_output",
+          "class": "outcome",
+          "result": "passed",
+          "evidence": ""
+        },
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "failed",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0001/transcripts/behaviour-ship-it/skill-1.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": "eval-results/20261030T120000Z-0001/grading/behaviour-ship-it/skill-1.json",
+      "graded": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 1,
+        "total": 3,
+        "pass_rate": 0.6666666666666666,
+        "arm_disclosed": false
+      },
+      "passed": false,
+      "valid": true
+    }
+  ]
+}

@@ -59,6 +59,11 @@
           "args": ["--", "Ship it, team!"]
         },
         { "type": "output_contains", "value": "< Ship it, team! >" }
+      ],
+      "expectations": [
+        "The response shows an ASCII-art cow together with a speech bubble.",
+        "The speech bubble contains the text 'Ship it, team!' exactly, with the same capitalisation and punctuation.",
+        "The cow and its speech bubble are shown in a code block or other monospaced formatting, so the art stays aligned."
       ]
     },
     {
@@ -81,6 +86,11 @@
           "args": ["--", "The quick brown fox jumps over the lazy dog by the river"]
         },
         { "type": "output_matches", "pattern": "(?m)^\\\\ dog by the river +/$" }
+      ],
+      "expectations": [
+        "The response shows an ASCII-art cow together with a speech bubble.",
+        "Every word of 'The quick brown fox jumps over the lazy dog by the river' appears inside the speech bubble, in order, with no words added, removed or changed.",
+        "The speech bubble's text is split across more than one line inside the bubble."
       ]
     }
   ]

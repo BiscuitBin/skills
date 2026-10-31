@@ -1,6 +1,6 @@
 # Evals
 
-The eval harness runs a skill's eval cases against a pinned agent CLI, headless, and writes a results file. This page covers the case schema, the adapter interface, isolation, credentials, the contamination check and the results format. [Eval isolation](../explanation/eval-isolation.md) explains why isolation is built this way and what it does not cover.
+The eval harness runs a skill's eval cases against a pinned agent CLI, headless, in several trials and optionally against a baseline, grades rubric expectations with an LLM, and writes a results file and a benchmark. This page covers the case schema, the adapter interface, isolation, credentials, the contamination check, the grader, the benchmark and the results format. [Eval isolation](../explanation/eval-isolation.md) explains why isolation is built this way and what it does not cover.
 
 ## Commands
 
@@ -12,10 +12,14 @@ The eval harness runs a skill's eval cases against a pinned agent CLI, headless,
 | `… --case <id>` | Runs only that case. Repeat it to run several. An unknown id is a usage error. |
 | `… --model <id>` | Overrides the pinned default model: `claude-sonnet-5-5` for Claude Code, `gpt-5.6-terra` for Codex. |
 | `… --timeout <seconds>` | Per-trial timeout, default 300. |
+| `… --trials <n>` | Runs every selected case n times per arm, default 1. |
+| `… --baseline` | Also runs, n times, every selected case that has an outcome to measure, with no skill installed (the baseline arm). Trigger-only cases are skipped in the baseline and listed. |
+| `… --grader-model <id>` | The grader's model, default `claude-opus-5-5`. |
+| `… --dry-run` | Prints the plan and exits 0: agent calls per arm, the cases skipped in the baseline, the most grader calls the run can make, and the spend cap. It reads no credential, creates no workspace and writes nothing. A real run prints the same plan first. |
 
 **Live evals need an authenticated agent and are never part of the PR gate.** `just eval` calls a paid model, so it runs only locally or from a manual job that holds the secret ([ADR 0004](../adr/0004-eval-tiers-and-ci.md)). `just check` and PR CI cover the harness without credentials: the tests drive the real pinned CLIs against local fake APIs (`tests/evals/fake_anthropic.py`, `tests/evals/fake_openai.py`) and parse recorded transcripts (`tests/fixtures/evals/claude/`, `tests/fixtures/evals/codex/`).
 
-Exit codes: 0 when every trial passed, 1 when any trial failed or hit an infrastructure error, 2 for a usage error (a missing credential, an invalid suite, an unknown case, a missing pinned CLI). Nothing is written on a usage error. A harness failure inside one trial is recorded as that trial's infrastructure error, and the other trials still run.
+Exit codes: 0 when every skill-arm trial passed and every baseline trial is valid, 1 otherwise (a failed trial, an infrastructure error, contamination, a grading that is not `ok` in the skill arm, or a grader error in the baseline), 2 for a usage error (a missing credential, an invalid suite, an unknown case, a missing pinned CLI). Nothing is written on a usage error. A harness failure inside one trial is recorded as that trial's infrastructure error, and the other trials still run.
 
 ## Case schema
 
@@ -39,6 +43,10 @@ Cases live at `evals/<skill>/evals.json`, outside the shipped skill's directory,
         { "type": "final_contains_script_output", "script": "scripts/cowsay.py", "args": ["--", "Ship it, team!"] },
         { "type": "output_contains", "value": "(oo)" },
         { "type": "output_matches", "pattern": "<\\s*Ship it, team!\\s*>" }
+      ],
+      "expectations": [
+        "The speech bubble contains the text 'Ship it, team!' exactly.",
+        { "text": "The agent ran a command before answering.", "needs_transcript": true }
       ]
     }
   ]
@@ -56,10 +64,15 @@ Cases live at `evals/<skill>/evals.json`, outside the shipped skill's directory,
 | `expected_output` | Optional human description, kept from skill-creator. It is not graded. |
 | `files` | Input files are not staged yet: anything but an empty list is rejected with a note that staging is deferred. |
 | `assertions` | Deterministic assertions, below. A `behaviour` case needs at least one. |
+| `expectations` | Optional rubric for the [grader](#grader), on `behaviour` cases only (skill-creator's field). Each item is a string, judged blinded, or `{"text": …, "needs_transcript": true}`, judged from the commands and the final message instead (no output files) and marked unblinded. Text must be nonempty and unique within the case; `needs_transcript: false` is rejected (use the string form). |
 
-Unknown keys are rejected at every level, so a later field, such as rubric `expectations`, has to be added on purpose. An assertion's `args`, when present, must be a list of strings: `null` is rejected, and `[]` means no arguments.
+Unknown keys are rejected at every level, so a later field has to be added on purpose.
+
+A blinded expectation describes the outcome the user asked for, never how it was produced: "the bubble contains the text verbatim", not "the bundled script was run" (that is `script_ran`). It must be passable by quoting the material, so negative expectations ("does not mention X") are not allowed. Freeze a rubric before a live run, and never edit it after seeing the delta. An assertion's `args`, when present, must be a list of strings: `null` is rejected, and `[]` means no arguments.
 
 ### Assertions
+
+Each type is a **skill-use** assertion (`skill_triggered`, `script_ran`), which the baseline arm never scores (`not_applicable`), or an **outcome** assertion (the rest), scored in both arms. `final_contains_script_output` runs the repo's copy of the script, so it needs nothing installed.
 
 | Type | Fields | Passes when |
 | --- | --- | --- |
@@ -125,26 +138,28 @@ An adapter drives one agent CLI. The interface is `skills_tooling.evals.adapter.
 | Agent | Credential | How it reaches the run |
 | --- | --- | --- |
 | Claude Code | `CLAUDE_CODE_OAUTH_TOKEN`, from `claude setup-token` | Read from the caller's environment and placed only in the child's environment. The harness writes it nowhere. The pinned CLI does not pass it on to its Bash tool's processes. |
-| Codex | `auth.json` in the project's `CODEX_HOME` (`.tools/agent-homes/codex`, which the Justfile sets), from `just run ./node_modules/.bin/codex login` | Only `auth.json` is copied, mode 0600, into each trial's own `CODEX_HOME`. No skills, config or instructions come with it, and the user's `~/.codex` is never read. `--ignore-user-config` would skip a `config.toml` there anyway. `results.json` records `CODEX_HOME` as the credential's source. |
+| Codex | `auth.json` in the project's `CODEX_HOME` (`.tools/agent-homes/codex`, which the Justfile sets), from `just run ./node_modules/.bin/codex login` | Only `auth.json` is copied, mode 0600, into each trial's own `CODEX_HOME`. No skills, config or instructions come with it, and the user's `~/.codex` is never read. `--ignore-user-config` would skip a `config.toml` there anyway. `results.json` records `CODEX_HOME` as the credential's source. When the selected cases carry expectations, the run also needs `CLAUDE_CODE_OAUTH_TOKEN` for the [grader](#grader), and records that name too. |
 
-The harness refuses to start without the token. Every file it writes under `eval-results/` passes through a scrub that replaces each credential value with `[REDACTED]`. The run then rereads every file, and deletes any that still holds a value and fails. After each trial, in a `finally`, the process group is killed and checked empty, and the trial's `home/`, `tmp/` and `bin/` are removed. The workspace is kept for inspection. If a credential value is found anywhere in the trial directory, the whole trial directory is deleted, the files are named in the trial's `secret_found`, and the trial fails. The `PASS`/`FAIL` lines printed at the end are scrubbed the same way as the files. `results.json` records the credential's variable name, never its value. Codex's `auth.json` sits in the per-trial agent home, which the same `finally` removes. Every string in it except `auth_mode` and `last_refresh` (the API key, or the ChatGPT tokens and account id) is a secret for the scrub and the sweep. The agent's tools can read the copy while the trial runs, as they can read any file. If Codex refreshes a ChatGPT login mid-trial, it rewrites the trial's copy. The runner reads that copy back after the run and again before teardown, even when the run raised, and its new values join the scrub and the sweep for that trial and the rest of the run. The next trial starts from the refreshed copy, held in memory, so a provider that rotates the refresh token does not strand the rest of the run. If that copy cannot be read, the trial fails as an infrastructure error and is deleted, transcript and all. The refreshed copy is never written back, so the refresh may still invalidate the project's own login; if it stops working, log in again. Pi's auth file belongs in its per-trial agent home too (ticket 07).
+The harness refuses to start without the token. Every file it writes under `eval-results/` passes through a scrub that replaces each credential value with `[REDACTED]`. The run then rereads every file, and deletes any that still holds a value and fails. After each trial, in a `finally`, the process group is killed and checked empty, and the trial's `home/`, `tmp/` and `bin/` are removed. The workspace is kept for inspection. If a credential value is found anywhere in the trial directory, in a file's contents or its path, the whole trial directory is deleted, the files are named in the trial's `secret_found`, and the trial fails. The `PASS`/`FAIL` lines printed at the end are scrubbed the same way as the files. `results.json` records the credential's variable name, never its value. Codex's `auth.json` sits in the per-trial agent home, which the same `finally` removes. Every string in it except `auth_mode` and `last_refresh` (the API key, or the ChatGPT tokens and account id) is a secret for the scrub and the sweep. The agent's tools can read the copy while the trial runs, as they can read any file. If Codex refreshes a ChatGPT login mid-trial, it rewrites the trial's copy. The runner reads that copy back after the run and again before teardown, even when the run raised, and its new values join the scrub and the sweep for that trial and the rest of the run. The next trial starts from the refreshed copy, held in memory, so a provider that rotates the refresh token does not strand the rest of the run. If that copy cannot be read, the trial fails as an infrastructure error and is deleted, transcript and all. The refreshed copy is never written back, so the refresh may still invalidate the project's own login; if it stops working, log in again. Pi's auth file belongs in its per-trial agent home too (ticket 07).
 
 ## Isolation
 
-Each trial gets `.eval-workspaces/<run-id>/<case-id>/` with:
+Each trial gets `.eval-workspaces/<run-id>/<case-id>/<arm>-<n>/` (for example `behaviour-ship-it/skill-1/`) with:
 
 - `workspace/`, a fresh `git init` (no global or system Git config) that is its own git root, gitignored, and outside `skills/` and `dev-skills/`. It holds `.git/` and the installed skill, nothing else.
 - `home/`, the user home and the agent home.
 - `tmp/`, the agent's temporary directory, transcript and debug log.
 - `bin/`, holding `python3` and `python`, wrappers that log each call and run the harness's pinned interpreter, and `git`.
 
-The preflight checks all of this before the agent starts, and fails closed.
+The preflight checks all of this before the agent starts, and fails closed. A baseline trial installs nothing, so its workspace may hold only `.git/`.
+
+Trials run in rounds. In round n every case's trials run back to back, the skill arm first when n is odd and the baseline first when n is even, so order effects balance over an even trial count. Each trial records its `order` in the run.
 
 ## Contamination check
 
 Each trial passes only when all of these hold:
 
-1. **Reported skills.** The init event's skills, plus any command a `system/commands_changed` event adds, plus every successful `Skill` call, minus the recorded built-ins, is exactly the skill under test (empty for a baseline). The init event's plugins equal the built-in plugins, and a missing skill or plugin report fails closed.
+1. **Reported skills.** The init event's skills, plus any command a `system/commands_changed` event adds, plus every successful `Skill` call, minus the recorded built-ins, is exactly the skill under test (empty for a baseline, which uses the same allowlist; the skill under test anywhere in a baseline's report fails it). The init event's plugins equal the built-in plugins, and a missing skill or plugin report fails closed.
 2. **Discovery report.** In the debug log, the `user=` location sits inside the trial home, every `project=` location inside the workspace, and the managed location is missing or empty. The per-location counts are `managed: 0, user: 0, additional: 0` and `project: 1` (0 for a baseline). A missing report fails closed. Only these lines are kept, and the debug log is deleted.
 3. **Never-appear list.** The repo's dev skills, the other shipped skills, and the user's own skills (directory names under `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`, `~/.pi/agent/skills` and the caller's agent homes) must not appear among the reported skills. The discovery report is checked by location instead (step 2), so any skill directory outside the trial fails there. A name that collides with a built-in is noted, not failed. The repo's `AGENTS.md`, `CLAUDE.md` and the user's `~/.claude/CLAUDE.md` are listed too. They are kept out by the preflight's instruction-file check, because a live run cannot observe the request.
 
@@ -168,28 +183,98 @@ Codex lists its skills only inside the model request, which a live run cannot ob
 
 `tests/evals/test_codex_contamination.py` plants a canary in each of those locations, one at a time, and shows the check fails. `tests/evals/test_codex_adapter.py` runs the real pinned Codex against the fake API. It shows that a canary in the trial home's shared folder or global `AGENTS.md` reaches the model, so the check has something to catch. It also shows that canaries in the caller's `~/.agents/skills`, in the caller's own `CODEX_HOME` (skills, `AGENTS.md` and `config.toml`), and in a parent repository's `.agents/skills` and `AGENTS.md` never do, that the caller's `CODEX_HOME` is never written, and that a workspace `AGENTS.md` loads only with `project_doc_max_bytes=0` removed.
 
+## Grader
+
+Rubric expectations are graded by Claude through the pinned Claude Code CLI, whatever agent ran the trial ([ADR 0012](../adr/0012-llm-grader-and-benchmark-statistics.md)). [The design](../../.scratch/foundation/design/08-grading.md) explains each rule and what it does not cover.
+
+- **When:** after the trial's teardown and secret sweep, only for a trial whose case has expectations and that is scorable (status `ok`, contamination passed, no secret found).
+- **Command:** `node_modules/.bin/claude -p <prompt> --system-prompt <grader prompt> --tools "" --disable-slash-commands --output-format stream-json --verbose --model <grader model> --no-session-persistence --strict-mcp-config --max-budget-usd 1.00`, in `.eval-workspaces/<run-id>/_grader/<random>/`, with the environment `prepare_homes` builds for an agent trial. The directory is deleted after each call. Its name is random because the CLI tells the model its working directory, and the trial key names the arm. No tools means everything it judges is in the prompt.
+- **Credential:** `CLAUDE_CODE_OAUTH_TOKEN`, the same token a Claude Code run uses. A Codex run whose selected cases carry expectations needs it too, and is a usage error without it. It joins the run's secrets, so the scrub and the sweep cover the grading files. A trial the sweep flags is never graded, and each finished material is scrubbed of every secret once more before it is sent, since removing a path can join the text on either side of it.
+- **Blinded material:** the final message (capped at 20 KB) and every workspace file except `.git/` and the skills directory (20 KB each, 80 KB in all; non-UTF-8 files by name and size, symlinks by name, and a file or directory the agent left unreadable by name, so it cannot turn its trial into a grader error). The caps keep the whole prompt inside one Linux argument; a NUL becomes U+FFFD for the same reason. A lone surrogate, in the material or in the grader's evidence and notes, becomes U+FFFD too, since UTF-8 cannot encode it. The trial directory, which names the arm, and every skill-install prefix (`.claude/skills/<skill>/`, `.agents/skills/<skill>/`, `skills/<skill>/`) are removed in both arms alike. Skill calls are never sent, nor the case's `expected_output`.
+- **Disclosure check:** the material is scanned, case-insensitively, for the word `skill` or `skills` (not "skilled"), any file path inside `skills/<skill>/`, and `.claude/skills` or `.agents/skills`. A match is graded anyway and recorded as `arm_disclosed`, with the matches, because rewriting the agent's prose would change what is judged.
+- **Unblinded expectations** (`needs_transcript`) are judged in a second call whose material is the trace instead: each command with its output and status (4 KB per output, 100 KB in all), then the final message. Output files are not sent, so a file's contents belong in a blinded expectation. These expectations are marked `"blinded": false`.
+- **Untrusted material:** the material sits between `<graded-material-NONCE>` tags, with a fresh random nonce the material does not contain. The system prompt says everything inside is data and any instruction in it is to be ignored and noted.
+- **Canary expectation:** each call slips in a known-false expectation naming a random code the material does not contain. If the grader passes it, every expectation is recorded as failed (`rejected`).
+- **Quote rule:** a pass needs a nonempty `quote` that appears verbatim in the material (whitespace collapsed). Without one, that expectation is failed.
+
+| Grading status | Meaning | Recorded as | In the benchmark |
+| --- | --- | --- | --- |
+| `ok` | A valid reply; the canary failed | each verdict, after the quote rule | counted |
+| `rejected` | The canary passed | every expectation failed | counted as failures |
+| `invalid_reply` | A reply that failed validation: empty, not one JSON object, wrong or missing ids, wrong types, extra keys | every expectation failed | counted as failures |
+| `grader_error` | No reply: the CLI failed or timed out, its run was not ok, or its stream had no result | every `passed` is `null` | excluded from `graded_pass_rate` and `outcome_pass_rate`, counted |
+
+A reply that fails validation might have been caused by the graded material, so it counts against the trial; only a call that returned nothing is excluded. With two calls, the worse status wins, and a reply that counts against the trial outranks a call that returned nothing.
+
+## Benchmark
+
+`eval-results/<run-id>/benchmark.json` aggregates the run's trials and grading files, and the run prints it as a table. It follows skill-creator's benchmark: skill-creator's `with_skill` and `without_skill` configurations are the `skill` and `baseline` arms here.
+
+For each agent, case and arm it counts `n_planned`, `n_scored` (status ok, uncontaminated, no secret), `n_infra_error`, `n_contaminated`, `n_secret_found`, `n_grader_error` (including a grading file that is missing, unreadable, malformed, or lists other expectations than the case's rubric), `n_invalid_reply`, `n_rejected` and `n_arm_disclosed`. Each metric is `{mean, stddev, min, max, n}` over per-trial values:
+
+| Metric | Per-trial value | Baseline arm |
+| --- | --- | --- |
+| `trigger_accuracy` | 1 when the trigger matched `should_trigger` | `not_applicable` |
+| `skill_use_pass_rate` | skill-use assertions passed / total | `not_applicable` |
+| `deterministic_pass_rate` | outcome assertions passed / total | measured |
+| `graded_pass_rate` | expectations passed / total (0 for `rejected` or `invalid_reply`) | measured |
+| `outcome_pass_rate` | outcome assertions and expectations together | measured |
+
+- The **delta** is the skill arm's mean minus the baseline's, for the deterministic, graded and outcome rates only, as `{value, n_skill, n_baseline}` for each metric. `value` is `null` when either arm has no data. A case skipped in the baseline, and every case of a run without one, has an empty delta, `{}`. The agent's delta is `{value, n_cases}` for each metric.
+- **Intention to treat:** a skill-arm trial in which the skill did not trigger still counts in its arm's outcome metrics.
+- An infrastructure error, contamination or a secret found removes a trial from every metric. A grader error removes it from the graded and outcome rates only. Every exclusion is counted, never turned into a 0.
+- `stddev` is the sample standard deviation, `null` below two values. A metric with nothing to measure is `null`, never 0.
+- **Notes** flag fewer than three trials ("spread not meaningful"), a flaky trigger, an expectation that passed in every trial of both arms (non-discriminating), and, on a delta, unequal n, excluded grader errors, excluded infrastructure errors and trials whose material named the arm. Infrastructure errors are noted because an exclusion can depend on the arm: under Codex, a baseline agent that tries to install the tool it lacks can trip the sandbox's denial rule and become an infrastructure error. A run without a baseline has no delta; its per-arm counts still show both.
+- **Per agent:** the trial-weighted mean of each metric over all cases, and the agent's delta as the mean of the per-case deltas, with the number of cases.
+- No significance test or confidence interval is reported. With a few trials per arm the figures are descriptive.
+- In the printed table, a case's baseline reads `off` when the run had no baseline arm, and `skipped` when the baseline ran without that case.
+
+**Provenance**, recorded at the start of the run: the agent CLI versions and models the trials reported, the grader model requested and reported and its CLI version, `git_commit` and `git_dirty` (`git status --porcelain` is not empty; git runs without the user's config, except their global ignore file), `skill_sha256` (the sorted relative paths and bytes of `skills/<skill>/`, without `__pycache__`), `evals_sha256` (`evals/<skill>/evals.json`, cases and rubric), `grader_prompt_sha256`, the trial count, whether the baseline ran, and the cases it skipped.
+
 ## Results
 
-`eval-results/<run-id>/results.json`, with each trial's transcript at `eval-results/<run-id>/transcripts/<case-id>.jsonl`, scrubbed.
+`eval-results/<run-id>/` holds:
+
+- `results.json`, the run record below
+- `transcripts/<case>/<arm>-<n>.jsonl`, each trial's transcript, scrubbed
+- `grading/<case>/<arm>-<n>.json`, each graded trial's grading
+- `benchmark.json`
 
 | Run field | Meaning |
 | --- | --- |
 | `run_id`, `skill`, `agent`, `requested_model` | What ran. |
-| `credential_env` | The names of the caller's variables the credential came from: `CLAUDE_CODE_OAUTH_TOKEN`, or `CODEX_HOME` for Codex's `auth.json`. |
+| `credential_env` | The names of the caller's variables the credentials came from: `CLAUDE_CODE_OAUTH_TOKEN`, or `CODEX_HOME` for Codex's `auth.json`, plus the grader's `CLAUDE_CODE_OAUTH_TOKEN` when the cases carry expectations. |
 | `started_at`, `finished_at` | UTC, ISO 8601. |
-| `passed` | Every trial passed. |
-| `trials` | One record per case, below. |
+| `passed` | Every skill-arm trial passed and every baseline trial is valid. |
+| `trials_per_case`, `baseline`, `grader_model_requested` | The run's configuration. |
+| `cases` | Each selected case's `id`, `kind`, `should_trigger`, `expectations` (`text`, `blinded`) and `in_baseline`. |
+| `skipped_in_baseline` | Case ids with nothing for a baseline to measure. |
+| `provenance` | The provenance above that is known at the start. |
+| `trials` | One record per trial, below, in run order. |
 
 | Trial field | Meaning |
 | --- | --- |
 | `case`, `kind`, `agent` | The case and the agent. |
+| `arm`, `trial`, `order` | `skill` or `baseline`, the trial's number n in its arm, and its 0-based position in the run. |
 | `cli_version`, `model` | What the agent reports running: Claude Code's init event, or Codex's `codex.conversation_starts` event. A `--model` alias shows the model it resolved to. |
 | `started_at`, `finished_at` | UTC, ISO 8601. |
 | `status`, `status_reason` | `ok` or `infra_error`, with the reason. |
-| `trigger` | `expected`, `actual`, `matched`. `actual` and `matched` are `null` on an infrastructure error. |
+| `trigger` | `expected`, `actual`, `matched`, `applicable`. `actual` and `matched` are `null` on an infrastructure error. In the baseline, `applicable` is false and `matched` is `null`: a trigger there is a contamination failure. |
 | `contamination` | `passed`, `problems`, `notes`. |
-| `assertions` | Each `type`, `result` (`passed`, `failed` or `not_scored`) and `evidence`. Every assertion is `not_scored` on an infrastructure error, so a crash can never pass a should-not-trigger case. |
+| `assertions` | Each `type`, `class` (`skill_use` or `outcome`), `result` (`passed`, `failed`, `not_scored` or `not_applicable`) and `evidence`. Every assertion is `not_scored` on an infrastructure error, so a crash can never pass a should-not-trigger case. |
 | `transcript` | The scrubbed transcript, relative to the repo root. |
 | `stderr` | The last 2000 characters of the agent's stderr, scrubbed. |
 | `secret_found` | `null`, or the `files` in the trial directory that held a credential value and whether the directory was `deleted`. |
-| `passed` | No secret was found, `status` is `ok`, contamination passed, the trigger matched and every assertion passed. |
+| `grading`, `graded` | The grading file, relative to the repo root, and its `status`, `passed`, `failed`, `total`, `pass_rate` and `arm_disclosed`; both `null` when the trial was not graded. |
+| `valid` | No secret was found, `status` is `ok`, contamination passed, and the grading (if any) is not a `grader_error`. |
+| `passed` | Skill arm: valid, the trigger matched, every assertion passed, and the grading (if any) is `ok` with every expectation passed. `null` in the baseline arm, which never fails on its outcomes. |
+
+`grading/<case>/<arm>-<n>.json` follows skill-creator's `grading.json`. `claims`, `user_notes_summary` and `eval_feedback` are not produced.
+
+| Grading field | Meaning |
+| --- | --- |
+| `expectations` | Each `text`, `passed` (`null` on a grader error), `evidence` and `blinded`, in rubric order. The canary is never listed. |
+| `summary` | `passed`, `failed`, `total`, `pass_rate` (`null` on a grader error). |
+| `arm_disclosed`, `disclosure_matches` | Whether the material named the arm, and the matching strings. |
+| `grader` | `model_requested`, `model` and `cli_version` as the grader reported them, `status`, `status_reason`, `canary_passed`, `notes` (what the grader flagged, such as instructions in the material) and `calls`. |
+| `timing` | `grader_duration_seconds`. |

@@ -40,13 +40,18 @@ def test_a_fake_token_reaches_the_api_but_not_the_results(tmp_path: Path) -> Non
     assert exit_code == 0
     assert server.requests[0].headers["Authorization"] == f"Bearer {SECRET}"
     written = [p for p in (root / "eval-results").rglob("*") if p.is_file()]
-    assert {p.name for p in written} == {"results.json", "trigger-moo.jsonl"}
+    assert {p.relative_to(root / "eval-results/test-run").as_posix() for p in written} == {
+        "benchmark.json",
+        "results.json",
+        "transcripts/trigger-moo/skill-1.jsonl",
+    }
     for path in written:
         assert SECRET not in path.read_text(), path
     assert (
-        "[REDACTED]" in (root / "eval-results/test-run/transcripts/trigger-moo.jsonl").read_text()
+        "[REDACTED]"
+        in (root / "eval-results/test-run/transcripts/trigger-moo/skill-1.jsonl").read_text()
     )
-    trial = root / ".eval-workspaces/test-run/trigger-moo"
+    trial = root / ".eval-workspaces/test-run/trigger-moo/skill-1"
     assert [p.name for p in trial.iterdir()] == ["workspace"]
     for path in trial.rglob("*"):
         if path.is_file():
@@ -65,6 +70,19 @@ def test_a_file_that_still_holds_a_secret_is_deleted_and_rejected(tmp_path: Path
         verify_clean(tmp_path, [SECRET])
     assert clean.exists()
     assert not leaked.exists()
+
+
+def test_a_file_whose_path_holds_a_secret_is_deleted_and_rejected(tmp_path: Path) -> None:
+    # The grader lists every output file by its path, so a name can carry a secret too.
+    named, nested = tmp_path / f"{SECRET}.txt", tmp_path / f"d-{SECRET}" / "a.txt"
+    nested.parent.mkdir()
+    named.write_text("moo\n")
+    nested.write_text("moo\n")
+    (tmp_path / f"link-{SECRET}").symlink_to(named)
+    with pytest.raises(SecretLeakError) as raised:
+        verify_clean(tmp_path, [SECRET])
+    assert SECRET not in str(raised.value)
+    assert [p.name for p in tmp_path.rglob("*")] == [f"d-{SECRET}"]
 
 
 def test_the_agents_bash_commands_never_see_the_token(tmp_path: Path) -> None:
@@ -122,7 +140,7 @@ def test_a_secret_left_outside_the_workspace_deletes_the_trial_and_fails_it(
     [trial] = json.loads((root / "eval-results/test-run/results.json").read_text())["trials"]
     assert trial["passed"] is False
     assert trial["secret_found"] == {"files": ["token.txt"], "deleted": True}
-    assert not (root / ".eval-workspaces/test-run/trigger-moo").exists()
+    assert not (root / ".eval-workspaces/test-run/trigger-moo/skill-1").exists()
     assert "secret found in the trial directory" in capsys.readouterr().out
 
 

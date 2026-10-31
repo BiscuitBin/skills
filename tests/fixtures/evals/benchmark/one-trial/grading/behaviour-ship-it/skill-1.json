@@ -1,0 +1,43 @@
+{
+  "expectations": [
+    {
+      "text": "The response shows an ASCII-art cow together with a speech bubble.",
+      "passed": true,
+      "evidence": "e",
+      "blinded": true
+    },
+    {
+      "text": "The speech bubble contains the text 'Ship it, team!' exactly, with the same capitalisation and punctuation.",
+      "passed": true,
+      "evidence": "e",
+      "blinded": true
+    },
+    {
+      "text": "The cow and its speech bubble are shown in a code block or other monospaced formatting, so the art stays aligned.",
+      "passed": false,
+      "evidence": "e",
+      "blinded": true
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 1,
+    "total": 3,
+    "pass_rate": 0.6666666666666666
+  },
+  "arm_disclosed": false,
+  "disclosure_matches": [],
+  "grader": {
+    "model_requested": "claude-opus-5-5",
+    "model": "claude-opus-5-5",
+    "cli_version": "2.1.309",
+    "status": "ok",
+    "status_reason": "",
+    "canary_passed": false,
+    "notes": "",
+    "calls": 1
+  },
+  "timing": {
+    "grader_duration_seconds": 10.0
+  }
+}

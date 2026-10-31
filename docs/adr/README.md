@@ -15,3 +15,4 @@ Each record states one decision that is hard to reverse, would surprise a reader
 | [0009](0009-flat-shipped-skills-layout.md) | Shipped skills use a flat skills directory |
 | [0010](0010-distribution-boundaries.md) | Each shipped skill is its own plugin; dev skills stay behind discovery symlinks |
 | [0011](0011-eval-case-location-and-isolation.md) | Eval cases live in evals/; trials are isolated by redirection and proven by the agent's own reports |
+| [0012](0012-llm-grader-and-benchmark-statistics.md) | The LLM grader runs on the pinned Claude Code, and failures it can be blamed for count against the trial |
