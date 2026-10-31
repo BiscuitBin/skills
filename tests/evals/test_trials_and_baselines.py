@@ -278,6 +278,22 @@ def test_a_grader_reply_utf_8_cannot_encode_is_written_with_replacements(tmp_pat
     assert (root / "eval-results/test-run/benchmark.json").exists()
 
 
+def test_a_reply_id_utf_8_cannot_encode_still_counts_as_invalid(tmp_path: Path) -> None:
+    # JSON's \ud800 escape: the id decodes to a lone surrogate, which the reason quotes.
+    reply = (
+        r'{"expectations": [{"id": "\ud800", "passed": true, "evidence": "x", "quote": "(oo)"}]}'
+    )
+    fake = fake_grader(tmp_path / "grader", reply=reply)
+    with serve(SCRIPT) as server:
+        exit_code = graded_run(tmp_path, server.url, fake, case_ids=("behaviour-moo",))
+    root = tmp_path / "repo"
+    (trial,) = results(root)["trials"]
+    assert exit_code == 1
+    assert (trial["graded"]["status"], trial["valid"]) == ("invalid_reply", True)
+    grading = json.loads((root / trial["grading"]).read_text(encoding="utf-8"))
+    assert "unexpected �" in grading["grader"]["status_reason"]
+
+
 def test_a_grading_that_cannot_be_written_is_a_grader_error_not_a_lost_run(
     tmp_path: Path,
 ) -> None:

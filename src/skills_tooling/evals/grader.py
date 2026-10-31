@@ -682,6 +682,9 @@ def _grading(  # noqa: PLR0913 -- the parts of one grading.json
     elapsed: float,
 ) -> dict[str, Any]:
     worst = max(outcomes, key=lambda o: STATUS_RANK[o.status], default=_Outcome("ok"))
+    # A reason can quote the reply (an unexpected id) or the CLI's result text,
+    # and a lone surrogate there would leave the grading unwritable.
+    reason = UNSENDABLE.sub("\ufffd", worst.reason)
     passed: list[bool | None] = []
     evidence: list[str] = []
     for index in range(len(expectations)):
@@ -690,7 +693,7 @@ def _grading(  # noqa: PLR0913 -- the parts of one grading.json
             evidence.append(verdicts[index].evidence)
         else:
             passed.append(None if worst.status == "grader_error" else False)
-            evidence.append(EVIDENCE[worst.status].format(reason=worst.reason))
+            evidence.append(EVIDENCE[worst.status].format(reason=reason))
     total = len(expectations)
     passes = sum(1 for p in passed if p)
     error = worst.status == "grader_error"
@@ -712,7 +715,7 @@ def _grading(  # noqa: PLR0913 -- the parts of one grading.json
             "model": next((o.model for o in outcomes if o.model), ""),
             "cli_version": next((o.cli_version for o in outcomes if o.cli_version), ""),
             "status": worst.status,
-            "status_reason": worst.reason,
+            "status_reason": reason,
             "canary_passed": _canary_passed(outcomes),
             "notes": "\n".join(o.notes for o in outcomes if o.notes),
             "calls": calls,
