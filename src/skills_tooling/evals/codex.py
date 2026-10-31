@@ -89,6 +89,8 @@ SHELLS = {"bash", "zsh", "sh"}
 UNPLACEABLE = re.compile(r"[*?\[\]{}$~`]")
 # The directory a skill directory sits in: .agents/skills, skills, dev-skills, .system.
 SKILLS_DIR = re.compile(r"skills$|^\.system$")
+# A frontmatter `name:` line, its value optionally quoted.
+FRONTMATTER_NAME = re.compile(r"""name:\s*["']?(.*?)["']?\s*""")
 # auth.json fields that are not secret. Short strings are not secret either:
 # keys, tokens and account ids are long, and a short label such as a plan name
 # would scrub every occurrence of a common word.
@@ -530,6 +532,20 @@ def skills_read(command: str) -> tuple[list[str], bool]:
     return skills, unplaceable
 
 
+def frontmatter_names(output: str) -> list[str]:
+    """The `name` in each `---` frontmatter block a read printed.
+
+    A glob read prints several files, so every block counts.
+    """
+    names, inside = [], False
+    for line in output.split("\n"):
+        if line.rstrip() == "---":
+            inside = not inside
+        elif inside and (match := FRONTMATTER_NAME.fullmatch(line)):
+            names.append(match.group(1))
+    return names
+
+
 def outcome_is_the_read(command: str, output: str) -> bool:
     """Whether the command's exit status and output show its read printed something.
 
@@ -566,8 +582,9 @@ def parse_stream(raw: RawRun) -> Trace:
     reader program, exits 0, and whose output shows the read printed something
     (see `outcome_is_the_read`). Codex's own skill_invocation events count too:
     `explicit` for a `$skill` mention, whose SKILL.md it injects without
-    running a command, and `implicit` only when such a read of the same skill,
-    or of a SKILL.md the text cannot place (see `skills_read`), succeeded.
+    running a command, and `implicit` only when such a read of the same skill
+    succeeded, or a read of a SKILL.md the text cannot place (see
+    `skills_read`) printed frontmatter naming the skill.
     Codex logs `implicit` from the command text before the command runs, and
     for a run of the skill's scripts too, so the event alone shows no read.
     Both events name a skill from Codex's own skill list, so every skill they
@@ -580,8 +597,8 @@ def parse_stream(raw: RawRun) -> Trace:
     listed: list[str] = []
     commands: list[Command] = []
     final = ""
-    # Whether a successful read named a SKILL.md the text cannot place.
-    read_unplaced = False
+    # The frontmatter names that successful reads of unplaced SKILL.md files printed.
+    unplaced_names: set[str] = set()
     for event in events:
         item = event.get("item")
         if event.get("type") != "item.completed" or not isinstance(item, dict):
@@ -597,7 +614,8 @@ def parse_stream(raw: RawRun) -> Trace:
             invoked += read
             if ok and outcome_is_the_read(command, output):
                 triggered += read
-                read_unplaced = read_unplaced or unplaced
+                if unplaced:
+                    unplaced_names.update(frontmatter_names(output))
     starts = ""
     denied = 0
     for line in raw.debug_lines:
@@ -615,9 +633,8 @@ def parse_stream(raw: RawRun) -> Trace:
                 triggered.append(skill)
             elif fields.get("skill.invocation_type") == "implicit":
                 implicit.append(skill)
-    # A placed read already counts; an unplaced one backs every implicit event.
-    if read_unplaced:
-        triggered += implicit
+    # A placed read already counts; an unplaced one backs the skill it printed.
+    triggered += [skill for skill in implicit if skill in unplaced_names]
     started = dict(FIELD.findall(starts))
     last = events[-1] if events else {}
     completed = clean and last.get("type") == "turn.completed"

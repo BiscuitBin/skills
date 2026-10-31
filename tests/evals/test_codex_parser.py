@@ -197,6 +197,61 @@ def test_a_read_of_another_skill_does_not_back_codexs_implicit_event(tmp_path: P
     assert trace.listed_skills == ["cowsay"]
 
 
+COWSAY_HEAD = "---\nname: cowsay\ndescription: Have a cow say it.\n---\n# Cowsay\n"
+
+
+def transcript(tmp_path: Path, *commands: tuple[str, int, str]) -> Path:
+    """A completed turn running each (command, exit code, output)."""
+    items = [
+        {
+            "type": "item.completed",
+            "item": {
+                "id": f"item_{n}",
+                "type": "command_execution",
+                "command": command,
+                "aggregated_output": output,
+                "exit_code": code,
+                "status": "completed" if code == 0 else "failed",
+            },
+        }
+        for n, (command, code, output) in enumerate(commands)
+    ]
+    events = [{"type": "turn.started"}, *items, {"type": "turn.completed"}]
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("".join(json.dumps(e) + "\n" for e in events))
+    return path
+
+
+FAILED_READ = ("cat .agents/skills/cowsay/SKILL.md", 1, "cat: No such file or directory\n")
+SCRIPT_RUN = ("python3 .agents/skills/cowsay/scripts/cowsay.py -- hi", 0, "< hi >\n")
+
+
+@pytest.mark.parametrize(
+    ("commands", "triggered"),
+    [
+        # An unplaced read that printed some other file backs no event.
+        ([FAILED_READ, ("cat SKILL.md", 0, "# Project instructions\n")], []),
+        ([("cat SKILL.md", 0, "# Project instructions\n")], []),
+        ([SCRIPT_RUN, ("cat SKILL.md", 0, "# Project instructions\n")], []),
+        ([("cat ../SKILL.md", 0, "---\nname: other\n---\n")], []),
+        # A retry in the skill's directory, as `workdir`, printed its frontmatter.
+        ([FAILED_READ, ("cat SKILL.md", 0, COWSAY_HEAD)], ["cowsay"]),
+        ([("pwd && cat SKILL.md", 0, f"/w/.agents/skills/cowsay\n{COWSAY_HEAD}")], ["cowsay"]),
+        (
+            [("cat .agents/skills/*/SKILL.md", 0, f"---\nname: other\n---\n{COWSAY_HEAD}")],
+            ["cowsay"],
+        ),
+        ([("cat SKILL.md", 0, "---\nname: 'cowsay'\n---\n")], ["cowsay"]),
+    ],
+)
+def test_an_unplaced_read_backs_the_implicit_event_of_the_skill_it_printed(
+    tmp_path: Path, commands: list[tuple[str, int, str]], triggered: list[str]
+) -> None:
+    trace = parse_stream(raw_run(transcript(tmp_path, *commands), log("fake-should-trigger")))
+    assert trace.status == "ok"
+    assert trace.skills_triggered == triggered
+
+
 def test_an_explicit_invocation_is_a_trigger_without_a_read() -> None:
     # `$cowsay:cowsay` injects SKILL.md into the request; no command reads it.
     trace = parse("fake-explicit")
