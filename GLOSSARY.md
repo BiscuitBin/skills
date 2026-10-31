@@ -42,6 +42,18 @@ _Avoid_: Judge, scorer, evaluator
 The same eval case run with no skill installed, so a skill's effect is measured as the difference.
 _Avoid_: Control, without-skill run
 
+**Arm**:
+One side of the comparison a run makes: the skill arm, with the skill installed, or the baseline arm, with nothing installed.
+_Avoid_: Configuration, condition, variant
+
+**Expectation**:
+One statement in an eval case's rubric that an LLM grader judges true or false from what the trial produced.
+_Avoid_: Criterion, check, rubric item
+
+**Canary expectation**:
+A known-false expectation the harness slips in among the real ones, so a grader that passes it is shown to have been subverted.
+_Avoid_: Control expectation, honeypot
+
 **Benchmark**:
 A report that aggregates the trials of one or more runs across agents, skills and baselines, with means and spread.
 _Avoid_: Leaderboard, scoreboard
