@@ -44,8 +44,9 @@ NAME_END = r"(?![\w-]|\.\w)"
 # Where a skill can be installed; the adapter's own skills_dir joins them.
 SKILL_DIRS = (".claude/skills", ".agents/skills", "skills")
 # The disclosure check. The cowsay prompts say "cowsay" but never "skill", so
-# an echo of the prompt does not match; "skills" and "SKILL.md" do.
-SKILL_WORD = re.compile(r"\bskill", re.IGNORECASE)
+# an echo of the prompt does not match; "skills" and "SKILL.md" do, and
+# "skilled" and "skillet" do not.
+SKILL_WORD = re.compile(r"\bskills?(?![a-z])", re.IGNORECASE)
 DISCLOSED_DIRS = (".claude/skills", ".agents/skills")
 # What no argument can carry: NUL, and a lone surrogate, which has no UTF-8.
 UNSENDABLE = re.compile("[\x00\ud800-\udfff]")
@@ -80,8 +81,9 @@ FRAMING = {
 }
 
 
-# The worse of two calls' statuses is the grading's.
-STATUS_RANK = {"ok": 0, "rejected": 1, "invalid_reply": 2, "grader_error": 3}
+# The worse of two calls' statuses is the grading's. A reply that counts against
+# the trial outranks a call that got none, so material cannot trade the one for the other.
+STATUS_RANK = {"ok": 0, "grader_error": 1, "rejected": 2, "invalid_reply": 3}
 REJECTED = "the canary expectation passed"
 # Every real expectation's evidence when the grading is not ok.
 EVIDENCE = {
@@ -483,7 +485,6 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
     trial: TrialPaths,
     workspaces_dir: Path,
     run_id: str,
-    key: str,
     skill: str,
     skills_dir: str,
     skill_dir: Path,
@@ -525,9 +526,7 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
     verdicts: dict[int, Verdict] = {}
     for indices, material in groups:
         texts = [expectations[i].text for i in indices]
-        outcome = _Call(settings, workspaces_dir, run_id, key).ask(
-            case.prompt, texts, material, draw
-        )
+        outcome = _Call(settings, workspaces_dir, run_id).ask(case.prompt, texts, material, draw)
         outcomes.append(outcome)
         # Only an ok call has verdicts, one for each expectation it was sent.
         if outcome.status == "ok":
@@ -556,7 +555,6 @@ class _Call:
     settings: GraderSettings
     workspaces_dir: Path
     run_id: str
-    key: str
 
     def ask(  # noqa: PLR0911 -- one return for each way a call can end
         self, task: str, texts: list[str], material: str, rng: random.Random
@@ -588,9 +586,10 @@ class _Call:
         seen = _Outcome("ok", model=trace.model, cli_version=trace.cli_version)
         if trace.status != "ok":
             return replace(seen, status="grader_error", reason=trace.status_reason)
+        # A reply, if an empty one: the material can ask for that.
         if not trace.final_message.strip():
             return replace(
-                seen, status="grader_error", reason="the grader returned no result text"
+                seen, status="invalid_reply", reason="the grader returned no result text"
             )
         try:
             verdicts, notes = _parse(trace.final_message, ids, material)
@@ -604,11 +603,12 @@ class _Call:
         return replace(seen, verdicts=real, canary_passed=False, notes=notes)
 
     def _run(self, system: str, user: str) -> Trace:
-        root = (self.workspaces_dir / self.run_id / "_grader" / self.key).resolve()
+        # A random name, not the trial key: the CLI tells the model its working
+        # directory even under --system-prompt, and the key names the arm.
+        name = f"_grader/{secrets.token_hex(8)}"
+        root = (self.workspaces_dir / self.run_id / name).resolve()
         try:
-            grader = workspace.create_trial(
-                self.workspaces_dir, self.run_id, f"_grader/{self.key}"
-            )
+            grader = workspace.create_trial(self.workspaces_dir, self.run_id, name)
             adapter = ClaudeCode(self.settings.executable, api_base_url=self.settings.api_base_url)
             homes = adapter.prepare_homes(grader)
             argv = [

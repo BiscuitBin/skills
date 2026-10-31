@@ -336,11 +336,7 @@ def _collect_credentials(
 
 def _scorable(record: Mapping[str, Any]) -> bool:
     """No secret found, the run was ok and uncontaminated: its scores count."""
-    return (
-        record["secret_found"] is None
-        and record["status"] == "ok"
-        and record["contamination"]["passed"] is True
-    )
+    return benchmark.exclusion(record) is None
 
 
 def run_trial(
@@ -469,7 +465,6 @@ def _grade(
             trial=trial,
             workspaces_dir=settings.workspaces_dir,
             run_id=settings.run_id,
-            key=planned.key,
             skill=settings.skill,
             skills_dir=settings.adapter.skills_dir,
             skill_dir=settings.root / "skills" / settings.skill,
@@ -607,4 +602,10 @@ def _why(trial: Mapping[str, Any]) -> str:
             for a in trial["assertions"]
             if a["result"] not in ("passed", "not_applicable")
         ]
+    if (graded := trial.get("graded")) is not None:
+        where = f"see {trial['grading']}" if trial.get("grading") else "no grading file"
+        if graded["status"] != "ok":
+            reasons.append(f"grading {graded['status']} ({where})")
+        elif trial["arm"] == "skill" and graded["failed"]:
+            reasons.append(f"{graded['failed']} of {graded['total']} expectations failed")
     return "; ".join(reasons)

@@ -14,6 +14,8 @@ from tests.evals.test_runner import ROOT, TOKEN, fake_root, results, run_cli, se
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import pytest
+
 NO_TRIGGER = "Tell me three facts about cows."
 MOO = "Have a cow say: moo"
 COW = "```text\n _____\n< moo >\n -----\n        \\   ^__^\n         \\  (oo)\\_______\n```"
@@ -212,7 +214,7 @@ def test_graded_trials_write_a_grading_per_trial_and_a_benchmark(tmp_path: Path)
 
 
 def test_a_failed_expectation_fails_a_skill_trial_but_not_a_baseline_trial(
-    tmp_path: Path,
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     verdicts = {**PASS_BOTH, "The bubble says moo.": {"passed": False, "evidence": "No."}}
     fake = fake_grader(tmp_path / "grader", verdicts=verdicts)
@@ -224,6 +226,7 @@ def test_a_failed_expectation_fails_a_skill_trial_but_not_a_baseline_trial(
     assert by_arm["skill"]["graded"]["failed"] == 1
     assert by_arm["skill"]["passed"] is False
     assert (by_arm["baseline"]["passed"], by_arm["baseline"]["valid"]) == (None, True)
+    assert "FAIL behaviour-moo/skill-1: 1 of 2 expectations failed\n" in capsys.readouterr().out
 
 
 def test_a_token_in_the_trace_never_reaches_the_grader(tmp_path: Path) -> None:
@@ -291,7 +294,9 @@ def test_a_grading_that_cannot_be_written_is_a_grader_error_not_a_lost_run(
     assert (tmp_path / "repo/eval-results/test-run/benchmark.json").exists()
 
 
-def test_a_grader_error_invalidates_a_baseline_trial(tmp_path: Path) -> None:
+def test_a_grader_error_invalidates_a_baseline_trial(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     fake = fake_grader(tmp_path / "grader", mode="fail")
     with serve(SCRIPT) as server:
         assert (
@@ -301,6 +306,9 @@ def test_a_grader_error_invalidates_a_baseline_trial(tmp_path: Path) -> None:
     assert by_arm["baseline"]["graded"]["status"] == "grader_error"
     assert by_arm["baseline"]["valid"] is False
     assert by_arm["skill"]["passed"] is False
+    printed = capsys.readouterr().out
+    assert "FAIL behaviour-moo/skill-1: grading grader_error (" in printed
+    assert "INVALID behaviour-moo/baseline-1: grading grader_error (" in printed
 
 
 def test_the_dry_run_plans_the_repos_cowsay_suite_with_its_grader_calls() -> None:

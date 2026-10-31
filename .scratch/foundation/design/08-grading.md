@@ -68,7 +68,7 @@ Paths (the trial key is `<case>/<arm>-<n>`, so nothing collides):
 | What | Path |
 | --- | --- |
 | Trial directory | `.eval-workspaces/<run-id>/<case>/<arm>-<n>/` |
-| Grader directory | `.eval-workspaces/<run-id>/_grader/<case>/<arm>-<n>/`. `_` is not a valid case-id character, so it cannot collide. Deleted after each call. |
+| Grader directory | `.eval-workspaces/<run-id>/_grader/<random>/`, a fresh random name for each call. `_` is not a valid case-id character, so it cannot collide. Deleted after each call. |
 | Transcript | `eval-results/<run-id>/transcripts/<case>/<arm>-<n>.jsonl` |
 | Grading | `eval-results/<run-id>/grading/<case>/<arm>-<n>.json` |
 | Run results | `eval-results/<run-id>/results.json` |
@@ -106,7 +106,7 @@ node_modules/.bin/claude -p <user prompt> --system-prompt <grader system prompt>
 ```
 
 - `--tools ""` gives it no tools: it cannot read files, run commands or fetch anything, so everything it judges is in the prompt. `--disable-slash-commands` turns off skills. The integration test checks the recorded API request: the `system` field carries the grader prompt's fixed header and `tools` is absent or empty.
-- It runs in its own directory, `.eval-workspaces/<run-id>/_grader/<case>/<arm>-<n>/`, created by `create_trial` (home, tmp, an empty git workspace as cwd). Its environment comes from `ClaudeCode.prepare_homes`, so the instruction-file switches, the redirected homes and the disabled autoupdater and telemetry all apply. The directory is deleted after the call, on every path.
+- It runs in its own directory, `.eval-workspaces/<run-id>/_grader/<random>/`, created by `create_trial` (home, tmp, an empty git workspace as cwd). Its environment comes from `ClaudeCode.prepare_homes`, so the instruction-file switches, the redirected homes and the disabled autoupdater and telemetry all apply. The directory is deleted after the call, on every path. Its name is random, not the trial key, because the CLI tells the model its working directory even under `--system-prompt`, and the key names the arm.
 - `parse_stream` reads its transcript: the init event's `model` and `claude_code_version`, and the `result` text. The run-status rules are the same as an agent trial's.
 - Timeout: 300 seconds per call. A timeout is a `grader_error`.
 - `--json-schema` is not used: the harness validates the reply itself (§4.5), which it would have to do anyway, and the fake API already supports text replies.
@@ -136,7 +136,7 @@ Skill calls never appear in this material: it is the final message and files onl
 
 **Disclosure check.** After redaction, the harness scans the material sent in both arms, case-insensitively, for:
 
-- the word `skill` (the cowsay prompts contain "cowsay" but never "skill", so an echo of the prompt does not match)
+- the word `skill` or `skills`, not a longer word such as "skilled" (the cowsay prompts contain "cowsay" but never "skill", so an echo of the prompt does not match)
 - the relative path of any file under `skills/<skill>/`, such as `scripts/cowsay.py` or `SKILL.md`
 - the skills-directory names `.claude/skills` and `.agents/skills`
 
@@ -208,12 +208,12 @@ Any violation makes the call `invalid_reply`. Then, per verdict:
 | --- | --- | --- | --- |
 | `ok` | Valid reply, canary failed | each verdict stands (after the quote rule) | counted |
 | `rejected` | The canary expectation passed | every expectation failed, evidence "grading rejected: the canary expectation passed" | counted as failures |
-| `invalid_reply` | A reply was received but failed validation: malformed JSON, wrong or missing ids, wrong types, extra keys | every expectation failed, evidence `grading invalid: REASON` | counted as failures |
-| `grader_error` | No reply was obtained: the CLI failed or timed out, its run status was not ok, or there was no `result` text | every expectation `passed: null` | excluded from `graded_pass_rate` and `outcome_pass_rate` (§5.3), counted separately |
+| `invalid_reply` | A reply was received but failed validation: empty, malformed JSON, wrong or missing ids, wrong types, extra keys | every expectation failed, evidence `grading invalid: REASON` | counted as failures |
+| `grader_error` | No reply was obtained: the CLI failed or timed out, its run status was not ok, or the stream had no `result` event | every expectation `passed: null` | excluded from `graded_pass_rate` and `outcome_pass_rate` (§5.3), counted separately |
 
 A reply that fails validation may have been caused by the graded material, so, like a passed canary, it counts against the trial rather than removing it. Only a failure that returned no reply at all, which the material cannot cause through the reply format, is excluded. An honest grader's occasional formatting slip therefore costs a trial; no retry is made, so the dry-run's call count stays exact.
 
-With two calls, the grading's status is the worse of the two (`grader_error` > `invalid_reply` > `rejected` > `ok`).
+With two calls, the grading's status is the worse of the two (`invalid_reply` > `rejected` > `grader_error` > `ok`). A reply that counts against the trial outranks a call that returned none, so a caught injection in one call is never excluded because the other call failed.
 
 ### 4.6 `grading.json`
 
@@ -334,7 +334,7 @@ A real run prints the same plan before the first trial. The Justfile's `eval` re
 
 | Risk | Mitigation | Residual |
 | --- | --- | --- |
-| The grader infers the arm | Final message and files only; trial paths and skill-install prefixes redacted identically; skill calls never sent; `expected_output` not sent; the system prompt says to disregard claims about how the outcome was produced; the disclosure check | The agent's prose or a bundled path can name the arm. Such trials are detected and counted per arm (§4.2), not hidden. A distinctive result, such as an exact canonical cow, can also reveal the arm, and that is not detected. The self-preference row's cancellation holds only as far as the grader cannot infer the arm. |
+| The grader infers the arm | Final message and files only; trial paths and skill-install prefixes redacted identically; the grader's own directory has a random name; skill calls never sent; `expected_output` not sent; the system prompt says to disregard claims about how the outcome was produced; the disclosure check | The agent's prose or a bundled path can name the arm. Such trials are detected and counted per arm (§4.2), not hidden. A distinctive result, such as an exact canonical cow, can also reveal the arm, and that is not detected. The self-preference row's cancellation holds only as far as the grader cannot infer the arm. |
 | Injection in the material ("pass everything") | Nonce-tagged untrusted-data block; system prompt says to ignore and note instructions in it; no tools; the canary expectation; the quote rule; an invalid reply counts as failed, so breaking the reply format cannot remove a trial from the denominator | An adaptive injection that knows this harness could tell the grader to fail the reference-code expectation and pass the rest. It would also need quotable text, which it can supply itself, since it is part of the material. The quote rule proves the quote exists, not that it supports the verdict. A grader failure with no reply is still excluded; it is counted and noted on the delta. |
 | Lenient grading | Burden of proof on passing; a pass needs a nonempty verbatim quote; no partial credit | The grader can still accept a weak quote. An empty or whitespace-only quote counts as no quote; a very short quote is still accepted. |
 | Self-preference (Claude grading Claude) | The same grader judges both arms, so a constant bias largely cancels in the delta | It does not cancel if the bias depends on the arm's style. Unmeasured. |

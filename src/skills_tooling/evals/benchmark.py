@@ -59,7 +59,7 @@ class _Scored:
     disclosed: bool = False
 
 
-def _exclusion(trial: Mapping[str, Any]) -> str | None:
+def exclusion(trial: Mapping[str, Any]) -> str | None:
     """Which count removes the trial from every metric, or None when it is scored."""
     if trial["secret_found"] is not None:
         return "n_secret_found"
@@ -173,7 +173,7 @@ def _arm(
     counts = dict.fromkeys(("n_scored", *EXCLUSIONS), 0)
     scored = []
     for trial in trials:
-        excluded = _exclusion(trial)
+        excluded = exclusion(trial)
         if excluded is not None:
             counts[excluded] += 1
             continue

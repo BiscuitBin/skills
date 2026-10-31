@@ -272,7 +272,9 @@ CLEAN_COW = MATERIAL
             "Found nothing in .Claude/Skills or .agents/skills.",
             [".agents/skills", ".claude/skills", "skill"],
         ),
+        ("The skill's script drew it; skill_dir and skill-creator too.", ["skill"]),
         (CLEAN_COW, []),
+        ("A skilled, skillful cow in a skillet shows its skillset.", []),
     ],
 )
 def test_the_disclosure_check_flags_material_that_names_the_arm(
@@ -571,7 +573,6 @@ def run_grade(  # noqa: PLR0913 -- the test's knobs, each with a default
         trial=trial,
         workspaces_dir=tmp_path / ".eval-workspaces",
         run_id="run-1",
-        key=key,
         skill="cowsay",
         skills_dir=".claude/skills",
         skill_dir=ROOT / "skills/cowsay",
@@ -623,7 +624,6 @@ def assert_grader_gone(tmp_path: Path) -> None:
         ({"mode": "hang"}, 1.0, "timed out after "),
         ({"mode": "fail"}, 30.0, "stream truncated: the last event is not a result"),
         ({"mode": "no_result"}, 30.0, "stream truncated: the last event is not a result"),
-        ({"reply": " \n"}, 30.0, "the grader returned no result text"),
     ],
 )
 def test_no_reply_is_a_grader_error_with_every_verdict_null(
@@ -641,6 +641,18 @@ def test_no_reply_is_a_grader_error_with_every_verdict_null(
     assert grading["grader"]["status"] == "grader_error"
     assert grading["grader"]["canary_passed"] is None
     assert_grader_gone(tmp_path)
+
+
+def test_an_empty_reply_is_invalid_and_fails_every_expectation(tmp_path: Path) -> None:
+    # The material can ask for silence, so an empty reply counts against the trial.
+    grading = run_grade(tmp_path, fake_grader(tmp_path, reply=" \n"))
+    reason = "the grader returned no result text"
+    assert (grading["grader"]["status"], grading["grader"]["status_reason"]) == (
+        "invalid_reply",
+        reason,
+    )
+    assert [e["passed"] for e in grading["expectations"]] == [False, False]
+    assert grading["summary"] == {"passed": 0, "failed": 2, "total": 2, "pass_rate": 0.0}
 
 
 def test_a_reply_that_breaks_the_contract_fails_every_expectation(tmp_path: Path) -> None:
@@ -721,6 +733,18 @@ def test_a_prompt_too_large_for_one_argument_is_a_grader_error_without_a_call(
     [prompt] = fake.prompts()
     assert RAN in prompt
     assert HUGE not in prompt
+
+
+def test_a_passed_canary_outranks_the_other_calls_grader_error(tmp_path: Path) -> None:
+    # The blinded call cannot be sent; the transcript call passes its canary.
+    case = ship_it(Expectation(HUGE), Expectation(RAN, blinded=False))
+    fake = fake_grader(tmp_path, verdicts={RAN: RAN_OK}, otherwise=CANARY_PASSES)
+    trace = a_trace(FINAL, [Command("cowsay moo", ok=True, output="< moo >")])
+    grading = run_grade(tmp_path, fake, case=case, trace=trace)
+    grader = grading["grader"]
+    assert (grader["status"], grader["canary_passed"], grader["calls"]) == ("rejected", True, 1)
+    assert [e["passed"] for e in grading["expectations"]] == [False, False]
+    assert grading["summary"]["pass_rate"] == 0.0
 
 
 QUOTED = {"passed": True, "evidence": "Shown.", "quote": "(oo)\\_______"}
@@ -836,12 +860,15 @@ def test_the_canary_code_is_redrawn_when_the_material_contains_it(tmp_path: Path
     assert planted in prompt
 
 
-def test_the_grader_runs_in_its_own_workspace(tmp_path: Path) -> None:
+def test_the_grader_runs_in_its_own_workspace_whose_path_names_no_arm(tmp_path: Path) -> None:
+    # The CLI tells the model its working directory, whatever the system prompt.
     fake = fake_grader(tmp_path)
     run_grade(tmp_path, fake, key="behaviour-ship-it/baseline-2")
     [record] = fake.records()
-    grader = tmp_path / ".eval-workspaces/run-1/_grader/behaviour-ship-it/baseline-2/workspace"
-    assert record["cwd"] == str(grader.resolve())
+    cwd = Path(record["cwd"])
+    assert cwd.parent.parent == (tmp_path / ".eval-workspaces/run-1/_grader").resolve()
+    assert cwd.name == "workspace"
+    assert not re.search(r"skill|baseline|behaviour", cwd.parent.name)
 
 
 def test_a_disclosure_only_in_the_transcript_material_is_caught(tmp_path: Path) -> None:
@@ -1113,7 +1140,6 @@ def test_the_pinned_cli_grades_a_trial_against_the_fake_api(tmp_path: Path) -> N
             trial=trial,
             workspaces_dir=tmp_path / ".eval-workspaces",
             run_id="run-1",
-            key="behaviour-ship-it/skill-1",
             skill="cowsay",
             skills_dir=".claude/skills",
             skill_dir=ROOT / "skills/cowsay",
@@ -1121,6 +1147,9 @@ def test_the_pinned_cli_grades_a_trial_against_the_fake_api(tmp_path: Path) -> N
         )
     graded = [r for r in server.requests if "# Eval grader" in system_text(json.loads(r.body))]
     assert graded, server.bodies()
+    # The CLI sends its working directory despite --system-prompt; it must not name the trial.
+    assert "skill-1" not in graded[0].body
+    assert "behaviour-ship-it" not in graded[0].body
     body = json.loads(graded[0].body)
     asked = json.dumps(body["messages"][0])
     assert "e2: The material contains the reference code" in asked

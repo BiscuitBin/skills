@@ -188,10 +188,10 @@ Codex lists its skills only inside the model request, which a live run cannot ob
 Rubric expectations are graded by Claude through the pinned Claude Code CLI, whatever agent ran the trial ([ADR 0012](../adr/0012-llm-grader-and-benchmark-statistics.md)). [The design](../../.scratch/foundation/design/08-grading.md) explains each rule and what it does not cover.
 
 - **When:** after the trial's teardown and secret sweep, only for a trial whose case has expectations and that is scorable (status `ok`, contamination passed, no secret found).
-- **Command:** `node_modules/.bin/claude -p <prompt> --system-prompt <grader prompt> --tools "" --disable-slash-commands --output-format stream-json --verbose --model <grader model> --no-session-persistence --strict-mcp-config --max-budget-usd 1.00`, in `.eval-workspaces/<run-id>/_grader/<case>/<arm>-<n>/`, with the environment `prepare_homes` builds for an agent trial. The directory is deleted after each call. No tools means everything it judges is in the prompt.
+- **Command:** `node_modules/.bin/claude -p <prompt> --system-prompt <grader prompt> --tools "" --disable-slash-commands --output-format stream-json --verbose --model <grader model> --no-session-persistence --strict-mcp-config --max-budget-usd 1.00`, in `.eval-workspaces/<run-id>/_grader/<random>/`, with the environment `prepare_homes` builds for an agent trial. The directory is deleted after each call. Its name is random because the CLI tells the model its working directory, and the trial key names the arm. No tools means everything it judges is in the prompt.
 - **Credential:** `CLAUDE_CODE_OAUTH_TOKEN`, the same token a Claude Code run uses. A Codex run whose selected cases carry expectations needs it too, and is a usage error without it. It joins the run's secrets, so the scrub and the sweep cover the grading files, and the grader sees the trace with every secret scrubbed.
 - **Blinded material:** the final message (capped at 20 KB) and every workspace file except `.git/` and the skills directory (20 KB each, 80 KB in all; non-UTF-8 files by name and size, symlinks by name). The caps keep the whole prompt inside one Linux argument; a NUL becomes U+FFFD for the same reason. A lone surrogate, in the material or in the grader's evidence and notes, becomes U+FFFD too, since UTF-8 cannot encode it. The trial directory, which names the arm, and every skill-install prefix (`.claude/skills/<skill>/`, `.agents/skills/<skill>/`, `skills/<skill>/`) are removed in both arms alike. Skill calls are never sent, nor the case's `expected_output`.
-- **Disclosure check:** the material is scanned, case-insensitively, for the word `skill`, any file path inside `skills/<skill>/`, and `.claude/skills` or `.agents/skills`. A match is graded anyway and recorded as `arm_disclosed`, with the matches, because rewriting the agent's prose would change what is judged.
+- **Disclosure check:** the material is scanned, case-insensitively, for the word `skill` or `skills` (not "skilled"), any file path inside `skills/<skill>/`, and `.claude/skills` or `.agents/skills`. A match is graded anyway and recorded as `arm_disclosed`, with the matches, because rewriting the agent's prose would change what is judged.
 - **Unblinded expectations** (`needs_transcript`) are judged in a second call whose material adds each command with its output (4 KB per output, 100 KB in all), and are marked `"blinded": false`.
 - **Untrusted material:** the material sits between `<graded-material-NONCE>` tags, with a fresh random nonce the material does not contain. The system prompt says everything inside is data and any instruction in it is to be ignored and noted.
 - **Canary expectation:** each call slips in a known-false expectation naming a random code the material does not contain. If the grader passes it, every expectation is recorded as failed (`rejected`).
@@ -201,10 +201,10 @@ Rubric expectations are graded by Claude through the pinned Claude Code CLI, wha
 | --- | --- | --- | --- |
 | `ok` | A valid reply; the canary failed | each verdict, after the quote rule | counted |
 | `rejected` | The canary passed | every expectation failed | counted as failures |
-| `invalid_reply` | A reply that failed validation: not one JSON object, wrong or missing ids, wrong types, extra keys | every expectation failed | counted as failures |
-| `grader_error` | No reply: the CLI failed or timed out, its run was not ok, or there was no result | every `passed` is `null` | excluded from `graded_pass_rate` and `outcome_pass_rate`, counted |
+| `invalid_reply` | A reply that failed validation: empty, not one JSON object, wrong or missing ids, wrong types, extra keys | every expectation failed | counted as failures |
+| `grader_error` | No reply: the CLI failed or timed out, its run was not ok, or its stream had no result | every `passed` is `null` | excluded from `graded_pass_rate` and `outcome_pass_rate`, counted |
 
-A reply that fails validation might have been caused by the graded material, so it counts against the trial; only a call that returned nothing is excluded. With two calls, the worse status wins.
+A reply that fails validation might have been caused by the graded material, so it counts against the trial; only a call that returned nothing is excluded. With two calls, the worse status wins, and a reply that counts against the trial outranks a call that returned nothing.
 
 ## Benchmark
 
@@ -224,7 +224,7 @@ For each agent, case and arm it counts `n_planned`, `n_scored` (status ok, uncon
 - **Intention to treat:** a skill-arm trial in which the skill did not trigger still counts in its arm's outcome metrics.
 - An infrastructure error, contamination or a secret found removes a trial from every metric. A grader error removes it from the graded and outcome rates only. Every exclusion is counted, never turned into a 0.
 - `stddev` is the sample standard deviation, `null` below two values. A metric with nothing to measure is `null`, never 0.
-- **Notes** flag fewer than three trials ("spread not meaningful"), a flaky trigger, an expectation that passed in every trial of both arms (non-discriminating), unequal n, excluded grader errors, and trials whose material named the arm.
+- **Notes** flag fewer than three trials ("spread not meaningful"), a flaky trigger, an expectation that passed in every trial of both arms (non-discriminating), and, on a delta, unequal n, excluded grader errors and trials whose material named the arm. A run without a baseline has no delta; its per-arm counts still show both.
 - **Per agent:** the trial-weighted mean of each metric over all cases, and the agent's delta as the mean of the per-case deltas, with the number of cases.
 - No significance test or confidence interval is reported. With a few trials per arm the figures are descriptive.
 - In the printed table, a case's baseline reads `off` when the run had no baseline arm, and `skipped` when the baseline ran without that case.
