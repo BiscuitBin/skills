@@ -81,13 +81,54 @@ def test_a_valid_suite_loads(tmp_path: Path) -> None:
     suite = load_suite(tmp_path, "cowsay")
     assert [case.id for case in suite.cases] == ["behaviour-hi", "trigger-cow"]
     assert suite.cases[0].assertions[1].args == ("--", "hi")
+    assert suite.cases[0].expectations == ()
+
+
+def test_expectations_load_blinded_unless_they_need_the_transcript(tmp_path: Path) -> None:
+    rubric = ["A cow appears", {"text": "The script ran once", "needs_transcript": True}]
+    write_suite(tmp_path, {"skill_name": "cowsay", "evals": [behaviour(expectations=rubric)]})
+    [case] = load_suite(tmp_path, "cowsay").cases
+    assert [(e.text, e.blinded) for e in case.expectations] == [
+        ("A cow appears", True),
+        ("The script ran once", False),
+    ]
+
+
+def test_assertions_are_classed_as_skill_use_or_outcome(tmp_path: Path) -> None:
+    write_suite(tmp_path, {"skill_name": "cowsay", "evals": [behaviour()]})
+    [case] = load_suite(tmp_path, "cowsay").cases
+    assert [(a.type, a.skill_use) for a in case.assertions] == [
+        ("skill_triggered", True),
+        ("script_ran", True),
+        ("final_contains_script_output", False),
+        ("output_contains", False),
+        ("output_matches", False),
+    ]
 
 
 @pytest.mark.parametrize(
     ("case", "expected"),
     [
         (behaviour(files=["input.txt"]), "input files are not staged yet"),
-        (behaviour(expectations=["rubric"]), "unknown key 'expectations'"),
+        (behaviour(expectations="rubric"), "expectations must be a list"),
+        (behaviour(expectations=[""]), "expectation text must be a nonempty string"),
+        (behaviour(expectations=["  "]), "expectation text must be a nonempty string"),
+        (behaviour(expectations=[{"text": ""}]), "expectation text must be a nonempty string"),
+        (behaviour(expectations=[3]), "an expectation must be a string or an object"),
+        (behaviour(expectations=["Moo", "Moo"]), "duplicate expectation 'Moo'"),
+        (
+            behaviour(expectations=["Moo", {"text": "Moo", "needs_transcript": True}]),
+            "duplicate expectation 'Moo'",
+        ),
+        (
+            behaviour(expectations=[{"text": "Moo", "needs_transcript": False}]),
+            "needs_transcript must be true",
+        ),
+        (behaviour(expectations=[{"text": "Moo", "weight": 2}]), "unknown key 'weight'"),
+        (
+            {**trigger(), "expectations": ["A cow appears"]},
+            "expectations are allowed on behaviour cases only",
+        ),
         (behaviour(kind="vibes"), "kind must be 'trigger' or 'behaviour'"),
         (behaviour(should_trigger=False), "behaviour cases need should_trigger: true"),
         (behaviour(assertions=[]), "behaviour cases need at least one assertion"),

@@ -1,8 +1,8 @@
 """Eval cases: evals/<skill>/evals.json. The schema is in docs/reference/evals.md.
 
 It extends skill-creator's evals.json with a case kind, an expected-trigger
-flag and deterministic assertions. Unknown keys are rejected everywhere, so a
-later field such as rubric `expectations` has to be added on purpose.
+flag, deterministic assertions and rubric expectations. Unknown keys are
+rejected everywhere, so a later field has to be added on purpose.
 """
 
 import json
@@ -16,7 +16,17 @@ if TYPE_CHECKING:
 Kind = Literal["trigger", "behaviour"]
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
 SUITE_KEYS = {"skill_name", "evals"}
-CASE_KEYS = {"id", "kind", "prompt", "should_trigger", "expected_output", "files", "assertions"}
+CASE_KEYS = {
+    "id",
+    "kind",
+    "prompt",
+    "should_trigger",
+    "expected_output",
+    "files",
+    "assertions",
+    "expectations",
+}
+EXPECTATION_KEYS = {"text", "needs_transcript"}
 # Each assertion type's required and optional fields, beyond `type`.
 ASSERTION_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "skill_triggered": (set(), set()),
@@ -25,6 +35,9 @@ ASSERTION_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "output_contains": ({"value"}, set()),
     "output_matches": ({"pattern"}, set()),
 }
+# Skill-use assertions show the skill was used; the baseline arm never scores
+# them. The rest are outcome assertions, scored in both arms.
+SKILL_USE = frozenset({"skill_triggered", "script_ran"})
 
 
 @dataclass(frozen=True)
@@ -35,6 +48,18 @@ class Assertion:
     value: str | None = None
     pattern: str | None = None
 
+    @property
+    def skill_use(self) -> bool:
+        return self.type in SKILL_USE
+
+
+@dataclass(frozen=True)
+class Expectation:
+    """A rubric expectation for the LLM grader. Blinded unless it needs the transcript."""
+
+    text: str
+    blinded: bool = True
+
 
 @dataclass(frozen=True)
 class Case:
@@ -44,6 +69,7 @@ class Case:
     should_trigger: bool
     expected_output: str | None
     assertions: tuple[Assertion, ...]
+    expectations: tuple[Expectation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -105,6 +131,44 @@ def _assertion(data: object, where: str, skill_dir: Path, problems: list[str]) -
     )
 
 
+def _expectation(data: object, where: str, problems: list[str]) -> Expectation | None:
+    if isinstance(data, str):
+        data = {"text": data}
+    if not isinstance(data, dict):
+        problems.append(f"{where}: an expectation must be a string or an object")
+        return None
+    before = len(problems)
+    problems += _unknown(data, EXPECTATION_KEYS, where)
+    text = data.get("text")
+    if not isinstance(text, str) or not text.strip():
+        problems.append(f"{where}: expectation text must be a nonempty string")
+    # false is the string form; two spellings of one thing are rejected.
+    if "needs_transcript" in data and data["needs_transcript"] is not True:
+        problems.append(f"{where}: needs_transcript must be true, or left out")
+    if len(problems) > before:
+        return None
+    return Expectation(str(text), blinded="needs_transcript" not in data)
+
+
+def _expectations(data: dict[str, object], where: str, problems: list[str]) -> list[Expectation]:
+    raw = data.get("expectations", [])
+    if not isinstance(raw, list):
+        problems.append(f"{where}: expectations must be a list")
+        return []
+    if raw and data.get("kind") != "behaviour":
+        problems.append(f"{where}: expectations are allowed on behaviour cases only")
+    found = [
+        _expectation(item, f"{where}: expectations[{index}]", problems)
+        for index, item in enumerate(raw)
+    ]
+    texts = [e.text for e in found if e is not None]
+    problems += [
+        f"{where}: duplicate expectation {text!r}"
+        for text in sorted({t for t in texts if texts.count(t) > 1})
+    ]
+    return [e for e in found if e is not None]
+
+
 def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Case | None:  # noqa: PLR0912 -- one check per schema rule
     if not isinstance(data, dict):
         problems.append(f"{where}: a case must be an object")
@@ -146,6 +210,7 @@ def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Cas
         _assertion(item, f"{where}: assertions[{index}]", skill_dir, problems)
         for index, item in enumerate(raw_assertions)
     ]
+    expectations = _expectations(data, where, problems)
     if kind == "behaviour":
         if should is not True:
             problems.append(f"{where}: behaviour cases need should_trigger: true")
@@ -160,6 +225,7 @@ def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Cas
         should_trigger=bool(should),
         expected_output=expected,
         assertions=tuple(a for a in assertions if a is not None),
+        expectations=tuple(expectations),
     )
 
 
