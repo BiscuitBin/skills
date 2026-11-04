@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from skills_tooling.evals.benchmark import aggregate
-from skills_tooling.evals.history import HistoryError, load, record, snapshot
+from skills_tooling.evals.history import HistoryError, assemble, load, record
 from tests.evals.test_benchmark import FIXTURES
 from tests.evals.test_benchmark import load as load_fixture
 
@@ -118,19 +118,35 @@ def test_a_run_without_a_benchmark_is_refused(tmp_path: Path) -> None:
         record(tmp_path, "first", ["20990101T000000Z-ffff"], now=NOW)
 
 
-def test_load_returns_a_skills_iterations_oldest_first(tmp_path: Path) -> None:
-    run_id = stored_run(tmp_path, "paired")
-    record(tmp_path, "zeta", [run_id], now=NOW)
-    record(tmp_path, "alpha", [run_id], now=NOW.replace(hour=13))
-    assert [i["iteration"] for i in load(tmp_path, "cowsay")] == ["zeta", "alpha"]
+def test_load_orders_iterations_by_when_their_runs_started_not_when_recorded(
+    tmp_path: Path,
+) -> None:
+    later = stored_run(tmp_path, "paired", run_id="20261102T000000Z-0002", started_at="2026-11-02")
+    earlier = stored_run(
+        tmp_path, "paired", run_id="20261101T000000Z-0001", started_at="2026-11-01"
+    )
+    record(tmp_path, "zeta", [later], now=NOW)
+    # A backfilled older run, recorded afterwards, is still the older iteration.
+    record(tmp_path, "alpha", [earlier], now=NOW.replace(hour=13))
+    assert [i["iteration"] for i in load(tmp_path, "cowsay")] == ["alpha", "zeta"]
     assert load(tmp_path, "nothing-recorded") == []
 
 
-def test_a_snapshot_of_unrecorded_runs_is_an_iteration_that_is_not_written(
+@pytest.mark.parametrize("missing", ["runs", "recorded_at", "iteration"])
+def test_a_damaged_iteration_file_is_a_history_error(tmp_path: Path, missing: str) -> None:
+    path = record(tmp_path, "first", [stored_run(tmp_path, "paired")], now=NOW)
+    data = json.loads(path.read_text())
+    del data[missing]
+    path.write_text(json.dumps(data))
+    with pytest.raises(HistoryError, match="not a schema-1 iteration"):
+        load(tmp_path, "cowsay")
+
+
+def test_unrecorded_runs_assemble_into_an_iteration_that_is_not_written(
     tmp_path: Path,
 ) -> None:
     run_id = stored_run(tmp_path, "paired")
-    provisional = snapshot(tmp_path, None, [run_id], now=NOW)
+    provisional = assemble(tmp_path, None, [run_id], now=NOW)
     assert provisional["iteration"] is None
     assert provisional["skill"] == "cowsay"
     assert not (tmp_path / "benchmarks").exists()

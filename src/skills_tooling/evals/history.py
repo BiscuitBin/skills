@@ -1,7 +1,7 @@
 """Benchmark history: named iterations in benchmarks/<skill>/<iteration>.json.
 
-An iteration is a snapshot of one run per agent: each run's benchmark.json and
-the case list from its results.json. It holds no transcript and no grading
+An iteration holds one run per agent: each run's benchmark.json and the case
+list from its results.json. It holds no transcript and no grading
 file. Where it lives and why it is committed: docs/adr/0014-benchmark-history.md.
 """
 
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from skills_tooling.evals import results
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
 SCHEMA = 1
@@ -74,7 +74,7 @@ def _run(root: Path, run_id: str) -> dict[str, Any]:
         raise HistoryError(msg) from error
 
 
-def snapshot(
+def assemble(
     root: Path, name: str | None, run_ids: Sequence[str], *, now: datetime | None = None
 ) -> dict[str, Any]:
     """The iteration the runs make; name is None for runs shown but not recorded."""
@@ -111,7 +111,7 @@ def record(root: Path, name: str, run_ids: Sequence[str], *, now: datetime | Non
     if not NAME.fullmatch(name) or name == UNRECORDED:
         msg = f"iteration name {name!r}: use letters, digits, '.', '_' and '-'"
         raise HistoryError(msg)
-    iteration = snapshot(root, name, run_ids, now=now)
+    iteration = assemble(root, name, run_ids, now=now)
     path = history_dir(root, iteration["skill"]) / f"{name}.json"
     if path.exists():
         msg = f"iteration {name!r} is already recorded at {path.relative_to(root)}"
@@ -121,15 +121,38 @@ def record(root: Path, name: str, run_ids: Sequence[str], *, now: datetime | Non
     return path
 
 
+def _started(iteration: Mapping[str, Any]) -> str:
+    """When the iteration's latest run started: what it measured, not when it was recorded."""
+    return max(str(run.get("started_at", "")) for run in iteration["runs"])
+
+
+def _complete(iteration: object, skill: str) -> bool:
+    return (
+        isinstance(iteration, dict)
+        and iteration.get("schema") == SCHEMA
+        and iteration.get("skill") == skill
+        and isinstance(iteration.get("iteration"), str)
+        and isinstance(iteration.get("recorded_at"), str)
+        and isinstance(iteration.get("runs"), list)
+        and bool(iteration["runs"])
+        and all(isinstance(run, dict) for run in iteration["runs"])
+    )
+
+
 def load(root: Path, skill: str) -> list[dict[str, Any]]:
-    """A skill's recorded iterations, oldest first."""
-    directory = history_dir(root, skill)
-    found = [_read(p, "iteration") for p in sorted(directory.glob("*.json"))]
-    for path, iteration in zip(sorted(directory.glob("*.json")), found, strict=True):
-        if iteration.get("schema") != SCHEMA or iteration.get("skill") != skill:
+    """A skill's recorded iterations, ordered by when their runs started.
+
+    A run recorded late, such as one backfilled from another worktree, still
+    sorts by when it ran. Ties go by recording time, then by name.
+    """
+    found = []
+    for path in sorted(history_dir(root, skill).glob("*.json")):
+        iteration = _read(path, "iteration")
+        if not _complete(iteration, skill):
             msg = f"{path} is not a schema-{SCHEMA} iteration of {skill}"
             raise HistoryError(msg)
-    return sorted(found, key=lambda i: (i["recorded_at"], i["iteration"]))
+        found.append(iteration)
+    return sorted(found, key=lambda i: (_started(i), i["recorded_at"], i["iteration"]))
 
 
 def recorded_skills(root: Path) -> list[str]:

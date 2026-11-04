@@ -84,7 +84,12 @@ def _case_delta(
         return _state("not_applicable")
     measured = delta[metric]
     if measured["value"] is None:
-        return _state("not_applicable" if skill["state"] == "not_applicable" else "no_data")
+        if skill["state"] in {"not_applicable", "no_scored"}:
+            return _state(skill["state"])
+        baseline = case["baseline"]
+        if isinstance(baseline, dict) and baseline["n_scored"] == 0:
+            return _state("no_scored")
+        return _state("no_data")
     return {
         "state": "value",
         "mean": measured["value"],
@@ -113,12 +118,7 @@ def _pooled_values(run: Mapping[str, Any]) -> dict[str, Value]:
     values: dict[str, Value] = {}
     for m in METRICS:
         measured = run["benchmark"]["pooled"]["skill"][m]
-        if isinstance(measured, dict):
-            values[m] = _stat(measured)
-        elif cases and all(c[m]["state"] == "not_applicable" for c in cases):
-            values[m] = _state("not_applicable")
-        else:
-            values[m] = _state("no_data")
+        values[m] = _stat(measured) if isinstance(measured, dict) else _missing(cases, m)
     for m in DELTA_METRICS:
         key = f"delta:{m}"
         measured = run["benchmark"]["delta"][m]
@@ -132,11 +132,19 @@ def _pooled_values(run: Mapping[str, Any]) -> dict[str, Value]:
                 "n": measured["n_cases"],
                 "unit": "cases",
             }
-        elif all(c[key]["state"] == "not_applicable" for c in cases):
-            values[key] = _state("not_applicable")
         else:
-            values[key] = _state("no_data")
+            values[key] = _missing(cases, key)
     return values
+
+
+def _missing(cases: Sequence[Mapping[str, Value]], key: str) -> Value:
+    """Why a figure over all cases has no value, from why each case has none."""
+    states = {c[key]["state"] for c in cases}
+    if states == {"not_applicable"}:
+        return _state("not_applicable")
+    if states and states <= {"not_applicable", "no_scored"}:
+        return _state("no_scored")
+    return _state("no_data")
 
 
 def _deltas() -> tuple[str, ...]:
@@ -443,7 +451,8 @@ def _e(text: object) -> str:
 
 
 def _td(value: Value, *, flag: bool = False) -> str:
-    classes = [value["state"]] + (["regressed"] if flag else [])
+    classes = [value["state"] if value["state"] == "value" else "missing"]
+    classes += ["regressed"] if flag else []
     return f'<td class="{" ".join(classes)}">{_e(show(value))}</td>'
 
 
@@ -494,8 +503,11 @@ def _provenance(report: Mapping[str, Any]) -> str:
             p["agent"],
             p["run_id"],
             listed(p["agent_cli_versions"]),
-            f"{p['requested_model']} (reported: {listed(p['agent_models'])})",
-            f"{p['grader_model_requested']} (reported: {listed(p['grader_models'])})",
+            f"{p['requested_model'] or 'default'} (reported: {listed(p['agent_models'])})",
+            (
+                f"{p['grader_model_requested'] or 'no grader'}"
+                f" (reported: {listed(p['grader_models'])})"
+            ),
             listed(p["grader_cli_versions"]),
             f"{p['trials_per_case']}{' + baseline' if p['baseline'] else ''}",
             commit,
@@ -580,8 +592,7 @@ body { font: 14px/1.45 system-ui, sans-serif; color: var(--fg); background: var(
 table { border-collapse: collapse; margin: 8px 0 20px; display: block; overflow-x: auto; }
 th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left;
   white-space: nowrap; font-variant-numeric: tabular-nums; }
-td:not(.value) { color: var(--muted); font-style: italic; }
-td.value { font-style: normal; }
+td.missing { color: var(--muted); font-style: italic; }
 td.regressed, .regressions li { color: var(--bad); background: var(--bad-bg); }
 """
 

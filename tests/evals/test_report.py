@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from skills_tooling.evals.history import snapshot
+from skills_tooling.evals.history import assemble
 from skills_tooling.evals.report import build, render_html
 from tests.evals.test_history import stored_run
 
@@ -91,7 +91,7 @@ class History:
 
     def iteration(self, name: str | None, *run_ids: str) -> dict[str, Any]:
         when = START + timedelta(hours=self.count)
-        return snapshot(self.root, name, list(run_ids), now=when)
+        return assemble(self.root, name, list(run_ids), now=when)
 
 
 @pytest.fixture
@@ -190,7 +190,7 @@ def test_a_metric_with_no_scored_trials_is_no_data(history: History) -> None:
     ship = cell(report, SHIP, "claude")
     assert ship["trigger"] == {"state": "no_scored"}
     assert ship["pass"] == {"state": "no_scored"}
-    assert ship["delta"] == {"state": "no_data"}
+    assert ship["delta"] == {"state": "no_scored"}
 
 
 def test_a_case_whose_every_grading_failed_has_no_pass_rate_data(history: History) -> None:
@@ -487,3 +487,35 @@ def test_an_agent_delta_over_fewer_cases_is_labelled(history: History) -> None:
         if (r["scope"], r["metric"]) == ("all cases", "delta:outcome_pass_rate")
     )
     assert "measured over different cases" in found["labels"]
+
+
+def test_figures_over_all_cases_say_no_scored_trials_when_every_trial_was_excluded(
+    history: History,
+) -> None:
+    def all_crashed(run: dict[str, Any]) -> None:
+        base(run)
+        for trial in run["trials"]:
+            trial["status"] = "infra_error"
+
+    report = build([history.iteration("first", history.run(edit=all_crashed))])
+    assert report["matrix"]["pooled"]["claude"]["trigger"] == {"state": "no_scored"}
+    assert report["matrix"]["pooled"]["claude"]["pass"] == {"state": "no_scored"}
+    assert report["deltas"]["claude"]["outcome_pass_rate"] == {"state": "no_scored"}
+
+
+def test_a_case_delta_says_no_scored_trials_when_either_arm_had_none(history: History) -> None:
+    def baseline_crashed(run: dict[str, Any]) -> None:
+        base(run)
+        for trial in run["trials"]:
+            if trial["arm"] == "baseline":
+                trial["status"] = "infra_error"
+
+    def skill_crashed(run: dict[str, Any]) -> None:
+        base(run)
+        for trial in run["trials"]:
+            if trial["case"] == SHIP and trial["arm"] == "skill":
+                trial["status"] = "infra_error"
+
+    for edit in (baseline_crashed, skill_crashed):
+        report = build([history.iteration("first", history.run(edit=edit))])
+        assert cell(report, SHIP, "claude")["delta"] == {"state": "no_scored"}

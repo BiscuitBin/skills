@@ -151,7 +151,7 @@ def record(args: argparse.Namespace) -> int:
 
 def _reports(args: argparse.Namespace, root: Path) -> list[dict[str, Any]]:
     """Each skill's report: its recorded iterations, then any --run runs as one more."""
-    provisional = history.snapshot(root, None, args.run) if args.run else None
+    provisional = history.assemble(root, None, args.run) if args.run else None
     if provisional is not None and args.skill not in (None, provisional["skill"]):
         msg = f"the --run runs test {provisional['skill']}, not {args.skill}"
         raise history.HistoryError(msg)
