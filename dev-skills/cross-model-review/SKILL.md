@@ -18,7 +18,7 @@ The protocol below follows ticket `.scratch/foundation/issues/01-cross-model-rev
 ```sh
 REVIEW select --implementer claude-code            # you are Claude Code
 REVIEW select --implementer codex                  # you are Codex
-REVIEW select --implementer other --model <id>     # Pi or any other agent: the model you are actually running
+REVIEW select --implementer other --model <id>     # any other agent: the model you are actually running
 ```
 
 - Claude Code implementer → Codex, `gpt-6-astra`, read-only sandbox, ephemeral session.

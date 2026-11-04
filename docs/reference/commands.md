@@ -19,6 +19,6 @@ Every command goes through `just`. Run `just` on its own to list the recipes.
 | `validate-evals` | Validates every `evals/*/evals.json` against the [eval case schema](evals.md#case-schema). It calls no agent. |
 | `eval <skill> --agent claude\|codex` | Runs a skill's eval cases against the pinned agent and writes `eval-results/<run-id>/results.json`. It needs `CLAUDE_CODE_OAUTH_TOKEN` (Claude Code) or a Codex login in the project's `CODEX_HOME` (Codex), and calls a paid model, so it is never part of `check`. Takes `--case`, `--model` and `--timeout`. See [evals](evals.md). |
 | `validate-distribution` | Checks marketplace sources and versions, requires committed install sources, then runs pinned Claude Code's strict validation on the marketplace and each shipped plugin. See [distribution](distribution.md). |
-| `agents-version` | Prints the version of each pinned agent CLI (Claude Code, Codex and Pi), run from `node_modules/.bin` with isolated homes under `.tools/agent-homes/`. |
+| `agents-version` | Prints the version of each pinned agent CLI (Claude Code and Codex), run from `node_modules/.bin` with isolated homes under `.tools/agent-homes/`. |
 | `just-version` | Fails unless the running just is the pinned version. |
 | `check` | The full gate, which CI also runs: `just-version`, `lock-check`, `lint`, `typecheck`, `validate-distribution`, `test` (including credential-free install round trips and the eval harness against a local fake API), `validate-skills`, `validate-evals`, then `agents-version`. It stops at the first failure. |

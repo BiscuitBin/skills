@@ -8,7 +8,7 @@ The repo also gets its agent instructions, a documentation skeleton, the first A
 
 **Status:** done, except the CI criterion, which needs the first run on the PR
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). All three pinned agent CLIs must be installed for version checks; authenticated live agent runs are not required outside the cross-model review checkpoint below.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). All three pinned agent CLIs must be installed for version checks; authenticated live agent runs are not required outside the cross-model review checkpoint below.
 
 ## Acceptance criteria
 

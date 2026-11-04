@@ -2,7 +2,7 @@
   "name": "skills-dev-tools",
   "version": "0.1.0",
   "private": true,
-  "description": "Pinned, project-local dev tools for BiscuitBin/skills: the three agent CLIs, Prettier and markdownlint.",
+  "description": "Pinned, project-local dev tools for BiscuitBin/skills: the Claude Code and Codex CLIs, Prettier, markdownlint and the skills installer.",
   "license": "MIT",
   "packageManager": "npm@11.17.0",
   "engines": {
@@ -11,15 +11,12 @@
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "2.1.309",
-    "@earendil-works/pi-coding-agent": "1.4.0",
     "@openai/codex": "0.163.0",
     "markdownlint-cli2": "0.24.0",
     "prettier": "3.9.10",
     "skills": "1.7.4"
   },
   "allowScripts": {
-    "@anthropic-ai/claude-code@2.1.309": true,
-    "@google/genai": false,
-    "protobufjs": false
+    "@anthropic-ai/claude-code@2.1.309": true
   }
 }

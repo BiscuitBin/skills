@@ -8,7 +8,7 @@ The repo also gets its own skill validator. `just check` and CI run it over ever
 
 **Status:** done
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). No live agent runs are required outside the cross-model review checkpoints below; the skill and validator are checked locally.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). No live agent runs are required outside the cross-model review checkpoints below; the skill and validator are checked locally.
 
 ## Acceptance criteria
 

@@ -11,7 +11,7 @@ In both cases they get exactly the shipped skill and nothing internal to the rep
 
 **Status:** done
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). The pinned Claude Code CLI is required for plugin validation and marketplace installation. The `npx skills` round trip targets Claude Code, Codex and Pi; this does not require those agents to implement the ticket. Record any installation credential requirement as described below. Cross-model review is also required.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). The pinned Claude Code CLI is required for plugin validation and marketplace installation. The `npx skills` round trip targets Claude Code, Codex and Pi; this does not require those agents to implement the ticket. Record any installation credential requirement as described below. Cross-model review is also required.
 
 ## Acceptance criteria
 

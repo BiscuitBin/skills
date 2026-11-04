@@ -17,7 +17,7 @@ CI now lifts the restriction (`sysctl -w kernel.apparmor_restrict_unprivileged_u
 
 **Status:** done
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Recording the transcript needs the pinned Codex on a Linux machine (or VM) with the AppArmor restriction on; the tests themselves must not. Cross-model review is also required.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). Recording the transcript needs the pinned Codex on a Linux machine (or VM) with the AppArmor restriction on; the tests themselves must not. Cross-model review is also required.
 
 ## Acceptance criteria
 

@@ -1,6 +1,6 @@
 # Skills
 
-The vocabulary for developing, evaluating and distributing agent skills for Claude Code, Codex and Pi.
+The vocabulary for developing, evaluating and distributing agent skills for Claude Code and Codex. Pi can install the skills but is not yet evaluated.
 
 ## Skills
 

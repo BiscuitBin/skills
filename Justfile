@@ -170,7 +170,6 @@ validate-distribution:
 agents-version:
     ./node_modules/.bin/claude --version
     ./node_modules/.bin/codex --version
-    ./node_modules/.bin/pi --version
 
 # uv and Node check their own versions (`required-version` in pyproject.toml,
 # `engine-strict` in .npmrc). Nothing checks just's, so this does. CI installs

@@ -6,7 +6,7 @@
 
 **Status:** done
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Authenticated access to the pinned Codex CLI is required to capture transcripts and pass the live eval; the implementer need not be Codex. Cross-model review is also required.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). Authenticated access to the pinned Codex CLI is required to capture transcripts and pass the live eval; the implementer need not be Codex. Cross-model review is also required.
 
 ## Acceptance criteria
 

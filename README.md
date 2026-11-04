@@ -1,6 +1,6 @@
 # skills
 
-Agent skills for Claude Code, Codex and Pi, in the [Agent Skills](https://agentskills.io/specification) `SKILL.md` format. This repository is where they are developed, evaluated against all three agents, and distributed.
+Agent skills for Claude Code and Codex, in the [Agent Skills](https://agentskills.io/specification) `SKILL.md` format. This repository is where they are developed, evaluated against both agents, and distributed. Pi can install them through `npx skills`, but they are not yet evaluated on Pi.
 
 The first shipped skill is `cowsay`, with a bundled Python script. The eval harness is under development. Work is tracked in `.scratch/foundation/issues/`.
 

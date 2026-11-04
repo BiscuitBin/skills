@@ -1,6 +1,6 @@
 # Agent instructions
 
-This repository develops, evaluates and distributes agent skills in the Agent Skills `SKILL.md` format, for Claude Code, Codex and Pi. Tickets are in `.scratch/<effort>/issues/`. Use the terms in `GLOSSARY.md`, and read the relevant record in `docs/adr/` before changing a decision it covers.
+This repository develops, evaluates and distributes agent skills in the Agent Skills `SKILL.md` format, for Claude Code and Codex. Pi can install them but is not evaluated; Pi support is future work (`docs/adr/0013-pi-deferred-past-mvp.md`). Tickets are in `.scratch/<effort>/issues/`. Use the terms in `GLOSSARY.md`, and read the relevant record in `docs/adr/` before changing a decision it covers.
 
 ## Commands
 
