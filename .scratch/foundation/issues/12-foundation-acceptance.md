@@ -3,7 +3,7 @@
 **What to build:** Proof that the foundation works for someone who has only the docs. A fresh-context agent, starting from a fresh clone, follows only the README and the docs to:
 
 - get a green `just check`
-- run the cowsay eval on all three agents
+- run the cowsay eval on Claude Code and Codex
 - build the report
 - install cowsay through each distribution channel
 
@@ -13,7 +13,7 @@ Then the whole repo gets a cross-model adversarial review. Valid findings are fi
 
 **Status:** ready-for-agent
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). A fresh-context subagent must perform the walkthrough with authenticated access to Claude Code, Codex and Pi, plus the configured grader when grading is enabled. Claude Code is also required for marketplace installation. The full-repo review and fix review require a reviewer from a different model family, plus separate reviewer and triage subagents.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). A fresh-context subagent must perform the walkthrough with authenticated access to Claude Code and Codex, plus the configured grader when grading is enabled. Claude Code is also required for marketplace installation. The full-repo review and fix review require a reviewer from a different model family, plus separate reviewer and triage subagents.
 
 ## Acceptance criteria
 
@@ -21,7 +21,7 @@ Then the whole repo gets a cross-model adversarial review. Valid findings are fi
 
 - [ ] A fresh-context subagent, given only the repo URL or a fresh clone and the instruction to follow the docs, completes these steps:
   - `just initialize` and `just check`, both green
-  - `just eval cowsay` on Claude Code, Codex and Pi, all passing
+  - `just eval cowsay` on Claude Code and Codex, all passing
   - `just eval-report`
   - installing cowsay through the marketplace and through `npx skills` into a throwaway project
 - [ ] Every point where the walkthrough agent got stuck, guessed, or had to read source code is fixed in the docs, and the walkthrough is repeated until it runs clean.
@@ -29,14 +29,14 @@ Then the whole repo gets a cross-model adversarial review. Valid findings are fi
 
 **Carried-over checks:**
 
-- [ ] The ticket 01 dev skill is confirmed discoverable by Claude Code, Codex and Pi in this repo.
-- [ ] Any gaps recorded by earlier tickets are closed or carried into the follow-up notes, for example the secret-present dispatch from ticket 10 or Pi discovery from ticket 01.
+- [ ] The ticket 01 dev skill is confirmed discoverable by Claude Code and Codex in this repo. Pi discovery moved to future ticket 07 ([ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md)).
+- [ ] Any gaps recorded by earlier tickets are closed or carried into the follow-up notes, for example the secret-present dispatch from ticket 10.
 
 **Full-repo review:**
 
 - [ ] A cross-model adversarial review covers the whole repo, not just a diff. It is checked against the foundation goals in the research notes and every earlier ticket's acceptance criteria.
 - [ ] Every finding is triaged, valid fixes are applied, and `just check` is green afterwards.
-- [ ] Residual gaps, deferred items and out-of-scope findings are written as follow-up notes in the foundation scratch folder. The deferred items are description-routing evals, description optimisation, a catalogue site, Codex and Pi package manifests, and a custom installer.
+- [ ] Residual gaps, deferred items and out-of-scope findings are written as follow-up notes in the foundation scratch folder. The deferred items are description-routing evals, description optimisation, a catalogue site, a Codex package manifest, a custom installer, and the Pi adapter and evals (future ticket 07).
 - [ ] Every ticket in the foundation set has its completion notes and a done status, except where a mandatory criterion is still unmet. Those criteria are listed by ticket in this ticket's completion notes as open, not as follow-ups, and the user confirms them before the foundation is called done.
 
 ## Review checkpoints

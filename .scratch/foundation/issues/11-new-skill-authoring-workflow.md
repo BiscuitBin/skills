@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). A fresh-context subagent must follow the tutorial, with authenticated access to at least one supported agent for its live eval. No particular agent is required for that walkthrough. Cross-model review is also required.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). A fresh-context subagent must follow the tutorial, with authenticated access to at least one supported agent for its live eval. No particular agent is required for that walkthrough. Cross-model review is also required.
 
 ## Acceptance criteria
 

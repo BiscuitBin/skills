@@ -116,6 +116,8 @@ Sources: <https://learn.chatgpt.com/docs/build-skills>, <https://learn.chatgpt.c
 
 ## Pi
 
+Pi is deferred past the MVP ([ADR 0013](../../docs/adr/0013-pi-deferred-past-mvp.md)). This section is kept as research for future ticket 07.
+
 Source: <https://github.com/earendil-works/pi> (badlogic/pi-mono redirects here). See `packages/coding-agent/docs/skills.md`, `cli.md`, `json.md` and `security.md`.
 
 - **Skill paths:**

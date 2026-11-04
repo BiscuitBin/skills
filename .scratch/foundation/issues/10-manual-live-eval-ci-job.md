@@ -6,13 +6,13 @@
 
 **Status:** ready-for-agent
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). The secret-present CI demonstration needs credentials for the selected agents and, when grading is enabled, the configured grader. If repository secrets cannot be configured, demonstrate the skip path and record the remaining demonstration for ticket 12 as allowed below. Cross-model review is also required.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). The secret-present CI demonstration needs credentials for the selected agents and, when grading is enabled, the configured grader. If repository secrets cannot be configured, demonstrate the skip path and record the remaining demonstration for ticket 12 as allowed below. Cross-model review is also required.
 
 ## Acceptance criteria
 
 - [ ] A manually dispatched workflow has these inputs:
   - the skill selection (a name, or changed skills)
-  - the agents (any of Claude Code, Codex, Pi)
+  - the agents (Claude Code or Codex, or both)
   - the trial count, with a low default
   - a baseline toggle
 - [ ] Inputs are validated: known skill names and agents, and a trial count within a documented maximum. They reach shell steps as data and are never pasted into commands.

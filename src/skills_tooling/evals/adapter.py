@@ -116,7 +116,7 @@ class CredentialError(Exception):
 
 
 class Adapter(Protocol):
-    """Drives one agent CLI. Pi (ticket 07) implements it too."""
+    """Drives one agent CLI. A future Pi adapter (.scratch/future/issues/07) would too."""
 
     name: ClassVar[str]
     default_model: ClassVar[str]

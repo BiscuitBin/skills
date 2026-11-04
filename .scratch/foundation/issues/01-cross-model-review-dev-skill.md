@@ -8,7 +8,7 @@ Read the foundation research notes (`.scratch/foundation/research.md`) first. Th
 
 **Status:** done. One criterion's placement half stays open until ticket 04 runs its listing test (see Completion notes).
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Claude Code and Codex access is required for the headless discovery checks and live review checks. Pi discovery may be deferred to ticket 12 as described below. Review requires a reviewer from a different model family, plus separate reviewer and triage subagents.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). Claude Code and Codex access is required for the headless discovery checks and live review checks. Pi discovery moved to future ticket 07 ([ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md)). Review requires a reviewer from a different model family, plus separate reviewer and triage subagents.
 
 ## The protocol
 
@@ -43,6 +43,7 @@ The skill encodes this protocol, and this text stays its source of truth:
   - Claude Code and Codex are each shown discovering it in a headless run.
   - Pi is verified once ticket 02's pinned Pi exists, or the gap is recorded for ticket 12 to recheck.
   - *Done:* Claude Code and Codex shown from `.scratch/`. The Pi gap is recorded for ticket 12.
+  - *Moved:* the Pi recheck now belongs to future ticket 07 (ADR 0013), not ticket 12.
 - [x] The skill has one source of content. It is made visible to every agent's discovery location without duplicating that content.
 - [x] The skill's frontmatter follows the Agent Skills spec. Its name and description are narrow enough that it triggers for review requests and not for ordinary coding.
 - [ ] The skill is clearly marked repo-internal, and the agent instructions say that dev skills must be excluded from distribution (ticket 04) and from eval workspaces (ticket 05). Choose where the dev skill lives with ticket 04 in mind: `npx skills` scans this repo's agent skill folders (see the research notes), so the placement must let ticket 04 prove the dev skill is not offered.

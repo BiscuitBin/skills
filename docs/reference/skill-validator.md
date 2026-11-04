@@ -35,10 +35,13 @@ The CLI exits nonzero if any error occurs; warnings alone pass.
 
 ## Agent extension allowlist
 
-Supported means documented consumption; ignored means the pinned loader tolerates
-an unknown key, not that the feature works. Shipped skills target Claude Code,
-Codex and Pi. Dev skills may use documented extensions. No current evidence
-establishes a hard loader rejection in these three CLI targets; Claude's upload/packaging validators are separate from Claude Code's loader.
+Supported means documented consumption; ignored means the agent's loader
+tolerates an unknown key, not that the feature works. Shipped skills target
+Claude Code and Codex. Pi can install them but is not evaluated
+([ADR 0013](../adr/0013-pi-deferred-past-mvp.md)), and its column comes from
+Pi 1.4.0, checked while Pi was pinned. Dev skills may use documented extensions.
+No current evidence establishes a hard loader rejection in Claude Code, Codex or
+Pi 1.4.0; Claude's upload/packaging validators are separate from Claude Code's loader.
 
 | Fields | Type | Claude Code | Codex | Pi |
 | --- | --- | --- | --- | --- |
@@ -73,8 +76,9 @@ does not cover budgets, file references or openai.yaml.
 - [Agent Skills specification](https://agentskills.io/specification)
 - [skills-ref validator](https://github.com/agentskills/agentskills/blob/main/skills-ref/src/skills_ref/validator.py)
 - [Claude Code frontmatter](https://code.claude.com/docs/en/skills#frontmatter-reference)
-- Pi 1.4.0: node_modules/@earendil-works/pi-coding-agent/dist/core/skills.js;
-  unknown keys ignored and disable-model-invocation read as a boolean.
+- Pi 1.4.0 source (`dist/core/skills.js` in `@earendil-works/pi-coding-agent`),
+  checked 2026-10-23 while Pi was pinned: unknown keys ignored and
+  disable-model-invocation read as a boolean.
 - Pinned Codex [parser.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/parser.rs) ignores unknown fields.
 - Pinned Codex [model.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/model.rs) and [interface.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/interface.rs) define UI metadata.
 

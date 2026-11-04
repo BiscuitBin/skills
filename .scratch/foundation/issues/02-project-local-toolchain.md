@@ -8,7 +8,7 @@ The repo also gets its agent instructions, a documentation skeleton, the first A
 
 **Status:** done, except the CI criterion, which needs the first run on the PR
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). All three pinned agent CLIs must be installed for version checks; authenticated live agent runs are not required outside the cross-model review checkpoint below.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). The pinned Claude Code and Codex CLIs must be installed for version checks; Pi's pin was removed ([ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md)). Authenticated live agent runs are not required outside the cross-model review checkpoint below.
 
 ## Acceptance criteria
 
@@ -18,6 +18,7 @@ The repo also gets its agent instructions, a documentation skeleton, the first A
 - [x] Claude Code, Codex and Pi are pinned to exact versions and installed project-locally.
   - A recipe prints each version without using any global install.
   - Any pinned binaries live in a gitignored tools folder inside the project.
+  - *Narrowed:* ADR 0013 removed the Pi pin; Claude Code and Codex stay pinned.
 - [x] `just check` covers ruff (lint and format check), mypy, pytest, markdownlint and prettier.
   - A deliberately broken input in each category makes it fail. Show this, then revert.
   - One trivial test proves the pytest wiring.

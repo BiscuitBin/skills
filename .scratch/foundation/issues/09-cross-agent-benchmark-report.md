@@ -2,18 +2,18 @@
 
 **What to build:** `just eval-report` turns recorded eval results into a static report a person can open offline. It shows:
 
-- a matrix of agents (Claude Code, Codex, Pi) against cases
+- a matrix of agents (Claude Code, Codex) against cases
 - each skill's delta against its baseline
 - how results changed across iterations
 - flags on regressions since the last recorded benchmark
 
 This lets a skill author see at a glance whether a change helped, hurt, or broke one agent in particular.
 
-**Blocked by:** 06 (Codex adapter), 07 (Pi adapter), 08 (Graded trials and baselines).
+**Blocked by:** 06 (Codex adapter), 08 (Graded trials and baselines). Pi is deferred ([ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md)); future ticket 07 adds its column.
 
 **Status:** ready-for-agent
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Report generation itself requires no agent calls. Completion requires results from live cowsay runs on Claude Code, Codex and Pi; authenticated access to each agent and the configured grader is needed if those results must be generated. Cross-model review is also required.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). Report generation itself requires no agent calls. Completion requires results from live cowsay runs on Claude Code and Codex; authenticated access to both agents and the configured grader is needed if those results must be generated. Cross-model review is also required.
 
 ## Acceptance criteria
 
@@ -27,7 +27,7 @@ This lets a skill author see at a glance whether a change helped, hurt, or broke
 - [ ] Regression flags mark any metric that fell beyond a configurable threshold since the last recorded benchmark for the same skill and agent. A run with a regression can be made to exit nonzero. When the cases, rubric, model or CLI version differ from the earlier benchmark, the report labels the comparison as such instead of presenting it as a like-for-like change.
 - [ ] Missing data (an agent never run, a case added later) shows as missing, never as zero.
 - [ ] Building the report from fixture results is tested in `just check`, including a fixture with a regression that gets flagged, and fixtures for a should-trigger case and a should-not-trigger case.
-- [ ] A real report built from live cowsay runs on all three agents is produced and summarised in the completion notes.
+- [ ] A real report built from live cowsay runs on both agents is produced and summarised in the completion notes.
 
 ## Review checkpoints
 

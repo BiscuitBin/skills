@@ -13,7 +13,7 @@ Grading output follows skill-creator's shapes, described in the research notes (
 
 **Status:** done
 
-**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Authenticated Claude Code access and access to the configured grader model are required for the live benchmark. The grader defaults to Opus 5.5 (`claude-opus-5-5`) but is configurable; this does not constrain the implementing agent. Cross-model review is also required.
+**Agent requirements:** Any implementing agent (Claude Code or Codex). Authenticated Claude Code access and access to the configured grader model are required for the live benchmark. The grader defaults to Opus 5.5 (`claude-opus-5-5`) but is configurable; this does not constrain the implementing agent. Cross-model review is also required.
 
 ## Acceptance criteria
 
