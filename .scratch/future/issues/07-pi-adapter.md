@@ -61,3 +61,14 @@ These notes record the review of the change that deferred this ticket ([ADR 0013
 | 2 | medium | `skill-validator.md` presents Pi as a current pinned target | valid for the prose; the Pi allowlist column stays | Paragraph names Claude Code and Codex as targets and dates the Pi column to Pi 1.4.0 |
 
 **Follow-ups:** none.
+
+### PR #11 review
+
+- **Reviewers:** GitHub Copilot (inline comment), plus the implementer's own sweep for leftover "three agent CLIs" wording
+
+| # | Source | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | Copilot | Ticket 02's Agent requirements line still requires all three pinned agent CLIs | valid: ticket 02 has an open CI criterion, so the line is still in force | Requirements line names Claude Code and Codex and cites ADR 0013; an additive *Narrowed* note follows the done pin criterion |
+| 2 | self-review | ADR 0003 says the gate pins "the three agent CLIs", but ADR 0013 only superseded ADR 0002 | valid | ADR 0013's supersedes sentence now names ADR 0003 too; ADR 0003 itself is unchanged |
+
+**Follow-ups:** none.
