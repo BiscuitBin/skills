@@ -35,10 +35,13 @@ The CLI exits nonzero if any error occurs; warnings alone pass.
 
 ## Agent extension allowlist
 
-Supported means documented consumption; ignored means the pinned loader tolerates
-an unknown key, not that the feature works. Shipped skills target Claude Code,
-Codex and Pi. Dev skills may use documented extensions. No current evidence
-establishes a hard loader rejection in these three CLI targets; Claude's upload/packaging validators are separate from Claude Code's loader.
+Supported means documented consumption; ignored means the agent's loader
+tolerates an unknown key, not that the feature works. Shipped skills target
+Claude Code and Codex. Pi can install them but is not evaluated
+([ADR 0013](../adr/0013-pi-deferred-past-mvp.md)), and its column comes from
+Pi 1.4.0, checked while Pi was pinned. Dev skills may use documented extensions.
+No current evidence establishes a hard loader rejection in Claude Code, Codex or
+Pi 1.4.0; Claude's upload/packaging validators are separate from Claude Code's loader.
 
 | Fields | Type | Claude Code | Codex | Pi |
 | --- | --- | --- | --- | --- |

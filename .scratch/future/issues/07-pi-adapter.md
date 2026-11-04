@@ -42,3 +42,22 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - Apply the valid fixes, rerun `just check`, and record every finding and how it was handled under **Completion notes**.
 
 - **Implementation checkpoint:** before marking done, review the full diff against these acceptance criteria. Pay particular attention to the project-trust approval scope, trigger detection accuracy, and isolation leaks.
+
+## Completion notes
+
+These notes record the review of the change that deferred this ticket ([ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md)), not work on the ticket itself. That change had no ticket of its own.
+
+### Cross-model review of the Pi deferral
+
+- **Implementer:** Claude Code running Opus 5.5 (`claude-opus-5-5`)
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `3802631...1d29d1b`
+- **Findings:** `ai_tmp/review-20261104T023947Z-codex.md` · **Triage:** `ai_tmp/triage-pi-defer-20261104T024040Z.md`
+- The first run exited 4 and was discarded unread: Codex initialised its project home (`.tools/agent-homes/codex/`) during its first run in a fresh worktree. The rerun passed.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | Ticket 01 still sends Pi discovery to ticket 12 | valid for the Agent requirements line; the done criterion and completion notes are history | Requirements line points at this ticket; an additive *Moved* note follows the done criterion |
+| 2 | medium | `skill-validator.md` presents Pi as a current pinned target | valid for the prose; the Pi allowlist column stays | Paragraph names Claude Code and Codex as targets and dates the Pi column to Pi 1.4.0 |
+
+**Follow-ups:** none.
