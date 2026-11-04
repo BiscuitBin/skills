@@ -1,11 +1,16 @@
-"""Validate eval cases, or run them against an agent. See docs/reference/evals.md."""
+"""Validate eval cases, run them against an agent, record benchmarks and report on them.
+
+See docs/reference/evals.md.
+"""
 
 import argparse
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from skills_tooling.evals import history
+from skills_tooling.evals import report as reporting
 from skills_tooling.evals.adapter import CredentialError
 from skills_tooling.evals.cases import CaseError, load_suite, validate_all
 from skills_tooling.evals.claude_code import BUDGET_USD, ClaudeCode
@@ -26,6 +31,7 @@ if TYPE_CHECKING:
     from skills_tooling.evals.cases import Case
 
 USAGE = 2
+REGRESSED = 1
 GRADER_MODEL = "claude-opus-5-5"
 
 
@@ -131,6 +137,70 @@ def run(args: argparse.Namespace) -> int:
     return run_suite(settings)
 
 
+def record(args: argparse.Namespace) -> int:
+    """Write finished runs as a named iteration under benchmarks/<skill>/."""
+    root: Path = args.root.resolve()
+    try:
+        path = history.record(root, args.name, args.run_ids)
+    except history.HistoryError as error:
+        print(f"eval: {error}", file=sys.stderr)
+        return USAGE
+    print(f"Recorded {path.relative_to(root)}")
+    return 0
+
+
+def _reports(args: argparse.Namespace, root: Path) -> list[dict[str, Any]]:
+    """Each skill's report: its recorded iterations, then any --run runs as one more."""
+    provisional = history.snapshot(root, None, args.run) if args.run else None
+    if provisional is not None and args.skill not in (None, provisional["skill"]):
+        msg = f"the --run runs test {provisional['skill']}, not {args.skill}"
+        raise history.HistoryError(msg)
+    skills = [args.skill] if args.skill else history.recorded_skills(root)
+    if provisional is not None and provisional["skill"] not in skills:
+        skills.append(provisional["skill"])
+    reports = []
+    for skill in skills:
+        iterations = history.load(root, skill)
+        if provisional is not None and provisional["skill"] == skill:
+            iterations.append(provisional)
+        if iterations:
+            reports.append(reporting.build(iterations, threshold=args.threshold))
+    return reports
+
+
+def report(args: argparse.Namespace) -> int:
+    """Build the offline report from recorded iterations. Calls no agent and no network."""
+    root: Path = args.root.resolve()
+    try:
+        reports = _reports(args, root)
+    except history.HistoryError as error:
+        print(f"eval: {error}", file=sys.stderr)
+        return USAGE
+    if not reports:
+        scope = f"for {args.skill} " if args.skill else ""
+        print(
+            f"eval: no benchmark recorded {scope}in benchmarks/; record one with just eval-record.",
+            file=sys.stderr,
+        )
+        return USAGE
+    out: Path = args.out if args.out is not None else root / "eval-results/report.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(reporting.render_html(reports))
+    for each in reports:
+        print(reporting.summary(each), end="")
+    print(f"Report: {out}")
+    regressed = any(each["regressions"] for each in reports)
+    return REGRESSED if regressed and args.fail_on_regression else 0
+
+
+def threshold(value: str) -> float:
+    number = float(value)
+    if not 0 <= number <= 1:
+        msg = f"must be between 0 and 1, got {number}"
+        raise argparse.ArgumentTypeError(msg)
+    return number
+
+
 def trials(value: str) -> int:
     count = int(value)
     if count < 1:
@@ -174,8 +244,35 @@ def main() -> None:
         help="Print the planned agent and grader calls and the spend cap, then exit.",
     )
     live.add_argument("--root", type=Path, default=Path.cwd())
+    keep = commands.add_parser("record", help="Record finished runs as a named iteration.")
+    keep.add_argument("name", help="The iteration's name, such as a version or a change.")
+    keep.add_argument("run_ids", nargs="+", metavar="run-id", help="One run per agent.")
+    keep.add_argument("--root", type=Path, default=Path.cwd())
+    show = commands.add_parser("report", help="Build the offline benchmark report.")
+    show.add_argument("skill", nargs="?", help="Report only this skill.")
+    show.add_argument(
+        "--run",
+        action="append",
+        default=[],
+        metavar="RUN_ID",
+        help="Add an unrecorded run as the last iteration (repeatable, one per agent).",
+    )
+    show.add_argument(
+        "--threshold",
+        type=threshold,
+        default=reporting.DEFAULT_THRESHOLD,
+        help=f"Flag a metric that fell by more than this. Default: {reporting.DEFAULT_THRESHOLD}.",
+    )
+    show.add_argument(
+        "--fail-on-regression",
+        action="store_true",
+        help=f"Exit {REGRESSED} when any metric is flagged.",
+    )
+    show.add_argument("--out", type=Path, help="Default: eval-results/report.html.")
+    show.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
-    sys.exit(validate(args.root) if args.command == "validate" else run(args))
+    handlers = {"run": run, "record": record, "report": report}
+    sys.exit(validate(args.root) if args.command == "validate" else handlers[args.command](args))
 
 
 if __name__ == "__main__":

@@ -58,6 +58,14 @@ _Avoid_: Control expectation, honeypot
 A report that aggregates the trials of one or more runs across agents, skills and baselines, with means and spread.
 _Avoid_: Leaderboard, scoreboard
 
+**Iteration**:
+A named benchmark recorded into the skill's history, holding one run per agent, so the report can show how each metric changed from one iteration to the next.
+_Avoid_: Version, snapshot, release
+
+**Regression**:
+A metric that fell by more than the report's threshold between an agent's last two benchmarks of the same skill.
+_Avoid_: Failure, drop
+
 **Contamination**:
 Anything the agent could see during a trial other than the skill under test and the agent's built-in skills, such as this repo's dev skills, other shipped skills or the user's own skills.
 _Avoid_: Leakage, pollution
