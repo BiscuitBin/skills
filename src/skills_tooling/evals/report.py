@@ -9,6 +9,7 @@ as one self-contained page: inline CSS, no script and no network.
 import html
 from typing import TYPE_CHECKING, Any
 
+from skills_tooling.evals.adapter import AGENTS
 from skills_tooling.evals.benchmark import DELTA_METRICS, METRICS, MIN_SPREAD_N
 from skills_tooling.evals.history import UNRECORDED
 
@@ -210,6 +211,13 @@ def _scope_labels(before: Mapping[str, Any], after: Mapping[str, Any], scope: st
     return ["case changed"] if changed else []
 
 
+def _case_labels(before: Mapping[str, Any], after: Mapping[str, Any]) -> list[str]:
+    """What changed in the cases between two runs, as the comparison's labels."""
+    common = {c["id"] for c in before["cases"]} & {c["id"] for c in after["cases"]}
+    redefined = any(_scope_labels(before, after, case_id) for case_id in sorted(common))
+    return [*_scope_labels(before, after, POOLED), *(["case changed"] if redefined else [])]
+
+
 def _thin(value: Value) -> bool:
     if value.get("unit") == "cases":
         return False
@@ -268,13 +276,23 @@ def _compare(
     threshold: float,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """The agent's last two benchmarks compared: what differs, and each fall beyond threshold."""
-    ran = [i for i, column in enumerate(runs) if agent in column]
+    # By when the agent's own run started: an iteration's runs can start days apart, so
+    # the order of the iterations is not always the order of one agent's runs.
+    ran = sorted(
+        (i for i, column in enumerate(runs) if agent in column),
+        key=lambda i: (str(runs[i][agent]["started_at"]), i),
+    )
     if len(ran) < 2:  # noqa: PLR2004 -- a comparison needs two benchmarks
         return None, []
     b, a = ran[-2], ran[-1]
     before, after = runs[b][agent], runs[a][agent]
     every, graded = _labels(before, after)
-    comparison = {"agent": agent, "from": names[b], "to": names[a], "labels": every + graded}
+    comparison = {
+        "agent": agent,
+        "from": names[b],
+        "to": names[a],
+        "labels": [*every, *graded, *_case_labels(before, after)],
+    }
     regressions = []
     for row in rows:
         old, new = row["values"][b], row["values"][a]
@@ -368,7 +386,8 @@ def build(
     columns = _columns(iterations)
     names = [c["name"] for c in columns]
     runs: Columns = [{r["agent"]: r for r in i["runs"]} for i in iterations]
-    agents = sorted({agent for column in runs for agent in column})
+    # Every agent the harness runs, so one never benchmarked shows as not run.
+    agents = sorted(set(AGENTS) | {agent for column in runs for agent in column})
     # Cases in the latest iteration first, then any that only earlier ones ran.
     case_ids = _unique(
         c["id"] for column in reversed(runs) for r in column.values() for c in r["cases"]
@@ -575,6 +594,9 @@ def _section(report: Mapping[str, Any]) -> str:
         )
     for agent in report["agents"]:
         parts.append(f"<h3>History: {_e(agent)}</h3>")
+        if not any(row["agent"] == agent for row in report["provenance"]):
+            parts.append(f"<p>{_e(agent)} has not been run in any iteration.</p>")
+            continue
         parts.append(_history(report, agent))
     parts.append("</section>")
     return "\n".join(parts)

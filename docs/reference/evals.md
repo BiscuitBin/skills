@@ -239,14 +239,14 @@ For each agent, case and arm it counts `n_planned`, `n_scored` (status ok, uncon
 
 `just eval-report [skill]` reads `benchmarks/`, every skill or the one named, and writes one self-contained page, `eval-results/report.html` (or `--out <path>`): inline CSS, no script, nothing fetched. It calls no agent and no network. For each skill it shows:
 
-- **Agents by cases**, for the latest iteration: each case's expectation (trigger or no trigger), and per agent its trigger accuracy, its pass rate (`outcome_pass_rate`: outcome assertions and expectations together) and that pass rate's delta against the baseline, each as mean ± stddev (n), with a row over all cases.
+- **Agents by cases**, for the latest iteration, with a column for every agent the harness runs, benchmarked or not: each case's expectation (trigger or no trigger), and per agent its trigger accuracy, its pass rate (`outcome_pass_rate`: outcome assertions and expectations together) and that pass rate's delta against the baseline, each as mean ± stddev (n), with a row over all cases.
 - **Delta against the baseline** per agent: the agent's deterministic, graded and outcome deltas, with the number of cases behind each.
 - **Provenance** per iteration and agent: the run, the agent CLI versions, the requested and reported agent models, the requested and reported grader models, the grader CLI versions, trials per case, whether the baseline ran, and the commit.
 - **History** per agent: every metric and delta, over all cases and per case, in every iteration that measured it.
 
 Missing data is shown by its reason, never as 0, never averaged and never compared: `not run` (the agent was not in that iteration), `case not run` (its run did not include the case), `no scored trials` (every trial was excluded), `n/a` (nothing of that kind to measure, such as a pass rate for a trigger-only case), `no baseline` (the run had no baseline arm), and `no data` (trials were scored but none measured it, such as when every grading failed).
 
-**Regressions.** For each agent, the report compares the agent's last two benchmarks of the skill, which need not be the last two iterations. Any metric or delta that fell by more than `--threshold` (default 0.1, between 0 and 1) is flagged, in the page and on stdout. A value missing on either side is never flagged. Each flag carries labels when the comparison is not like-for-like:
+**Regressions.** For each agent, the report compares the agent's last two benchmarks of the skill, by when the agent's own run started, which need not be the last two iterations. Any metric or delta that fell by more than `--threshold` (default 0.1, between 0 and 1) is flagged, in the page and on stdout. A value missing on either side is never flagged. Each flag carries labels when the comparison is not like-for-like, and the page's line for each agent's comparison lists every label that applies to all its figures, plus `case changed` when any case it ran on both sides changed, or says `like-for-like`:
 
 | Label | When | On |
 | --- | --- | --- |

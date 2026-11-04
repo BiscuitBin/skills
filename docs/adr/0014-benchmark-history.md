@@ -6,7 +6,7 @@
 
 An iteration is never overwritten, and its runs must test one skill, at one `skill_sha256` and `evals_sha256`, with one run per agent. Two runs that measured different skill versions or case files are two iterations, not one. Iterations are ordered by when their runs started, not when they were recorded, so a run backfilled from another worktree takes its true place.
 
-Regression flags compare each agent's last two benchmarks for the same skill. A comparison across a different case file, agent model or agent CLI version is labelled not like-for-like, as is a graded or outcome metric across a different grader prompt, model or CLI version. A different skill or commit is the change being measured, so it carries no label. A labelled fall is still flagged, and `--fail-on-regression` still fails on it. Otherwise a model bump in the same change as a skill edit would hide the skill's regression.
+Regression flags compare each agent's last two benchmarks for the same skill, ordered by when that agent's run started. A comparison across a different case file, agent model or agent CLI version is labelled not like-for-like, as is a graded or outcome metric across a different grader prompt, model or CLI version. A different skill or commit is the change being measured, so it carries no label. A labelled fall is still flagged, and `--fail-on-regression` still fails on it. Otherwise a model bump in the same change as a skill edit would hide the skill's regression.
 
 ## Considered options
 

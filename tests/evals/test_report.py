@@ -152,7 +152,15 @@ def test_a_should_not_trigger_case_scores_trigger_accuracy_and_has_no_pass_rate(
 
 def test_an_agent_that_never_ran_shows_as_not_run(history: History) -> None:
     report = build([history.iteration("first", history.run("claude"))])
-    assert report["agents"] == ["claude"]
+    # Codex has never been benchmarked, and still gets a column that says so.
+    assert report["agents"] == ["claude", "codex"]
+    assert cell(report, SHIP, "codex") == {
+        "trigger": {"state": "not_run"},
+        "pass": {"state": "not_run"},
+        "delta": {"state": "not_run"},
+    }
+    assert {v["state"] for v in report["deltas"]["codex"].values()} == {"not_run"}
+    assert "codex has not been run in any iteration" in render_html([report])
     two = build(
         [
             history.iteration("first", history.run("codex")),
@@ -319,6 +327,26 @@ def test_only_the_last_two_benchmarks_of_the_same_agent_are_compared(history: Hi
     assert ("claude", SHIP, "trigger_accuracy") in flagged(build([first, second, third]))
 
 
+def test_regressions_compare_an_agents_own_runs_in_the_order_they_ran(
+    history: History,
+) -> None:
+    # Iteration A pairs an early Claude run with a later Codex run, so it sorts after B,
+    # whose Claude run came in between and fell.
+    early = history.run("claude", started_at="2026-11-01T00:00:00.000+00:00")
+    late = history.run("codex", started_at="2026-11-03T00:00:00.000+00:00")
+    fell = history.run(
+        "claude",
+        both(base, set_trigger(TRIGGER, (False, False, False))),
+        started_at="2026-11-02T00:00:00.000+00:00",
+    )
+    a = history.iteration("A", early, late)
+    b = history.iteration("B", fell)
+    report = build([b, a])
+    assert ("claude", TRIGGER, "trigger_accuracy") in flagged(report)
+    claude = next(c for c in report["comparisons"] if c["agent"] == "claude")
+    assert (claude["from"], claude["to"]) == ("A", "B")
+
+
 def test_an_unrecorded_run_is_compared_with_the_last_recorded_benchmark(
     history: History,
 ) -> None:
@@ -404,6 +432,29 @@ def test_a_case_definition_change_is_labelled_on_that_case(history: History) -> 
     found = next(r for r in build([first, second])["regressions"] if r["scope"] == TRIGGER)
     assert "case changed" in found["labels"]
     assert found["comparable"] is False
+
+
+def test_a_comparison_over_a_different_case_selection_is_not_like_for_like(
+    history: History,
+) -> None:
+    # Same case file and provenance; the second run selected fewer cases.
+    first = history.iteration("first", history.run())
+    second = history.iteration("second", history.run(edit=lambda _: None))
+    report = build([first, second])
+    assert "case set changed" in report["comparisons"][0]["labels"]
+    assert "claude: first → second: case set changed." in render_html([report])
+
+
+def test_a_comparison_where_a_case_was_redefined_is_not_like_for_like(
+    history: History,
+) -> None:
+    def redefined(run: dict[str, Any]) -> None:
+        base(run)
+        run["cases"][0]["kind"] = "behaviour"
+
+    first = history.iteration("first", history.run())
+    second = history.iteration("second", history.run(edit=redefined))
+    assert "case changed" in build([first, second])["comparisons"][0]["labels"]
 
 
 def test_a_thin_sample_is_flagged_with_both_ns(history: History) -> None:

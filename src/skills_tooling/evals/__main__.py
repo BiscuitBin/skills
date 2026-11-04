@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from skills_tooling.evals import history
 from skills_tooling.evals import report as reporting
-from skills_tooling.evals.adapter import CredentialError
+from skills_tooling.evals.adapter import AGENTS, CredentialError
 from skills_tooling.evals.cases import CaseError, load_suite, validate_all
 from skills_tooling.evals.claude_code import BUDGET_USD, ClaudeCode
 from skills_tooling.evals.codex import Codex, pinned_executable
@@ -216,7 +216,7 @@ def main() -> None:
     check.add_argument("--root", type=Path, default=Path.cwd())
     live = commands.add_parser("run", help="Run a skill's eval cases against an agent.")
     live.add_argument("skill", help="The skill under test, as in evals/<skill>/.")
-    live.add_argument("--agent", choices=["claude", "codex"], required=True)
+    live.add_argument("--agent", choices=AGENTS, required=True)
     live.add_argument(
         "--case", action="append", default=[], help="Run only this case (repeatable)."
     )

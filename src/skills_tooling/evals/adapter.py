@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 Status = Literal["ok", "infra_error"]
+# Every agent the harness runs, by adapter name. The report gives each a column.
+AGENTS = ("claude", "codex")
 # How a discovery location is kept out of a trial. See discovery_locations().
 Mitigation = Literal["redirected", "suppressed", "reported", "controlled", "not-a-location"]
 
