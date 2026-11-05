@@ -51,7 +51,7 @@ The inputs reach the shell only as environment variables, and `just eval-ci plan
 4. Runs `just eval-report <skill> --run <run-id>...` for each skill, which adds this dispatch's runs to the recorded history in `benchmarks/` as an unrecorded iteration, and appends the matrix and any regressions to the summary.
 5. Scans `eval-results/` for secret values (below). On a hit the job fails and nothing is uploaded.
 6. Uploads `eval-results/` as the artifact `live-evals-<run id>-<attempt>`, kept 30 days, and links it from the summary. The trial workspaces in `.eval-workspaces/` are never uploaded.
-7. Fails the job if any `just eval` exited nonzero.
+7. Fails the job if any `just eval` exited nonzero, or a skill's report could not be built or had no finished run to report.
 
 CI never records results to `benchmarks/`. To keep a dispatch's runs as an iteration, download the artifact into `eval-results/` and run `just eval-record <name> <run-id>...` locally.
 

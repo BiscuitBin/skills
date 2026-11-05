@@ -105,3 +105,15 @@ def test_the_setup_matches_the_gate(steps: list[dict[str, Any]]) -> None:
         assert mine.get(action) == settings, action
     runs = [s["run"] for s in steps if "run" in s]
     assert "just initialize" in runs
+
+
+def test_a_failed_eval_or_report_fails_the_job_after_the_upload(
+    steps: list[dict[str, Any]],
+) -> None:
+    names = [s.get("id") or s.get("name") for s in steps]
+    final = steps[-1]
+    assert names.index("upload") < len(steps) - 1
+    assert "steps.evals.outputs.failed == '1'" in final["if"]
+    assert "steps.report.outputs.failed == '1'" in final["if"]
+    [report] = [s for s in steps if s.get("id") == "report"]
+    assert 'echo "failed=$failed" >>"$GITHUB_OUTPUT"' in report["run"]

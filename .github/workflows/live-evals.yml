@@ -127,14 +127,19 @@ jobs:
           done 3<eval-results/dispatch/runs.txt
           echo "failed=$failed" >>"$GITHUB_OUTPUT"
 
+      # A missing report fails the job, but only at the end, after the raw
+      # results are uploaded.
       - name: Report
+        id: report
         if: ${{ !cancelled() && steps.plan.outputs.has_runs == 'true' }}
         run: |
+          failed=0
           for skill in $(cut -d' ' -f1 eval-results/dispatch/runs.txt | sort -u); do
             set --
             for run_id in $(just eval-ci runs "$skill"); do set -- "$@" --run "$run_id"; done
             if [ "$#" -eq 0 ]; then
               printf '\nNo finished run of %s to report.\n' "$skill" >>"$GITHUB_STEP_SUMMARY"
+              failed=1
               continue
             fi
             if just eval-report "$skill" "$@" --out "eval-results/report-$skill.html" \
@@ -143,8 +148,10 @@ jobs:
             else
               printf '\nThe report for %s could not be built; see the Report step.\n' "$skill" \
                 >>"$GITHUB_STEP_SUMMARY"
+              failed=1
             fi
           done
+          echo "failed=$failed" >>"$GITHUB_OUTPUT"
 
       # The runs scrub what they write; this rereads all of it for the
       # configured secrets, and for the Codex login's, before anything leaves
@@ -176,8 +183,8 @@ jobs:
           printf '\n[Download the report and raw results](%s)\n' "$ARTIFACT_URL" \
             >>"$GITHUB_STEP_SUMMARY"
 
-      - name: Fail on a failed eval
-        if: ${{ !cancelled() && steps.evals.outputs.failed == '1' }}
+      - name: Fail on a failed eval or report
+        if: ${{ !cancelled() && (steps.evals.outputs.failed == '1' || steps.report.outputs.failed == '1') }}
         run: |
-          echo 'At least one `just eval` exited nonzero; the job summary lists each exit code.' >&2
+          echo 'A `just eval` exited nonzero or a report was not built; see the job summary.' >&2
           exit 1
