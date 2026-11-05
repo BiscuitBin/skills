@@ -72,9 +72,9 @@ Print the spend cap of one agent's run before dispatching:
 just eval cowsay --agent claude --dry-run
 ```
 
-Claude Code's runs and the grader are capped per call by `--max-budget-usd`; Codex's runs have no per-call cap. For cowsay at one trial, without a baseline, the cap is $11.00 for Claude Code (nine agent calls and two grader calls) and $2.00 of grading for Codex plus its own nine calls. Real spend is usually well under the cap. The cost grows linearly with `trials`, the baseline adds a run of each case that has an outcome to measure, and `both` runs every skill twice. At the maximum of five trials with a baseline, the same cowsay dispatch is about seven times the one-trial figure.
+Claude Code's runs and the grader are capped per call by `--max-budget-usd`; Codex's runs have no per-call cap. For cowsay at one trial, without a baseline, the cap is $11.00 for Claude Code (nine agent calls and two grader calls) and $2.00 of grading for Codex plus its own nine calls. Real spend is usually far under the cap: the first CI dispatch of cowsay on Claude Code at one trial, with grading, spent $0.27 on the agent, as Claude Code estimated it. The grader's spend was not recorded. The cost grows linearly with `trials`, the baseline adds a run of each case that has an outcome to measure, and `both` runs every skill twice. At the maximum of five trials with a baseline, the same cowsay dispatch is about seven times the one-trial figure.
 
-The runner minutes add to this. In ticket 09 the two cowsay runs, one trial each with grading, started about nine minutes apart, and setup takes a few minutes more. The runs stop at 90 minutes, so the largest dispatches (five trials, a baseline, both agents, several skills) need splitting: one agent or one skill per dispatch.
+The runner minutes add to this. That same dispatch ran in 49 seconds, and the whole job took 74 seconds once approved. The runs stop at 90 minutes, so the largest dispatches (five trials, a baseline, both agents, several skills) need splitting: one agent or one skill per dispatch.
 
 ## Locally
 

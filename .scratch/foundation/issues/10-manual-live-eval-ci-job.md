@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 (Installable via Claude marketplace and npx skills), 09 (Cross-agent benchmark report and history).
 
-**Status:** done, except the two live demonstrations, which need the workflow on `main` (see Completion notes)
+**Status:** done, except the Codex secret-present dispatch, which waits for `OPENAI_API_KEY` and is carried to ticket 12 (see Completion notes)
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). The secret-present CI demonstration needs credentials for the selected agents and, when grading is enabled, the configured grader. If repository secrets cannot be configured, demonstrate the skip path and record the remaining demonstration for ticket 12 as allowed below. Cross-model review is also required.
 
@@ -31,7 +31,7 @@
   - If nothing changed, nothing is selected, and the job says so.
   - This is unit-tested locally and in `just check`.
 - [x] A how-to guide explains which secrets to configure, how to dispatch the job, and roughly what a run costs.
-- [ ] Shown working twice: a dispatch with secrets present produces the artifact, and one without secrets skips cleanly. If repo secrets can't be configured from here, show the skip path, and record that the secret-present path still needs to be shown for ticket 12.
+- [x] Shown working twice: a dispatch with secrets present produces the artifact, and one without secrets skips cleanly. If repo secrets can't be configured from here, show the skip path, and record that the secret-present path still needs to be shown for ticket 12.
 
 ## Review checkpoints
 
@@ -55,14 +55,21 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 - Docs: `docs/how-to/live-evals-in-ci.md` (secrets, environment protection, dispatch, cost), plus `docs/reference/evals.md`, `docs/reference/commands.md`, ADR 0004's link and the GLOSSARY entry **Changed skill**.
 - `codex login --with-api-key`, run through `just run`, was verified locally. It writes `.tools/agent-homes/codex/auth.json`, and `~/.codex/auth.json`'s mtime was unchanged.
 
-### Demonstrations: not yet shown
+### Demonstrations
 
-`gh workflow run live-evals.yml --ref ticket/10-manual-live-eval-ci-job` returned `HTTP 404: workflow live-evals.yml not found on the default branch`, because GitHub dispatches only workflows that are on `main`. Both demonstrations therefore wait for the merge:
+Before the merge, `gh workflow run` returned `HTTP 404: workflow live-evals.yml not found on the default branch`, so both dispatches ran on `main` after PR #13 merged.
 
-1. The skip path: dispatch with no secrets in `live-evals`. The job should succeed with a skip notice per agent.
-2. The secret-present path: add `CLAUDE_CODE_OAUTH_TOKEN` and `OPENAI_API_KEY` to the environment, then dispatch cowsay on both agents at 1 trial. The run should produce the artifact.
+1. **Skip path:** [run 41973747872](https://github.com/BiscuitBin/skills/actions/runs/41973747872). The `live-evals` environment was empty (the run created it), and the dispatch was `skills=cowsay agents=both trials=1`. The job was green. Plan printed "Claude Code skipped: the CLAUDE_CODE_OAUTH_TOKEN secret is not set…" and the same for Codex, then "No evals ran." Every later step was skipped.
+2. **Secret-present path, Claude Code:** [run 41979759356](https://github.com/BiscuitBin/skills/actions/runs/41979759356). This ran after required reviewers were set on the environment and only `CLAUDE_CODE_OAUTH_TOKEN` was added, with the same dispatch, approved by the reviewer. The job was green.
+   - The plan ran Claude Code with grading on, and skipped Codex with its notice.
+   - All 9 cowsay cases passed (`20261105T063529Z-8e38`), and both behaviour cases were graded.
+   - The report and Markdown matrix were built as iteration `unrecorded` after ticket-08 and ticket-09, with no regression beyond 0.10.
+   - The scan found "no configured secret in the 18 file(s)".
+   - The [artifact](https://github.com/BiscuitBin/skills/actions/runs/41979759356/artifacts/13394595292) `live-evals-41979759356-1` (40 KB) holds the run, `report-cowsay.html`, `summary-cowsay.md` and the plan.
+   - Real cost: $0.27 of agent spend, as Claude Code estimated it in the transcripts' `total_cost_usd`. The grader's spend is not recorded. The run took 49 s, and the job 74 s once approved.
+3. **Secret-present path, Codex: not shown.** The maintainer chose to hold off on `OPENAI_API_KEY`. This includes the unverified check that a trial authenticates from the API-key login. It is carried to ticket 12, whose gaps criterion names it.
 
-If either cannot be shown before ticket 12, ticket 12 carries it (its gaps criterion names this one). The local skip path was shown: `just eval-ci plan … --has-claude false --has-openai false` printed both skip notices and wrote an empty `runs.txt`.
+Follow-up: ticket 14 (`.scratch/future/issues/14-claude-workload-identity-federation.md`) replaces `CLAUDE_CODE_OAUTH_TOKEN` with the Claude API's workload identity federation.
 
 ### Code review (`/code-review high`)
 
@@ -92,4 +99,4 @@ If either cannot be shown before ticket 12, ticket 12 carries it (its gaps crite
 
 **Follow-ups:**
 
-- Show both dispatches once the workflow is on `main`, and record the run URLs here or in ticket 12.
+- Dispatch cowsay on Codex once `OPENAI_API_KEY` is in `live-evals` (ticket 12).
