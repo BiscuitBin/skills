@@ -30,7 +30,9 @@ on:
 # No token permission by default; the job asks for exactly what it needs.
 permissions: {}
 
-# One dispatch at a time, and never cancel one that is spending.
+# One dispatch at a time, and never cancel one that is spending. GitHub keeps
+# only one pending run per group: a third dispatch replaces a second that is
+# still waiting.
 concurrency:
   group: live-evals
   cancel-in-progress: false
@@ -100,12 +102,14 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: printenv OPENAI_API_KEY | just run ./node_modules/.bin/codex login --with-api-key
 
-      # Every planned run goes ahead even when one fails; the last step fails
-      # the job afterwards. stdin is /dev/null so an agent CLI cannot read the
-      # run list.
+      # Every planned run goes ahead even when one fails, or the Codex login
+      # did; the last step fails the job afterwards. stdin is /dev/null so an
+      # agent CLI cannot read the run list. The step's timeout is below the
+      # job's, so a long dispatch still reports, scans and uploads what it ran.
       - name: Run evals
         id: evals
-        if: steps.plan.outputs.has_runs == 'true'
+        if: ${{ !cancelled() && steps.plan.outputs.has_runs == 'true' }}
+        timeout-minutes: 90
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |

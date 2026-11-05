@@ -9,6 +9,7 @@ import pytest
 
 from skills_tooling.evals import dispatch, workspace
 from skills_tooling.evals.dispatch import DispatchError, changed_paths, plan, select_changed
+from tests.evals.test_history import stored_run
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,6 +28,8 @@ API_KEY = "sk-proj-fake-dispatch-test-api-key"
         (["src/skills_tooling/evals/grader.py"], SUITES),
         (["src/skills_tooling/evals/codex.py"], SUITES),
         (["package.json"], SUITES),
+        (["uv.lock"], SUITES),
+        (["Justfile"], SUITES),
         (["package-lock.json"], SUITES),
         ([".node-version"], SUITES),
         (["docs/reference/evals.md", "README.md", "src/skills_tooling/validator.py"], []),
@@ -239,18 +242,11 @@ def test_the_plan_command_writes_only_under_eval_results(tmp_path: Path) -> None
 
 
 def test_runs_lists_the_finished_runs_of_one_skill(tmp_path: Path) -> None:
-    root = tmp_path
-    for run_id, skill, complete in [
-        ("20261104T000000Z-aaaa", "cowsay", True),
-        ("20261104T000001Z-bbbb", "haiku", True),
-        ("20261104T000002Z-cccc", "cowsay", False),
-    ]:
-        directory = root / "eval-results" / run_id
-        directory.mkdir(parents=True)
-        (directory / "results.json").write_text(json.dumps({"skill": skill}))
-        if complete:
-            (directory / "benchmark.json").write_text("{}")
-    assert dispatch.finished_runs(root, "cowsay") == ["20261104T000000Z-aaaa"]
+    cowsay = stored_run(tmp_path, "paired", run_id="20261104T000000Z-aaaa")
+    stored_run(tmp_path, "paired", run_id="20261104T000001Z-bbbb", skill="haiku")
+    broken = stored_run(tmp_path, "paired", run_id="20261104T000002Z-cccc")
+    (tmp_path / "eval-results" / broken / "benchmark.json").unlink()
+    assert dispatch.finished_runs(tmp_path, "cowsay") == [cowsay]
 
 
 def results_dir(tmp_path: Path) -> Path:
@@ -299,3 +295,20 @@ def test_a_clean_scan_passes(tmp_path: Path) -> None:
     result = run_dispatch("scan", str(directory), env=env)
     assert result.returncode == 0, result.stderr
     assert dispatch.SCANNED_ENV == ("CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY")
+
+
+def test_a_symlink_fails_the_scan(tmp_path: Path) -> None:
+    directory = results_dir(tmp_path)
+    (tmp_path / "auth.json").write_text("{}")
+    (directory / "run/auth.json").symlink_to(tmp_path / "auth.json")
+    result = run_dispatch("scan", str(directory), env={})
+    assert result.returncode == 1
+    assert "run/auth.json is a symlink" in result.stderr
+
+
+def test_a_file_moved_out_of_a_skill_selects_it(tmp_path: Path) -> None:
+    root = repo(tmp_path)
+    (root / "docs").mkdir()
+    git(root, "mv", "skills/haiku/SKILL.md", "docs/haiku.md")
+    git(root, "commit", "--quiet", "-m", "move")
+    assert dispatch.changed(root, "main") == ["haiku"]

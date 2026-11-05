@@ -10,17 +10,15 @@ and `just eval-changed`. See docs/how-to/live-evals-in-ci.md.
 """
 
 import argparse
-import json
 import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from skills_tooling.evals import results, workspace
+from skills_tooling.evals import history, results, workspace
 from skills_tooling.evals.adapter import AGENTS
 from skills_tooling.evals.cases import SLUG
 from skills_tooling.evals.codex import Codex
-from skills_tooling.evals.history import NAME
 
 USAGE = 2
 LEAKED = 1
@@ -33,9 +31,18 @@ DEFAULT_BASE = "origin/main"
 # reads the secret fields of $CODEX_HOME/auth.json, the login Codex writes.
 SCANNED_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY")
 # A change here can change every suite's results: the shared eval code, the
-# adapters and the grader, and the pinned agent CLIs and the Node that runs them.
+# adapters and the grader, the pinned agent CLIs and the Node that runs them,
+# and the Python toolchain and the Justfile environment the harness runs in.
 EVERY_SUITE_PREFIXES = ("src/skills_tooling/evals/",)
-EVERY_SUITE_FILES = ("package.json", "package-lock.json", ".node-version")
+EVERY_SUITE_FILES = (
+    "package.json",
+    "package-lock.json",
+    ".node-version",
+    "pyproject.toml",
+    "uv.lock",
+    ".python-version",
+    "Justfile",
+)
 LABELS = {"claude": "Claude Code", "codex": "Codex"}
 # The secret each agent's runs need. The grader is Claude Code for every agent.
 AGENT_SECRET = {"claude": "CLAUDE_CODE_OAUTH_TOKEN", "codex": "OPENAI_API_KEY"}
@@ -80,7 +87,8 @@ def changed_paths(root: Path, base: str = DEFAULT_BASE) -> list[str]:
     A missing base raises: an empty list would read as "nothing changed".
     """
     merge_base = _git(root, "merge-base", base, "HEAD").strip()
-    diffed = _git(root, "diff", "--name-only", "-z", merge_base, "--")
+    # --no-renames: a file moved out of a skill lists its old path too.
+    diffed = _git(root, "diff", "--name-only", "--no-renames", "-z", merge_base, "--")
     untracked = _git(root, "ls-files", "-z", "--others", "--exclude-standard")
     return sorted({p for p in (diffed + untracked).split("\0") if p})
 
@@ -97,7 +105,6 @@ class Plan:
     grade: bool
     flags: list[str]
     notices: list[str] = field(default_factory=list)
-    skills: list[str] = field(default_factory=list)
     trials: int = 1
     baseline: bool = False
 
@@ -185,22 +192,20 @@ def plan(  # noqa: PLR0913 -- one argument per dispatch input and secret
     flags = ["--trials", str(count)]
     flags += ["--baseline"] if with_baseline else []
     flags += [] if have_claude else ["--no-grader"]
-    return Plan(runs, have_claude, flags, notices, selected, count, with_baseline)
+    return Plan(runs, have_claude, flags, notices, count, with_baseline)
 
 
 def finished_runs(root: Path, skill: str) -> list[str]:
-    """The run ids under eval-results/ that tested skill and wrote their benchmark."""
+    """The run ids under eval-results/ that tested skill and that `just eval-report --run` takes."""
     found = []
     for path in sorted((root / "eval-results").glob("*/results.json")):
-        directory = path.parent
-        if not NAME.fullmatch(directory.name) or not (directory / "benchmark.json").is_file():
-            continue
         try:
-            data = json.loads(path.read_text())
-        except OSError, ValueError:
+            # The report's own check of a finished run, so the two cannot drift apart.
+            iteration = history.assemble(root, None, [path.parent.name])
+        except history.HistoryError:
             continue
-        if isinstance(data, dict) and data.get("skill") == skill:
-            found.append(directory.name)
+        if iteration["skill"] == skill:
+            found.append(path.parent.name)
     return found
 
 
@@ -219,21 +224,28 @@ def scanned_secrets(environ: dict[str, str]) -> list[str]:
 
 
 def scan(directory: Path, environ: dict[str, str]) -> int:
-    """Exit 1, naming each file scrubbed, when a file's contents or path holds a secret."""
-    secrets = scanned_secrets(environ)
-    if not secrets:
-        print("scan: no secret is configured, so there is nothing to look for.")
-        return 0
+    """Exit 1, naming each file scrubbed, when a file's contents or path holds a secret.
+
+    A symlink fails too: the upload would follow it, and the scan never reads one.
+    """
     if not directory.is_dir():
         print(f"scan: {directory} is not a directory.", file=sys.stderr)
         return USAGE
+    secrets = scanned_secrets(environ)
+    links = sorted(p for p in directory.rglob("*") if p.is_symlink())
     leaked = results.files_holding(directory, secrets)
+    for path in links:
+        name = results.scrub(path.relative_to(directory).as_posix(), secrets)
+        print(f"scan: {name} is a symlink, which the upload would follow", file=sys.stderr)
     for path in leaked:
         name = results.scrub(path.relative_to(directory).as_posix(), secrets)
         print(f"scan: a configured secret is in {name}", file=sys.stderr)
-    if leaked:
-        print(f"scan: {len(leaked)} file(s) hold a secret; do not upload {directory}.")
+    if links or leaked:
+        print(f"scan: {len(set(links) | set(leaked))} file(s) failed; do not upload {directory}.")
         return LEAKED
+    if not secrets:
+        print("scan: no secret is configured, so there is nothing to look for.")
+        return 0
     count = sum(1 for p in directory.rglob("*") if p.is_file())
     print(f"scan: no configured secret in the {count} file(s) under {directory}.")
     return 0
