@@ -22,6 +22,10 @@ _Avoid_: Activation, firing
 One scenario a skill is tested against: a prompt, any input files, and the assertions or rubric that decide whether the outcome is right.
 _Avoid_: Test case, scenario, example
 
+**Placeholder case**:
+A starter eval case that a new skill begins with, standing in for a real case the author has not written yet. It is never run, so it can never pass.
+_Avoid_: Stub case, sample case, unwritten test
+
 **Trial**:
 One attempt by one agent at one eval case, in its own fresh workspace.
 _Avoid_: Attempt, sample, rollout

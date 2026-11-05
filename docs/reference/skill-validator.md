@@ -32,6 +32,7 @@ The CLI exits nonzero if any error occurs; warnings alone pass.
 | openai-shape | error | Optional agents/openai.yaml is a mapping: interface string fields, policy.allow_implicit_invocation boolean and products string-list, dependencies.tools list of mappings with type/value strings and optional description/transport/url/command strings plus oauth_callback_port integer 0–65535. Interface keys: display_name, short_description, icon_small, icon_large, brand_color, default_prompt. Reject wrong types and unknown keys (repo policy to catch typos); interface and all sections are optional. Icon values are checked as strings, not as bundled resource references. |
 | claude-description | warning | description plus when_to_use above 1536 characters is truncated by Claude Code. |
 | openai-description | warning | If provided, short_description should be 25–64 characters (UI guidance). |
+| placeholder | warning | A file in the skill still holds `TODO(new-skill)`, the marker `just new-skill` writes wherever the author has to write something. A fresh scaffold passes the validator with one warning per file it wrote; see [CONTRIBUTING.md](../../CONTRIBUTING.md). Symlinks and files that are not UTF-8 are skipped. |
 
 ## Agent extension allowlist
 

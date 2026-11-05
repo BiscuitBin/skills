@@ -1,3 +1,3 @@
 # How-to guides
 
-No guides yet. Later tickets add guides for tasks such as writing a new skill, running evals and releasing.
+- [Contributing a skill](../../CONTRIBUTING.md): take a new skill from `just new-skill` to a merged pull request, with RED/GREEN evals, the cross-model review, versions and releases. It lives at the repository root, where Git hosts look for it.
