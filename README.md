@@ -8,6 +8,8 @@ The first shipped skill is `cowsay`, with a bundled Python script. The eval harn
 
 Python 3 is required to run the bundled script. Run these commands in the project where you want the skill available.
 
+Contributors working from a clone of this repository use [Check the install channels from a checkout](docs/reference/distribution.md#check-the-install-channels-from-a-checkout) instead, because these commands write to your real agent home.
+
 ### Claude Code marketplace
 
 ```sh
@@ -15,8 +17,7 @@ claude plugin marketplace add BiscuitBin/skills
 claude plugin install cowsay@biscuitbin-skills --scope project
 ```
 
-These are shell commands for an installed Claude Code CLI. Contributors verify
-this checkout's pinned CLI with `just test`, which installs into isolated projects.
+These are shell commands for an installed Claude Code CLI.
 Invoke the installed skill with `/cowsay:cowsay Hello there`.
 
 ### npx skills

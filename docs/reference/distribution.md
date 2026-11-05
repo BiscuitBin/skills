@@ -79,6 +79,48 @@ directories; unrelated documentation edits remain allowed. The live manifest
 validation also checks the working tree. Round trips deliberately do not install
 uncommitted files.
 
+## Check the install channels from a checkout
+
+Use this section, not the README's commands, when you try an install from a
+clone of this repository. The README's commands are for end users: a bare
+`claude` or `npx` runs outside the Justfile's environment, so it writes to your
+real `~/.claude/plugins` and `~/.npm`. These commands run the pinned `claude`
+and `skills` through `just run`, which keeps the Claude Code home and the npm
+cache under `.tools/`. Neither install needs an agent login. Run them from the
+repository root.
+
+Create a throwaway project and install cowsay through the marketplace:
+
+```sh
+just run sh -c 'mkdir -p .tools/tmp/install-check && cd .tools/tmp/install-check && git init -q && ../../../node_modules/.bin/claude plugin marketplace add ../../.. && ../../../node_modules/.bin/claude plugin install cowsay@biscuitbin-skills --scope project'
+```
+
+It reports `Successfully installed plugin: cowsay@biscuitbin-skills (scope: project)`.
+The project's `.claude/settings.json` now enables the plugin, and the plugin
+itself is cached in `.tools/agent-homes/claude/plugins/cache/`.
+
+Install it through `skills`, once per agent:
+
+```sh
+just run sh -c 'cd .tools/tmp/install-check && DO_NOT_TRACK=1 ../../../node_modules/.bin/skills add ../../.. --agent claude-code --yes'
+just run sh -c 'cd .tools/tmp/install-check && DO_NOT_TRACK=1 ../../../node_modules/.bin/skills add ../../.. --agent codex --yes'
+ls .tools/tmp/install-check/.claude/skills/cowsay .tools/tmp/install-check/.agents/skills/cowsay
+```
+
+Each `skills` run reports `Found 1 skill` and `✓ cowsay (copied)`. The `ls` lists
+`SKILL.md`, `agents` and `scripts` for each agent.
+
+`../../..` is this checkout. To check what is published on GitHub instead,
+replace it with `BiscuitBin/skills` in the `marketplace add` and `skills add`
+commands.
+
+Remove the plugin, the marketplace and the throwaway project when you finish:
+
+```sh
+just run sh -c 'cd .tools/tmp/install-check && ../../../node_modules/.bin/claude plugin uninstall cowsay@biscuitbin-skills --scope project && ../../../node_modules/.bin/claude plugin marketplace remove biscuitbin-skills'
+rm -rf .tools/tmp/install-check
+```
+
 ## Upstream references
 
 - [Claude Code plugin manifest](https://code.claude.com/docs/en/plugins-reference)
