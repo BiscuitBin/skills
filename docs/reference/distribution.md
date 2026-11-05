@@ -1,6 +1,6 @@
 # Distribution
 
-The Claude Code marketplace and `npx skills` ship `skills/cowsay/`.
+The Claude Code marketplace and `npx skills` ship every skill in `skills/`, currently `skills/cowsay/`.
 Dev skills stay in `dev-skills/`, exposed to repository agents through relative
 symlinks in `.claude/skills/` and `.agents/skills/`. They are excluded from both
 installation channels. See [ADR 0010](../adr/0010-distribution-boundaries.md).
@@ -9,18 +9,21 @@ installation channels. See [ADR 0010](../adr/0010-distribution-boundaries.md).
 
 `.claude-plugin/marketplace.json` lists plugins in `plugins[]`. Each entry's
 `name` matches a shipped skill and its `source` is `./skills/<name>`, so the
-plugin cache contains only that skill's directory. In
-`skills/cowsay/.claude-plugin/plugin.json`, `skills: ["./"]` tells Claude Code
+plugin cache contains only that skill's directory. In each
+`skills/<name>/.claude-plugin/plugin.json`, `skills: ["./"]` tells Claude Code
 to discover the skill at the plugin root.
 
-The single source for the cowsay plugin version is
-`skills/cowsay/.claude-plugin/plugin.json`'s top-level `version`.
-`just format` derives `.claude-plugin/marketplace.json`'s
-`plugins[name=cowsay].version` from it. Change the plugin version, run
-`just format`, and commit both manifests. The Python tooling's version and
+The single source for a plugin's version and description is its
+`skills/<name>/.claude-plugin/plugin.json`. `just format` copies both into
+the plugin's entry in `.claude-plugin/marketplace.json`, and removes the
+entry's description when `plugin.json` has none. Change the plugin
+version, run `just format`, and commit both manifests. `just new-skill` adds
+the manifest and the marketplace entry for a new skill; [CONTRIBUTING.md](../../CONTRIBUTING.md)
+says when to bump a version. The Python tooling's version and
 the npm development package's version are independent.
 
-`just validate-distribution` rejects version drift, extra/missing plugins,
+`just validate-distribution` rejects version or description drift and
+extra/missing plugins (naming the entry to add or remove),
 sources outside shipped skill directories, and uncommitted changes to install
 sources. It runs the pinned
 `claude plugin validate --strict` for the marketplace and each shipped plugin.
@@ -40,7 +43,7 @@ Each test clones the committed tree. Both installers use the README's
 `BiscuitBin/skills` shorthand and Git's process-local
 `url.<file-url>.insteadOf` configuration to redirect the clone to the local
 source. `GIT_ALLOW_PROTOCOL=file` prevents network Git transport. This exercises
-the hosted Git-source behavior. Claude installs into its plugin cache and its
+the hosted Git-source behavior. Claude installs cowsay into its plugin cache and its
 recorded `gitCommitSha` must match the local clone's HEAD;
 the other three installs use the default `skills add --agent <agent> --yes`
 behavior without naming a skill, exercising installation of all shipped skills.
@@ -55,7 +58,7 @@ paths in the throwaway project (excluding its Git metadata). Only shipped
 payloads and installer lock/settings files are allowed. Every accepted payload
 copy is compared byte for byte, lockfile skill names and sources are checked,
 and only the known Claude-to-shared discovery symlink is permitted. They remove the source clone and Claude's
-marketplace clone, then execute the installed script. An isolated Python
+marketplace clone, then execute the installed cowsay script. An isolated Python
 subprocess (`-I -S`) with a file-open audit hook permits reads only from the
 installed skill and the pinned Python standard library. This makes source
 files in the development checkout unavailable to the script while retaining

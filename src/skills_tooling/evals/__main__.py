@@ -4,11 +4,13 @@ See docs/reference/evals.md.
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from skills_tooling.distribution import MARKETPLACE
 from skills_tooling.evals import history
 from skills_tooling.evals import report as reporting
 from skills_tooling.evals.adapter import AGENTS, CredentialError
@@ -25,6 +27,7 @@ from skills_tooling.evals.runner import (
     run_suite,
     select_cases,
 )
+from skills_tooling.validator import PLACEHOLDER
 
 if TYPE_CHECKING:
     from skills_tooling.evals.adapter import Adapter
@@ -35,15 +38,63 @@ REGRESSED = 1
 GRADER_MODEL = "claude-opus-5-5"
 
 
+def unwritten_distributed(root: Path) -> dict[str, list[str]]:
+    """Distributed skills with placeholder cases: their ids, or [] when every case is one."""
+    try:
+        plugins = json.loads((root / MARKETPLACE).read_text())["plugins"]
+        listed = sorted({entry["name"] for entry in plugins})
+    except OSError, ValueError, KeyError, TypeError:
+        return {}  # validate-distribution reports a missing or malformed marketplace.
+    found: dict[str, list[str]] = {}
+    for name in listed:
+        try:
+            suite = load_suite(root, name)
+        except CaseError, OSError:
+            continue
+        placeholders = [case.id for case in suite.cases if case.placeholder]
+        if placeholders:
+            found[name] = placeholders if len(placeholders) < len(suite.cases) else []
+    return found
+
+
 def validate(root: Path) -> int:
     problems = validate_all(root)
     for problem in problems:
         print(problem, file=sys.stderr)
     if problems:
         return 1
+    for name, some in unwritten_distributed(root).items():
+        which = (
+            f"still has placeholder cases: {', '.join(some)}"
+            if some
+            else "has only placeholder cases"
+        )
+        print(
+            f"warning: {name} is in {MARKETPLACE} but evals/{name}/evals.json {which}; "
+            "write them (see CONTRIBUTING.md)",
+            file=sys.stderr,
+        )
     count = len(list((root / "evals").glob("*/evals.json")))
     print(f"{count} eval suite{'' if count == 1 else 's'} valid.")
     return 0
+
+
+def refuse_unwritten(args: argparse.Namespace, root: Path) -> bool:
+    """Report selected placeholder cases, which have nothing to measure yet; True if any."""
+    try:
+        cases = select_cases(load_suite(root, args.skill).cases, tuple(args.case))
+    except CaseError, UsageError, FileNotFoundError:
+        return False  # The run reports these itself.
+    unwritten = [case for case in cases if case.placeholder]
+    for case in unwritten:
+        print(
+            f"UNWRITTEN {args.skill}/{case.id}: a starter case from just new-skill; "
+            f'replace its {PLACEHOLDER} text and delete "placeholder": true',
+            file=sys.stderr,
+        )
+    if unwritten:
+        print("eval: nothing ran; write those cases or pick others with --case.", file=sys.stderr)
+    return bool(unwritten)
 
 
 def adapter_for(agent: str, root: Path) -> Adapter:
@@ -69,6 +120,8 @@ def describe(args: argparse.Namespace, cases: list[Case]) -> str:
 def plan(args: argparse.Namespace) -> int:
     """Print the calls a run would make. Reads no credential and writes nothing."""
     root: Path = args.root.resolve()
+    if refuse_unwritten(args, root):
+        return USAGE
     try:
         suite = load_suite(root, args.skill)
         cases = select_cases(suite.cases, tuple(args.case))
@@ -102,6 +155,8 @@ def run(args: argparse.Namespace) -> int:
     if args.dry_run:
         return plan(args)
     root: Path = args.root.resolve()
+    if refuse_unwritten(args, root):
+        return USAGE
     # The credential is read here and handed only to the trial.
     try:
         adapter = adapter_for(args.agent, root)

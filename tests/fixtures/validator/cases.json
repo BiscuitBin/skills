@@ -139,5 +139,13 @@
     "shipped": false,
     "ref": false,
     "difference": "documented agent extensions accepted here"
+  },
+  {
+    "id": "placeholder",
+    "yaml": "name: example\ndescription: An example.\n",
+    "body": "# Example\n\nTODO(new-skill) Write the instructions.\n",
+    "rule": "placeholder",
+    "severity": "warning",
+    "ref": true
   }
 ]

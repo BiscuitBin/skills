@@ -24,7 +24,7 @@ The eval harness runs a skill's eval cases against a pinned agent CLI, headless,
 
 **Live evals need an authenticated agent and are never part of the PR gate.** `just eval` calls a paid model, so it runs only locally or from a manual job that holds the secret ([ADR 0004](../adr/0004-eval-tiers-and-ci.md)). `just check` and PR CI cover the harness without credentials: the tests drive the real pinned CLIs against local fake APIs (`tests/evals/fake_anthropic.py`, `tests/evals/fake_openai.py`) and parse recorded transcripts (`tests/fixtures/evals/claude/`, `tests/fixtures/evals/codex/`).
 
-Exit codes: 0 when every skill-arm trial passed and every baseline trial is valid, 1 otherwise (a failed trial, an infrastructure error, contamination, a grading that is not `ok` in the skill arm, or a grader error in the baseline), 2 for a usage error (a missing credential, an invalid suite, an unknown case, a missing pinned CLI). Nothing is written on a usage error. A harness failure inside one trial is recorded as that trial's infrastructure error, and the other trials still run.
+Exit codes: 0 when every skill-arm trial passed and every baseline trial is valid, 1 otherwise (a failed trial, an infrastructure error, contamination, a grading that is not `ok` in the skill arm, or a grader error in the baseline), 2 for a usage error (a missing credential, an invalid suite, an unknown case, a selected [placeholder case](#placeholder-cases), a missing pinned CLI). Nothing is written on a usage error. A harness failure inside one trial is recorded as that trial's infrastructure error, and the other trials still run.
 
 ## Case schema
 
@@ -69,9 +69,17 @@ Cases live at `evals/<skill>/evals.json`, outside the shipped skill's directory,
 | `expected_output` | Optional human description, kept from skill-creator. It is not graded. |
 | `files` | Input files are not staged yet: anything but an empty list is rejected with a note that staging is deferred. |
 | `assertions` | Deterministic assertions, below. A `behaviour` case needs at least one. |
+| `placeholder` | `true` marks a starter case written by `just new-skill`, which is not written yet. `just eval` refuses to run it (see [placeholder cases](#placeholder-cases)). Delete the key once the case is written; `false` is rejected. |
 | `expectations` | Optional rubric for the [grader](#grader), on `behaviour` cases only (skill-creator's field). Each item is a string, judged blinded, or `{"text": …, "needs_transcript": true}`, judged from the commands and the final message instead (no output files) and marked unblinded. Text must be nonempty and unique within the case; `needs_transcript: false` is rejected (use the string form). |
 
 Unknown keys are rejected at every level, so a later field has to be added on purpose.
+
+### Placeholder cases
+
+`just new-skill` writes starter cases, a should-trigger case, a should-not-trigger case and a behaviour case, each with `"placeholder": true` and `TODO(new-skill)` text. They are valid, so a new skill passes `just validate-evals`, but they measure nothing:
+
+- `just eval`, with or without `--dry-run`, prints `UNWRITTEN <skill>/<case>` for each selected placeholder case and exits 2 before it reads a credential or calls an agent. `--case` can still pick out the written cases of a suite that has placeholders.
+- `just validate-evals`, and so `just check`, warns on stderr, and still passes, when a skill listed in `.claude-plugin/marketplace.json` has placeholder cases: `warning: <skill> is in .claude-plugin/marketplace.json but evals/<skill>/evals.json has only placeholder cases`, or `… still has placeholder cases: <ids>` when some cases are written.
 
 A blinded expectation describes the outcome the user asked for, never how it was produced: "the bubble contains the text verbatim", not "the bundled script was run" (that is `script_ran`). It must be passable by quoting the material, so negative expectations ("does not mention X") are not allowed. Freeze a rubric before a live run, and never edit it after seeing the delta. An assertion's `args`, when present, must be a list of strings: `null` is rejected, and `[]` means no arguments.
 

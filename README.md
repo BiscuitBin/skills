@@ -61,9 +61,18 @@ just              # list every recipe
 
 `just initialize` never stages, commits, tags or pushes. The [getting started tutorial](docs/tutorials/getting-started.md) walks through it.
 
+## Adding a skill
+
+```sh
+just new-skill <name>   # scaffold a skill, its placeholder evals and its marketplace entry
+```
+
+The [first skill tutorial](docs/tutorials/first-skill.md) takes a scratch skill from scaffold to evaluated and installed. The [contributing guide](CONTRIBUTING.md) covers the full workflow: evals first, then the skill, the cross-model review, versions and releases.
+
 ## Documentation
 
 - [Documentation index](docs/README.md)
+- [Contributing a skill](CONTRIBUTING.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Glossary](GLOSSARY.md)
 - [Agent instructions](AGENTS.md)
