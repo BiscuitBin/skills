@@ -86,7 +86,7 @@ The reviewer needs its own login: Codex in the project's Codex home, or `CLAUDE_
 
 Each shipped skill has one version: `version` in `skills/<name>/.claude-plugin/plugin.json`. The marketplace entry carries a copy, which `just format` writes and `just check` keeps equal ([ADR 0010](docs/adr/0010-distribution-boundaries.md)).
 
-Bump the version in every pull request that changes a shipped skill's files. Claude Code finds plugin updates by comparing versions, so a change merged without a bump never reaches people who installed the plugin from the marketplace ([Claude Code: release a new version](https://code.claude.com/docs/en/plugins/host-marketplace.md#release-a-new-version)). Use [semantic versioning](https://semver.org/): a patch for a fix, a minor version for new behaviour, a major version when the skill stops doing something users relied on.
+Bump the version in every pull request that changes a shipped skill's files. Claude Code finds plugin updates by comparing versions, so a change merged without a bump never reaches people who installed the plugin from the marketplace ([Claude Code: release a new version](https://code.claude.com/docs/en/plugins/host-marketplace#release-a-new-version)). Use [semantic versioning](https://semver.org/): a patch for a fix, a minor version for new behaviour, a major version when the skill stops doing something users relied on.
 
 To bump it:
 
