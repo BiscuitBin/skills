@@ -12,7 +12,7 @@ The secrets live in a deployment environment named `live-evals`, never in the re
 
 | Secret | Used for | Without it |
 | --- | --- | --- |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code runs, and the grader for every agent. Create one with `claude setup-token`. | Claude Code runs are skipped. Codex runs go ahead with grading skipped: cases with expectations are scored on their deterministic assertions only, and the graded and outcome pass rates read `no data`. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code runs, and the grader for every agent. Create one with `just run ./node_modules/.bin/claude setup-token`. | Claude Code runs are skipped. Codex runs go ahead with grading skipped: cases with expectations are scored on their deterministic assertions only, and the graded and outcome pass rates read `no data`. |
 | `OPENAI_API_KEY` | Codex runs. The job logs Codex in with `codex login --with-api-key`, into the project's `CODEX_HOME`. | Codex runs are skipped. |
 
 Each skip is a notice in the job summary, not a failure. With neither secret the job succeeds and runs nothing.
