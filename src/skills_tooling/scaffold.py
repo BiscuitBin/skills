@@ -6,6 +6,7 @@ a placeholder that `just eval` refuses to run. See CONTRIBUTING.md.
 """
 
 import argparse
+import contextlib
 import json
 import shutil
 import sys
@@ -13,10 +14,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from skills_tooling.distribution import MARKETPLACE
 from skills_tooling.validator import PLACEHOLDER, name_error
 
 VERSION = "0.1.0"
-MARKETPLACE = ".claude-plugin/marketplace.json"
 
 
 class ScaffoldError(Exception):
@@ -147,8 +148,11 @@ def scaffold(root: Path, name: str) -> list[Path]:
         f"evals/{name}/evals.json": _evals_json(name),
     }
     moved: list[Path] = []
-    # Built beside the destinations, so each move is a rename on one filesystem.
-    with tempfile.TemporaryDirectory(dir=root, prefix=".new-skill-") as staging:
+    # Built inside the project, so each move is a rename on one filesystem; .tools/
+    # is gitignored, so a staging directory left by a killed process stays out of Git.
+    tools = root / ".tools/tmp"
+    staging_parent = tools if tools.is_dir() else root
+    with tempfile.TemporaryDirectory(dir=staging_parent, prefix=".new-skill-") as staging:
         try:
             for relative, text in files.items():
                 target = Path(staging) / relative
@@ -166,12 +170,16 @@ def scaffold(root: Path, name: str) -> list[Path]:
                     "version": VERSION,
                 }
             )
-            path.write_text(json.dumps(marketplace, indent=2) + "\n")
-        except OSError as error:
+            path.write_text(json.dumps(marketplace, indent=2, ensure_ascii=False) + "\n")
+        except BaseException as error:
+            # Interrupts too: a skill left without its marketplace entry fails just check.
             for directory in moved:
                 shutil.rmtree(directory, ignore_errors=True)
-            if path.exists() and path.read_text() != original:
-                path.write_text(original)
+            with contextlib.suppress(OSError):
+                if path.read_text() != original:
+                    path.write_text(original)
+            if not isinstance(error, OSError):
+                raise
             msg = f"could not write the skill, so nothing was kept: {error}"
             raise ScaffoldError(msg) from error
     return [root / relative for relative in files] + [path]

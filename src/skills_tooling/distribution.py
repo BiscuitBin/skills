@@ -12,11 +12,18 @@ MARKETPLACE = ".claude-plugin/marketplace.json"
 def _missing(root: Path, name: str) -> str:
     """What to add for a shipped skill the marketplace does not list."""
     manifest = f"skills/{name}/.claude-plugin/plugin.json"
+    exists = (root / manifest).is_file()
     try:
         plugin = json.loads((root / manifest).read_text())
         description, version = plugin["description"], plugin["version"]
         create = ""
-    except OSError, ValueError, KeyError, TypeError:
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        if exists:
+            return (
+                f"skills/{name} is not listed in {MARKETPLACE}, and its manifest cannot be read."
+                f"\n  Fix {manifest} so it has a name, version and description ({error!r}),"
+                " then run this check again for the entry to add."
+            )
         description, version = "<one line on what the skill does>", "0.1.0"
         plugin = {
             "name": name,
@@ -81,7 +88,7 @@ def check(root: Path, *, write: bool = False) -> None:
                 raise ValueError(msg)
             entry[field] = plugin[field]
     if write:
-        path.write_text(json.dumps(marketplace, indent=2) + "\n")
+        path.write_text(json.dumps(marketplace, indent=2, ensure_ascii=False) + "\n")
 
 
 def require_committed(root: Path) -> None:

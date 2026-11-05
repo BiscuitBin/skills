@@ -318,16 +318,25 @@ def test_validate_warns_when_a_distributed_skill_has_only_placeholder_cases(
     ) in result.stderr
 
 
+def test_validate_warns_when_a_distributed_skill_still_has_some_placeholder_cases(
+    tmp_path: Path,
+) -> None:
+    write_suite(tmp_path, PLACEHOLDER_SUITE)
+    list_in_marketplace(tmp_path, "cowsay")
+    result = run_command(tmp_path, "validate")
+    assert result.returncode == 0, result.stderr
+    assert (
+        "warning: cowsay is in .claude-plugin/marketplace.json but evals/cowsay/evals.json "
+        "still has placeholder cases: trigger-todo, behaviour-todo"
+    ) in result.stderr
+
+
 @pytest.mark.parametrize("listed", [True, False])
 def test_validate_is_quiet_about_written_or_undistributed_suites(
     tmp_path: Path, *, listed: bool
 ) -> None:
-    write_suite(
-        tmp_path,
-        PLACEHOLDER_SUITE
-        if listed
-        else {**PLACEHOLDER_SUITE, "evals": PLACEHOLDER_SUITE["evals"][:2]},
-    )
+    written = {**PLACEHOLDER_SUITE, "evals": [trigger("trigger-written")]}
+    write_suite(tmp_path, written if listed else PLACEHOLDER_SUITE)
     if listed:
         list_in_marketplace(tmp_path, "cowsay")
     result = run_command(tmp_path, "validate")

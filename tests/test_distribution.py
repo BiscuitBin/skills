@@ -81,6 +81,34 @@ def test_an_unlisted_skill_without_a_plugin_manifest_says_to_create_one(tmp_path
     assert '"source": "./skills/tea-timer"' in result.stderr
 
 
+def test_an_unlisted_skill_with_a_broken_plugin_manifest_says_to_fix_it(tmp_path: Path) -> None:
+    root = distribution_root(tmp_path, [])
+    plugin = root / "skills/tea-timer/.claude-plugin"
+    plugin.mkdir(parents=True)
+    (plugin / "plugin.json").write_text('{"name": "tea-timer"')
+    result = check_distribution(root)
+    assert result.returncode == 1
+    assert "Fix skills/tea-timer/.claude-plugin/plugin.json" in result.stderr
+    assert "Create" not in result.stderr
+
+
+def test_just_format_keeps_non_ascii_descriptions_readable(tmp_path: Path) -> None:
+    root = distribution_root(
+        tmp_path, [{"name": "tea-timer", "source": "./skills/tea-timer", "version": "0.1.0"}]
+    )
+    plugin = root / "skills/tea-timer/.claude-plugin"
+    plugin.mkdir(parents=True)
+    (plugin / "plugin.json").write_text(
+        '{"name": "tea-timer", "version": "0.1.0", "description": "Brew tea — gently."}'
+    )
+    subprocess.run(
+        [sys.executable, "-m", "skills_tooling.distribution", "--root", str(root), "--write"],
+        check=True,
+        capture_output=True,
+    )
+    assert "Brew tea — gently." in (root / ".claude-plugin/marketplace.json").read_text()
+
+
 def test_a_listed_plugin_with_no_skill_fails_with_the_entry_to_remove(tmp_path: Path) -> None:
     root = distribution_root(tmp_path, [{"name": "gone", "source": "./skills/gone"}])
     result = check_distribution(root)

@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from skills_tooling.distribution import MARKETPLACE
 from skills_tooling.evals import history
 from skills_tooling.evals import report as reporting
 from skills_tooling.evals.adapter import AGENTS, CredentialError
@@ -37,24 +38,22 @@ REGRESSED = 1
 GRADER_MODEL = "claude-opus-5-5"
 
 
-MARKETPLACE = ".claude-plugin/marketplace.json"
-
-
-def unwritten_distributed(root: Path) -> list[str]:
-    """Skills in the marketplace whose eval suite still holds only placeholder cases."""
+def unwritten_distributed(root: Path) -> dict[str, list[str]]:
+    """Distributed skills with placeholder cases: their ids, or [] when every case is one."""
     try:
         plugins = json.loads((root / MARKETPLACE).read_text())["plugins"]
         listed = sorted({entry["name"] for entry in plugins})
     except OSError, ValueError, KeyError, TypeError:
-        return []  # validate-distribution reports a missing or malformed marketplace.
-    found = []
+        return {}  # validate-distribution reports a missing or malformed marketplace.
+    found: dict[str, list[str]] = {}
     for name in listed:
         try:
             suite = load_suite(root, name)
         except CaseError, OSError:
             continue
-        if all(case.placeholder for case in suite.cases):
-            found.append(name)
+        placeholders = [case.id for case in suite.cases if case.placeholder]
+        if placeholders:
+            found[name] = placeholders if len(placeholders) < len(suite.cases) else []
     return found
 
 
@@ -64,10 +63,15 @@ def validate(root: Path) -> int:
         print(problem, file=sys.stderr)
     if problems:
         return 1
-    for name in unwritten_distributed(root):
+    for name, some in unwritten_distributed(root).items():
+        which = (
+            f"still has placeholder cases: {', '.join(some)}"
+            if some
+            else "has only placeholder cases"
+        )
         print(
-            f"warning: {name} is in {MARKETPLACE} but evals/{name}/evals.json has only "
-            "placeholder cases; write them (see CONTRIBUTING.md)",
+            f"warning: {name} is in {MARKETPLACE} but evals/{name}/evals.json {which}; "
+            "write them (see CONTRIBUTING.md)",
             file=sys.stderr,
         )
     count = len(list((root / "evals").glob("*/evals.json")))
