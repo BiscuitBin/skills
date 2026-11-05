@@ -88,7 +88,7 @@ If either cannot be shown before ticket 12, ticket 12 carries it (its gaps crite
 
 | # | Severity | Finding | Verdict | Action |
 | --- | --- | --- | --- | --- |
-| 1 | medium | A failed `just eval-report` left the job green, with no report or matrix | valid | Fixed: Report sets a `failed` output (also when a skill has no finished run), and the last step fails the job on it after the upload; workflow test and how-to updated |
+| 1 | medium | A failed `just eval-report` left the job green, with no report or matrix | valid | Fixed in d9b9af4: Report sets a `failed` output (also when a skill has no finished run), and the last step fails the job on it after the upload; workflow test and how-to updated |
 
 **Follow-ups:**
 
