@@ -151,6 +151,36 @@ def test_description_drift_fails_and_just_format_copies_it(tmp_path: Path) -> No
     assert check_distribution(root).returncode == 0
 
 
+def test_a_description_removed_from_plugin_json_is_removed_from_the_marketplace(
+    tmp_path: Path,
+) -> None:
+    root = distribution_root(
+        tmp_path,
+        [
+            {
+                "name": "tea-timer",
+                "description": "TODO(new-skill) Old.",
+                "source": "./skills/tea-timer",
+                "version": "0.1.0",
+            }
+        ],
+    )
+    plugin = root / "skills/tea-timer/.claude-plugin"
+    plugin.mkdir(parents=True)
+    (plugin / "plugin.json").write_text('{"name": "tea-timer", "version": "0.1.0"}')
+    result = check_distribution(root)
+    assert result.returncode == 1
+    assert "tea-timer: marketplace description differs from plugin.json" in result.stderr
+    subprocess.run(
+        [sys.executable, "-m", "skills_tooling.distribution", "--root", str(root), "--write"],
+        check=True,
+        capture_output=True,
+    )
+    entry = json.loads((root / ".claude-plugin/marketplace.json").read_text())["plugins"][0]
+    assert "description" not in entry
+    assert check_distribution(root).returncode == 0
+
+
 def test_uncommitted_distribution_files_fail_before_installing(tmp_path: Path) -> None:
     env = isolated_environment(tmp_path)
     project = tmp_path / "repo"

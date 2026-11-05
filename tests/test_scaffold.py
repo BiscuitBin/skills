@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from skills_tooling import distribution
+from skills_tooling import distribution, scaffold
 from skills_tooling.evals.cases import load_suite
 from skills_tooling.validator import validate_skill
 
@@ -62,6 +62,15 @@ def test_a_new_skill_passes_every_check_straight_away(root: Path) -> None:
     suite = load_suite(root, "tea-timer")
     kinds = {(case.kind, case.should_trigger) for case in suite.cases}
     assert kinds == {("trigger", True), ("trigger", False), ("behaviour", True)}
+    validate = subprocess.run(
+        [sys.executable, "-m", "skills_tooling.evals", "validate", "--root", str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert validate.returncode == 0, validate.stderr
+    suites = len(list((ROOT / "evals").glob("*/evals.json"))) + 1
+    assert f"{suites} eval suites valid." in validate.stdout
     distribution.check(root)
     entry = json.loads((root / ".claude-plugin/marketplace.json").read_text())["plugins"][-1]
     assert entry == {
@@ -157,6 +166,31 @@ def test_a_failure_part_way_leaves_nothing_behind(root: Path) -> None:
     assert snapshot(root) == before
     assert not (root / "skills/tea-timer").exists()
     assert not (root / "evals/tea-timer").exists()
+
+
+def test_a_marketplace_write_cut_mid_character_is_restored(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    marketplace = root / ".claude-plugin/marketplace.json"
+    data = json.loads(marketplace.read_text())
+    data["plugins"][0]["description"] = "Brew tea — gently."
+    marketplace.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    before = snapshot(root)
+    write_text = Path.write_text
+
+    def cut_short(self: Path, text: str) -> int:
+        if self == marketplace and "tea-timer" in text:
+            encoded = text.encode()
+            # Stop inside the em dash's three bytes, as a full disk might.
+            self.write_bytes(encoded[: encoded.index("—".encode()) + 1])
+            raise OSError(28, "No space left on device")
+        return write_text(self, text)
+
+    monkeypatch.setattr(Path, "write_text", cut_short)
+    with pytest.raises(scaffold.ScaffoldError, match="nothing was kept"):
+        scaffold.scaffold(root, "tea-timer")
+    monkeypatch.undo()
+    assert snapshot(root) == before
 
 
 def test_the_starter_evals_are_reported_unwritten_not_run(root: Path) -> None:

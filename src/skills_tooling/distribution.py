@@ -79,14 +79,17 @@ def check(root: Path, *, write: bool = False) -> None:
         ):
             msg = f"{name}: plugin manifest needs a matching name and a nonempty version"
             raise ValueError(msg)
-        # plugin.json is the source of both; a manifest without a description has none to copy.
+        # plugin.json is the source of both; a field it leaves out is left out here too.
         for field in ("version", "description"):
-            if field not in plugin or entry.get(field) == plugin[field]:
+            if entry.get(field) == plugin.get(field):
                 continue
             if not write:
                 msg = f"{name}: marketplace {field} differs from plugin.json; run just format"
                 raise ValueError(msg)
-            entry[field] = plugin[field]
+            if field in plugin:
+                entry[field] = plugin[field]
+            else:
+                del entry[field]
     if write:
         path.write_text(json.dumps(marketplace, indent=2, ensure_ascii=False) + "\n")
 

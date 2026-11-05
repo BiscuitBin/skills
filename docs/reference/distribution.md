@@ -15,7 +15,8 @@ to discover the skill at the plugin root.
 
 The single source for a plugin's version and description is its
 `skills/<name>/.claude-plugin/plugin.json`. `just format` copies both into
-the plugin's entry in `.claude-plugin/marketplace.json`. Change the plugin
+the plugin's entry in `.claude-plugin/marketplace.json`, and removes the
+entry's description when `plugin.json` has none. Change the plugin
 version, run `just format`, and commit both manifests. `just new-skill` adds
 the manifest and the marketplace entry for a new skill; [CONTRIBUTING.md](../../CONTRIBUTING.md)
 says when to bump a version. The Python tooling's version and

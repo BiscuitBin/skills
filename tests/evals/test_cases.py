@@ -227,7 +227,8 @@ def test_validate_command_checks_the_repo_suites_without_an_agent(tmp_path: Path
         check=False,
     )
     assert (result.returncode, result.stderr) == (0, "")
-    assert "1 eval suite valid" in result.stdout
+    count = len(list((tmp_path / "evals").glob("*/evals.json")))
+    assert f"{count} eval suite{'' if count == 1 else 's'} valid." in result.stdout
     (tmp_path / "evals/cowsay/evals.json").write_text("{")
     result = subprocess.run(
         [sys.executable, "-m", "skills_tooling.evals", "validate", "--root", str(tmp_path)],

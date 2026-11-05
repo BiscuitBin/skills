@@ -189,9 +189,10 @@ def scaffold(root: Path, name: str) -> list[Path]:
             # Interrupts too: a skill left without its marketplace entry fails just check.
             for directory in moved:
                 shutil.rmtree(directory, ignore_errors=True)
+            # Written back unconditionally: a write that failed part way can leave bytes
+            # that no longer decode, so the file is never read to compare.
             with contextlib.suppress(OSError):
-                if path.read_text() != original:
-                    path.write_text(original)
+                path.write_text(original)
             if not isinstance(error, OSError):
                 raise
             msg = f"could not write the skill, so nothing was kept: {error}"

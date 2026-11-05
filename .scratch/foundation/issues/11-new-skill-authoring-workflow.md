@@ -82,6 +82,16 @@ Both runs ended with `git status --short` empty; the scratch skill was never com
 | --- | --- | --- | --- | --- |
 | 1 | medium | A valid name shaped like an impossible date (`2026-99-99`) crashed `just new-skill` with a traceback | valid | Fixed in b562b98: a YAML construction error means the name is quoted; `2026-99-99` and `2026-02-30` added to the tests |
 
+### PR review (Copilot, PR #14)
+
+- **Reviewer:** GitHub Copilot code review, on 23d9518. Triaged by Claude Code running `claude-opus-5-5`. `main` was merged in first (047ac94) to clear conflicts in `docs/how-to/README.md` and `docs/reference/commands.md`; both sides kept.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | high | `test_validate_command_checks_the_repo_suites_without_an_agent` hard-coded `1 eval suite valid`, so adding a second skill fails `just check` | valid | Fixed: the expected count comes from the copied suites; the scaffold test now validates the repo's suites plus a new one |
+| 2 | high | The scaffold rollback decoded the marketplace before restoring it; a write cut mid-character raised `UnicodeDecodeError` and skipped the restore | valid | Fixed: the saved original is written back without reading the file; test cuts the write inside an em dash |
+| 3 | medium | A description removed from `plugin.json` stayed in the marketplace, so `TODO(new-skill)` could ship | valid | Fixed: a missing description is drift, and `just format` removes it from the entry; test and docs added |
+
 **Follow-ups:**
 
 - Claude Code's docs advise against setting `version` in both `plugin.json` and the marketplace entry (the manifest wins silently). The repo sets both on purpose ([ADR 0010](../../../docs/adr/0010-distribution-boundaries.md)) and the gate keeps them equal; revisit if that ADR is reopened.
