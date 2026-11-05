@@ -90,6 +90,14 @@ No regression beyond 0.10. Claude Code's ticket-08 → ticket-09 comparison is l
 | 3 | medium | An agent never run had no column instead of showing as missing | valid | Fixed in 9c5fab3: every agent the harness runs (`adapter.AGENTS`, also `--agent`'s choices) gets a column, `not run`, and its history says so; test updated |
 | 4 | medium | The live-report summary was absent from the completion notes | out of scope | A step pending at review time; done above |
 
+### PR review (#12)
+
+- **Reviewer:** GitHub Copilot's pull request reviewer (1 inline comment)
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| C1 | medium | A run recorded under a second name, or passed again with `--run`, is compared with itself, which hides a fall and lets `--fail-on-regression` pass | valid | Fixed in 70689f2: the report counts a run once, and `eval-record` refuses a run already recorded for the skill; tests added |
+
 **Follow-ups:**
 
 - Compute each run's pooled values once, and share the matrix and history cell formatting (code review #10).
