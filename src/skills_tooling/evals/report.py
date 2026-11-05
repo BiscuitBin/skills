@@ -468,6 +468,50 @@ def summary(report: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _md(text: object) -> str:
+    """Text safe in a Markdown table cell: no pipe, no newline, no HTML tag."""
+    escaped = str(text).replace("&", "&amp;").replace("<", "&lt;").replace("|", "\\|")
+    return " ".join(escaped.split())
+
+
+def _matrix_entries(report: Mapping[str, Any]) -> list[tuple[str, str, Mapping[str, Any]]]:
+    """The matrix's rows: each case of the latest iteration, then the agents' figures over all."""
+    entries = [
+        (r["case"], "trigger" if r["should_trigger"] else "no trigger", r["cells"])
+        for r in report["matrix"]["rows"]
+    ]
+    entries.append((POOLED, "", report["matrix"]["pooled"]))
+    return entries
+
+
+def markdown(report: Mapping[str, Any]) -> str:
+    """The headline matrix and the regressions as Markdown, for a CI job summary."""
+    head = ["case", "expects"]
+    for agent in report["agents"]:
+        head += [f"{agent} trigger", f"{agent} pass rate", f"{agent} Δ pass rate"]
+    lines = [
+        f"### {_md(report['skill'])}: iteration {_md(report['matrix']['iteration'])}",
+        "",
+        "| " + " | ".join(head) + " |",
+        "|" + " --- |" * len(head),
+    ]
+    for case, expects, cells in _matrix_entries(report):
+        values = [
+            show(cells[agent][k])
+            for agent in report["agents"]
+            for k in ("trigger", "pass", "delta")
+        ]
+        lines.append("| " + " | ".join(_md(v) for v in [case, expects, *values]) + " |")
+    lines.append("")
+    if report["regressions"]:
+        lines.append(f"Regressions beyond {report['threshold']:.2f}:")
+        lines.append("")
+        lines += [f"- {_md(describe(r))}" for r in report["regressions"]]
+    else:
+        lines.append(f"No regression beyond {report['threshold']:.2f}.")
+    return "\n".join(lines) + "\n"
+
+
 def _e(text: object) -> str:
     return html.escape(str(text), quote=True)
 
@@ -488,12 +532,7 @@ def _matrix(report: Mapping[str, Any]) -> str:
     for agent in report["agents"]:
         head += [f"{agent} trigger", f"{agent} pass rate", f"{agent} Δ pass rate"]
     rows = []
-    entries = [
-        (r["case"], "trigger" if r["should_trigger"] else "no trigger", r["cells"])
-        for r in report["matrix"]["rows"]
-    ]
-    entries.append((POOLED, "", report["matrix"]["pooled"]))
-    for case, expects, cells in entries:
+    for case, expects, cells in _matrix_entries(report):
         tds = "".join(
             _td(cells[agent][k])
             for agent in report["agents"]

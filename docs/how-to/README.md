@@ -1,3 +1,3 @@
 # How-to guides
 
-No guides yet. Later tickets add guides for tasks such as writing a new skill, running evals and releasing.
+- [Run live evals in CI](live-evals-in-ci.md): configure the `live-evals` environment's secrets, dispatch the manual workflow, and what a run costs.

@@ -15,9 +15,12 @@ The eval harness runs a skill's eval cases against a pinned agent CLI, headless,
 | `… --trials <n>` | Runs every selected case n times per arm, default 1. |
 | `… --baseline` | Also runs, n times, every selected case that has an outcome to measure, with no skill installed (the baseline arm). Trigger-only cases are skipped in the baseline and listed. |
 | `… --grader-model <id>` | The grader's model, default `claude-opus-5-5`. |
+| `… --no-grader` | Skips grading: no grader call, and no grader token is read. A case with expectations rests on its assertions alone; its graded and outcome pass rates are not measured (`null`), and the plan shows `grader calls: 0 (grading skipped)`. The live-eval CI job uses it when `CLAUDE_CODE_OAUTH_TOKEN` is not set. |
 | `… --dry-run` | Prints the plan and exits 0: agent calls per arm, the cases skipped in the baseline, the most grader calls the run can make, and the spend cap. It reads no credential, creates no workspace and writes nothing. A real run prints the same plan first. |
 | `just eval-record <name> <run-id>...` | Records finished runs as a named iteration. See [history and report](#history-and-report). |
 | `just eval-report [skill]` | Builds the offline benchmark report from the recorded iterations. |
+| `just eval-changed [--base REF]` | Prints the skills with evals changed since the merge base with `origin/main` (or `REF`). See [live evals in CI](../how-to/live-evals-in-ci.md) for the rules. Calls no agent. |
+| `just eval-ci plan\|runs\|scan …` | The helpers the manual live-eval workflow runs: validate the dispatch inputs and plan the runs, list a skill's finished runs, and scan a directory for secret values. See [live evals in CI](../how-to/live-evals-in-ci.md). |
 
 **Live evals need an authenticated agent and are never part of the PR gate.** `just eval` calls a paid model, so it runs only locally or from a manual job that holds the secret ([ADR 0004](../adr/0004-eval-tiers-and-ci.md)). `just check` and PR CI cover the harness without credentials: the tests drive the real pinned CLIs against local fake APIs (`tests/evals/fake_anthropic.py`, `tests/evals/fake_openai.py`) and parse recorded transcripts (`tests/fixtures/evals/claude/`, `tests/fixtures/evals/codex/`).
 
@@ -212,7 +215,7 @@ A reply that fails validation might have been caused by the graded material, so 
 
 `eval-results/<run-id>/benchmark.json` aggregates the run's trials and grading files, and the run prints it as a table. It follows skill-creator's benchmark: skill-creator's `with_skill` and `without_skill` configurations are the `skill` and `baseline` arms here.
 
-For each agent, case and arm it counts `n_planned`, `n_scored` (status ok, uncontaminated, no secret), `n_infra_error`, `n_contaminated`, `n_secret_found`, `n_grader_error` (including a grading file that is missing, unreadable, malformed, or lists other expectations than the case's rubric), `n_invalid_reply`, `n_rejected` and `n_arm_disclosed`. Each metric is `{mean, stddev, min, max, n}` over per-trial values:
+For each agent, case and arm it counts `n_planned`, `n_scored` (status ok, uncontaminated, no secret), `n_infra_error`, `n_contaminated`, `n_secret_found`, `n_grader_error` (including a grading file that is missing, unreadable, malformed, or lists other expectations than the case's rubric), `n_invalid_reply`, `n_rejected`, `n_grading_skipped` (a trial with expectations in a `--no-grader` run) and `n_arm_disclosed`. Each metric is `{mean, stddev, min, max, n}` over per-trial values:
 
 | Metric | Per-trial value | Baseline arm |
 | --- | --- | --- |
@@ -224,6 +227,7 @@ For each agent, case and arm it counts `n_planned`, `n_scored` (status ok, uncon
 
 - The **delta** is the skill arm's mean minus the baseline's, for the deterministic, graded and outcome rates only, as `{value, n_skill, n_baseline}` for each metric. `value` is `null` when either arm has no data. A case skipped in the baseline, and every case of a run without one, has an empty delta, `{}`. The agent's delta is `{value, n_cases}` for each metric.
 - **Intention to treat:** a skill-arm trial in which the skill did not trigger still counts in its arm's outcome metrics.
+- In a run with `grading_skipped`, a case with expectations has `null` graded and outcome pass rates, never an outcome rate over its assertions alone, which would not compare with a graded run; its notes say `grading skipped: graded and outcome rates not measured`, and the report shows `no data`.
 - An infrastructure error, contamination or a secret found removes a trial from every metric. A grader error removes it from the graded and outcome rates only. Every exclusion is counted, never turned into a 0.
 - `stddev` is the sample standard deviation, `null` below two values. A metric with nothing to measure is `null`, never 0.
 - **Notes** flag fewer than three trials ("spread not meaningful"), a flaky trigger, an expectation that passed in every trial of both arms (non-discriminating), and, on a delta, unequal n, excluded grader errors, excluded infrastructure errors and trials whose material named the arm. Infrastructure errors are noted because an exclusion can depend on the arm: under Codex, a baseline agent that tries to install the tool it lacks can trip the sandbox's denial rule and become an infrastructure error. A run without a baseline has no delta; its per-arm counts still show both.
@@ -260,6 +264,8 @@ Missing data is shown by its reason, never as 0, never averaged and never compar
 
 A new `skill_sha256` or commit is the change being measured and carries no label. A reported list that is empty on one side (no grading ran) is not a difference. A flag on fewer than three values on either side also says `thin sample`. `--fail-on-regression` exits 1 when any metric is flagged, labelled or not; without it the report exits 0. A usage error exits 2.
 
+`--markdown <path>` also writes each skill's agents-by-cases matrix and its regressions as Markdown, which the live-eval CI job appends to its summary.
+
 `--run <run-id>` (repeatable, one per agent) adds finished runs from `eval-results/` as a last, unrecorded iteration, without writing it, so a change can be checked against the last recorded benchmark before it is recorded.
 
 ## Results
@@ -274,10 +280,10 @@ A new `skill_sha256` or commit is the change being measured and carries no label
 | Run field | Meaning |
 | --- | --- |
 | `run_id`, `skill`, `agent`, `requested_model` | What ran. |
-| `credential_env` | The names of the caller's variables the credentials came from: `CLAUDE_CODE_OAUTH_TOKEN`, or `CODEX_HOME` for Codex's `auth.json`, plus the grader's `CLAUDE_CODE_OAUTH_TOKEN` when the cases carry expectations. |
+| `credential_env` | The names of the caller's variables the credentials came from: `CLAUDE_CODE_OAUTH_TOKEN`, or `CODEX_HOME` for Codex's `auth.json`, plus the grader's `CLAUDE_CODE_OAUTH_TOKEN` when the cases carry expectations and grading is not skipped. |
 | `started_at`, `finished_at` | UTC, ISO 8601. |
 | `passed` | Every skill-arm trial passed and every baseline trial is valid. |
-| `trials_per_case`, `baseline`, `grader_model_requested` | The run's configuration. |
+| `trials_per_case`, `baseline`, `grader_model_requested`, `grading_skipped` | The run's configuration. `grader_model_requested` is `null` when no case was graded; `grading_skipped` is `true` for a `--no-grader` run (absent from runs before it existed, which read as `false`). |
 | `cases` | Each selected case's `id`, `kind`, `should_trigger`, `expectations` (`text`, `blinded`) and `in_baseline`. |
 | `skipped_in_baseline` | Case ids with nothing for a baseline to measure. |
 | `provenance` | The provenance above that is known at the start. |
