@@ -26,7 +26,7 @@ The scaffold passes every check, but it is not a skill yet. Everything you still
 
 - `just validate-skills` warns `[placeholder]` for every skill file that still holds `TODO(new-skill)`.
 - `just eval` refuses placeholder cases. It lists each one as `UNWRITTEN <skill>/<case>` and exits 2 before calling any agent.
-- `just validate-evals`, and so `just check`, warns when a skill in the marketplace has only placeholder cases.
+- `just validate-evals`, and so `just check`, warns when a skill in the marketplace still has placeholder cases, naming the skill.
 
 If you create a skill by hand instead, `just check` fails until the marketplace lists it, and the message gives the exact entry to add.
 

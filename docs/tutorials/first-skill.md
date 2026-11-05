@@ -4,7 +4,7 @@ This tutorial takes a scratch skill from nothing to scaffolded, validated, evalu
 
 You will delete the skill at the end. Nothing in this tutorial is committed.
 
-Run every command from the repository root. Each one is meant to be copied and pasted as it is.
+Run every command from the repository root. Each one is meant to be copied and pasted as it is. The commands that replace a scaffolded file use `>|`, which overwrites the file even when your shell has `noclobber` set; a plain `>` would fail there and leave the scaffold in place.
 
 ## Before you start
 
@@ -64,7 +64,7 @@ It lists each case as `UNWRITTEN biscuit-signoff/<case>` and fails with exit cod
 Write the evals before the skill. Trigger cases say which requests should load the skill and which should not; the behaviour case says what the answer must contain. Replace the starter cases:
 
 ```sh
-cat > evals/biscuit-signoff/evals.json <<'EOF'
+cat >| evals/biscuit-signoff/evals.json <<'EOF'
 {
   "skill_name": "biscuit-signoff",
   "evals": [
@@ -114,7 +114,7 @@ None of the cases carries `"placeholder": true` any more, so they count as writt
 just validate-evals
 ```
 
-It prints `2 eval suites valid.` and no warning.
+It prints `2 eval suites valid.` and no warning. If the placeholder warning is still there, the file was not replaced: rerun the `cat` command above and check it printed no error.
 
 ## 4. Run the baseline (RED)
 
@@ -124,16 +124,24 @@ Run the cases on Codex, with a baseline arm that has no skill installed:
 just eval biscuit-signoff --agent codex --baseline
 ```
 
-It prints its plan first (five agent calls for the skill arm, one for the baseline), then runs. The run fails, and that is the point. The behaviour case fails in the baseline arm because no agent knows the sign-off line. The skill arm fails too, because the skill is still a stub with a `TODO(new-skill)` description, so nothing triggers it.
+It prints its plan first (five agent calls for the skill arm, one for the baseline, with the four trigger cases skipped in the baseline), then runs. It exits 1, and that is the point. The line that matters is the behaviour case:
 
-The run is written to `eval-results/<run-id>/`, where `<run-id>` is the newest directory there. `results.json` holds every trial and `benchmark.json` the summary. The [evals reference](../reference/evals.md#results) describes both.
+```text
+FAIL behaviour-release-note/skill-1: output_contains failed (looked for 'Fresh from the BiscuitBin oven.')
+```
+
+No agent knows the sign-off line, with or without the stub. The trigger cases may already pass: Codex can load a skill whose name matches the request, even with a placeholder description. That does not matter yet; the behaviour case is the gap the skill has to close.
+
+The baseline arm is read differently. A baseline trial is never judged pass or fail, because it measures what the agent does without the skill. It prints `VALID behaviour-release-note/baseline-1` when it ran cleanly, and the line `behaviour-release-note: skill scored 1/1; baseline scored 1/1` counts the trials that could be scored, not the ones that passed. The baseline's result is in the benchmark that follows: its `deterministic` and `outcome` pass rates are 0.00, because its answer had no sign-off line either.
+
+The run is written to `eval-results/<run-id>/`, where `<run-id>` is the newest directory there. `results.json` holds every trial and `benchmark.json` the summary, including each case's `delta`, the skill arm minus the baseline. The [evals reference](../reference/evals.md#results) describes both.
 
 ## 5. Write the skill
 
 Now write the skill that closes that gap. Replace the stub `SKILL.md`:
 
 ````sh
-cat > skills/biscuit-signoff/SKILL.md <<'EOF'
+cat >| skills/biscuit-signoff/SKILL.md <<'EOF'
 ---
 name: biscuit-signoff
 description: Ends messages for the BiscuitBin team with the house sign-off line. Use when drafting any message, note, email or announcement addressed to the BiscuitBin team. Not for other writing.
@@ -157,7 +165,7 @@ EOF
 Replace the Codex UI metadata:
 
 ```sh
-cat > skills/biscuit-signoff/agents/openai.yaml <<'EOF'
+cat >| skills/biscuit-signoff/agents/openai.yaml <<'EOF'
 interface:
   display_name: 'Biscuit Signoff'
   short_description: 'Sign off BiscuitBin team messages'
@@ -167,7 +175,7 @@ EOF
 Replace the plugin manifest's placeholder description:
 
 ```sh
-cat > skills/biscuit-signoff/.claude-plugin/plugin.json <<'EOF'
+cat >| skills/biscuit-signoff/.claude-plugin/plugin.json <<'EOF'
 {
   "name": "biscuit-signoff",
   "version": "0.1.0",
@@ -187,13 +195,15 @@ The marketplace entry still has the old description. `plugin.json` is the source
 just format
 ```
 
+Among its output is `Marketplace sources, plugin versions and descriptions match.`, printed after the copy. `git diff .claude-plugin/marketplace.json` shows the new description.
+
 Check the skill again:
 
 ```sh
 just validate-skills
 ```
 
-It now ends with `0 errors, 0 warnings`.
+It now ends with `0 errors, 0 warnings`. A `[placeholder]` warning means one of the three files still has the scaffold's text: rerun its `cat` command.
 
 ## 6. Run it again (GREEN)
 
@@ -201,7 +211,7 @@ It now ends with `0 errors, 0 warnings`.
 just eval biscuit-signoff --agent codex --baseline
 ```
 
-This time every skill-arm trial should pass: the two team requests trigger the skill, the haiku and the git question do not, and the release note ends with the sign-off line. The baseline arm still fails the behaviour case, which shows the skill is what made the difference. The run exits 0.
+This time every skill-arm trial should pass: the two team requests trigger the skill, the haiku and the git question do not, and the release note ends with the sign-off line, so the behaviour case prints `PASS`. The baseline trial again prints `VALID`, with `deterministic` and `outcome` at 0.00, so the behaviour case's `delta` is +1.00: the skill is what made the difference. The run exits 0.
 
 Agents are not deterministic, so a case can still fail. Find it in the newest `eval-results/<run-id>/results.json`, then close the gap in the skill rather than in the case:
 
@@ -218,7 +228,7 @@ Install the skill the way a user would, with the pinned `skills` installer, into
 just run sh -c 'mkdir -p .tools/tmp/signoff-project && cd .tools/tmp/signoff-project && DO_NOT_TRACK=1 ../../../node_modules/.bin/skills add ../../../skills/biscuit-signoff --agent codex --yes'
 ```
 
-It ends with `Installed 1 skill`. Codex finds project skills in `.agents/skills/`:
+Its summary reports `Installed 1 skill` and `✓ biscuit-signoff (copied)`. Codex finds project skills in `.agents/skills/`:
 
 ```sh
 ls .tools/tmp/signoff-project/.agents/skills/biscuit-signoff

@@ -76,7 +76,7 @@ Unknown keys are rejected at every level, so a later field has to be added on pu
 `just new-skill` writes starter cases, a should-trigger case, a should-not-trigger case and a behaviour case, each with `"placeholder": true` and `TODO(new-skill)` text. They are valid, so a new skill passes `just validate-evals`, but they measure nothing:
 
 - `just eval`, with or without `--dry-run`, prints `UNWRITTEN <skill>/<case>` for each selected placeholder case and exits 2 before it reads a credential or calls an agent. `--case` can still pick out the written cases of a suite that has placeholders.
-- `just validate-evals`, and so `just check`, warns on stderr, and still passes, when a skill listed in `.claude-plugin/marketplace.json` has only placeholder cases: `warning: <skill> is in .claude-plugin/marketplace.json but evals/<skill>/evals.json has only placeholder cases`.
+- `just validate-evals`, and so `just check`, warns on stderr, and still passes, when a skill listed in `.claude-plugin/marketplace.json` has placeholder cases: `warning: <skill> is in .claude-plugin/marketplace.json but evals/<skill>/evals.json has only placeholder cases`, or `… still has placeholder cases: <ids>` when some cases are written.
 
 A blinded expectation describes the outcome the user asked for, never how it was produced: "the bubble contains the text verbatim", not "the bundled script was run" (that is `script_ran`). It must be passable by quoting the material, so negative expectations ("does not mention X") are not allowed. Freeze a rubric before a live run, and never edit it after seeing the delta. An assertion's `args`, when present, must be a list of strings: `null` is rejected, and `[]` means no arguments.
 
