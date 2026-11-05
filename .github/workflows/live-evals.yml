@@ -1,0 +1,190 @@
+name: Live evals
+
+# Manual only. Live evals call paid models, so they never run on a pull request
+# or a push, and fork code never runs with these secrets
+# (docs/adr/0004-eval-tiers-and-ci.md). How to configure and dispatch it:
+# docs/how-to/live-evals-in-ci.md.
+on:
+  workflow_dispatch:
+    inputs:
+      skills:
+        description: 'A skill name, or "changed" for the skills changed since main'
+        type: string
+        required: true
+        default: changed
+      agents:
+        description: The agents to run
+        type: choice
+        options: [both, claude, codex]
+        default: both
+      trials:
+        description: Trials per case, from 1 to 5
+        type: string
+        required: true
+        default: '1'
+      baseline:
+        description: Also run each case with no skill installed
+        type: boolean
+        default: false
+
+# No token permission by default; the job asks for exactly what it needs.
+permissions: {}
+
+# One dispatch at a time, and never cancel one that is spending. GitHub keeps
+# only one pending run per group: a third dispatch replaces a second that is
+# still waiting.
+concurrency:
+  group: live-evals
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    name: live evals
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    # The secrets live in this environment, not in the repository.
+    environment: live-evals
+    permissions:
+      contents: read
+    steps:
+      # Full history, so "changed" can find the merge base with origin/main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The same setup as ci.yml, then `just initialize`, as a developer runs it.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.6'
+          enable-cache: false
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.59.0'
+
+      # Codex's bubblewrap sandbox needs unprivileged user namespaces.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - run: just initialize
+
+      # The inputs reach the shell only as environment variables, and the plan
+      # validates them before anything runs. The secrets are tested for
+      # presence here; their values are not in this step.
+      - name: Plan
+        id: plan
+        env:
+          SKILLS: ${{ inputs.skills }}
+          AGENTS: ${{ inputs.agents }}
+          TRIALS: ${{ inputs.trials }}
+          BASELINE: ${{ inputs.baseline }}
+          HAS_CLAUDE: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          HAS_OPENAI: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: |
+          just eval-ci plan --skills "$SKILLS" --agents "$AGENTS" --trials "$TRIALS" \
+            --baseline "$BASELINE" --has-claude "$HAS_CLAUDE" --has-openai "$HAS_OPENAI" \
+            --out eval-results/dispatch
+          cat eval-results/dispatch/summary.md >>"$GITHUB_STEP_SUMMARY"
+          if [ -s eval-results/dispatch/runs.txt ]; then has_runs=true; else has_runs=false; fi
+          if grep -q ' codex$' eval-results/dispatch/runs.txt; then codex=true; else codex=false; fi
+          printf 'has_runs=%s\ncodex=%s\n' "$has_runs" "$codex" >>"$GITHUB_OUTPUT"
+
+      # Writes the login to the project's CODEX_HOME (.tools/agent-homes/codex),
+      # where `just eval --agent codex` reads it.
+      - name: Log Codex in
+        if: steps.plan.outputs.codex == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: printenv OPENAI_API_KEY | just run ./node_modules/.bin/codex login --with-api-key
+
+      # Every planned run goes ahead even when one fails, or the Codex login
+      # did; the last step fails the job afterwards. stdin is /dev/null so an
+      # agent CLI cannot read the run list. The step's timeout is below the
+      # job's, so a long dispatch still reports, scans and uploads what it ran.
+      - name: Run evals
+        id: evals
+        if: ${{ !cancelled() && steps.plan.outputs.has_runs == 'true' }}
+        timeout-minutes: 90
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          read -r flags <eval-results/dispatch/flags
+          failed=0
+          printf '\n### Runs\n\n| skill | agent | exit |\n| --- | --- | --- |\n' >>"$GITHUB_STEP_SUMMARY"
+          while read -r skill agent <&3; do
+            echo "::group::just eval $skill --agent $agent $flags"
+            # $flags is split on purpose: the plan wrote only validated words.
+            # shellcheck disable=SC2086
+            if just eval "$skill" --agent "$agent" $flags </dev/null; then code=0; else code=$?; fi
+            echo "::endgroup::"
+            [ "$code" -eq 0 ] || failed=1
+            printf '| %s | %s | %s |\n' "$skill" "$agent" "$code" >>"$GITHUB_STEP_SUMMARY"
+          done 3<eval-results/dispatch/runs.txt
+          echo "failed=$failed" >>"$GITHUB_OUTPUT"
+
+      # A missing report fails the job, but only at the end, after the raw
+      # results are uploaded.
+      - name: Report
+        id: report
+        if: ${{ !cancelled() && steps.plan.outputs.has_runs == 'true' }}
+        run: |
+          failed=0
+          for skill in $(cut -d' ' -f1 eval-results/dispatch/runs.txt | sort -u); do
+            set --
+            for run_id in $(just eval-ci runs "$skill"); do set -- "$@" --run "$run_id"; done
+            if [ "$#" -eq 0 ]; then
+              printf '\nNo finished run of %s to report.\n' "$skill" >>"$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            if just eval-report "$skill" "$@" --out "eval-results/report-$skill.html" \
+              --markdown "eval-results/summary-$skill.md"; then
+              { echo; cat "eval-results/summary-$skill.md"; } >>"$GITHUB_STEP_SUMMARY"
+            else
+              printf '\nThe report for %s could not be built; see the Report step.\n' "$skill" \
+                >>"$GITHUB_STEP_SUMMARY"
+              failed=1
+            fi
+          done
+          echo "failed=$failed" >>"$GITHUB_OUTPUT"
+
+      # The runs scrub what they write; this rereads all of it for the
+      # configured secrets, and for the Codex login's, before anything leaves
+      # the runner. On a hit the job fails and nothing is uploaded.
+      - name: Scan the results for secrets
+        id: scan
+        if: ${{ !cancelled() && steps.plan.outputs.has_runs == 'true' }}
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: just eval-ci scan eval-results
+
+      # eval-results/ only: the trial workspaces in .eval-workspaces/ stay here.
+      - name: Upload the report and raw results
+        id: upload
+        if: ${{ !cancelled() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-evals-${{ github.run_id }}-${{ github.run_attempt }}
+          path: eval-results/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Link the artifact
+        if: ${{ !cancelled() && steps.upload.outcome == 'success' }}
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          printf '\n[Download the report and raw results](%s)\n' "$ARTIFACT_URL" \
+            >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Fail on a failed eval or report
+        if: ${{ !cancelled() && (steps.evals.outputs.failed == '1' || steps.report.outputs.failed == '1') }}
+        run: |
+          echo 'A `just eval` exited nonzero or a report was not built; see the job summary.' >&2
+          exit 1

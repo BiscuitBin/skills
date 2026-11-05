@@ -8,8 +8,11 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from skills_tooling.evals import __main__ as evals_cli
+from skills_tooling.evals import history
+from skills_tooling.evals import report as reporting
 from skills_tooling.evals.cases import Case, Expectation
 from skills_tooling.evals.claude_code import ClaudeCode
+from skills_tooling.evals.codex import pinned_executable
 from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import describe_plan, run_suite
 from tests.evals.fake_anthropic import Turn, serve, text, tool
@@ -437,3 +440,72 @@ def test_a_codex_run_with_expectations_needs_the_graders_token(tmp_path: Path) -
     assert "CLAUDE_CODE_OAUTH_TOKEN" in result.stderr
     assert "grader" in result.stderr
     assert not (root / "eval-results").exists()
+
+
+def test_without_the_grader_a_case_with_expectations_rests_on_its_assertions(
+    tmp_path: Path,
+) -> None:
+    root = fake_root(tmp_path, GRADED_CASES)
+    with serve(SCRIPT) as server:
+        exit_code = run_suite(settings(root, server.url, grading_skipped=True, baseline=True))
+    data = results(root)
+    assert exit_code == 0, json.dumps(data, indent=2)
+    assert data["grading_skipped"] is True
+    assert data["grader_model_requested"] is None
+    assert data["credential_env"] == ["CLAUDE_CODE_OAUTH_TOKEN"]
+    for trial in data["trials"]:
+        assert (trial["grading"], trial["graded"], trial["valid"]) == (None, None, True)
+    assert not (root / "eval-results/test-run/grading").exists()
+    benchmark = json.loads((root / "eval-results/test-run/benchmark.json").read_text())
+    case = benchmark["agents"]["claude"]["cases"]["behaviour-moo"]
+    for arm in ("skill", "baseline"):
+        metrics = case[arm]["metrics"]
+        assert metrics["deterministic_pass_rate"]["mean"] == 1.0
+        # Not measured, never a partial outcome rate that looks comparable.
+        assert (metrics["graded_pass_rate"], metrics["outcome_pass_rate"]) == (None, None)
+        assert (case[arm]["n_grading_skipped"], case[arm]["n_grader_error"]) == (1, 0)
+    assert "grading skipped: graded and outcome rates not measured" in case["notes"]
+    trigger = benchmark["agents"]["claude"]["cases"]["no-trigger-facts"]
+    assert trigger["skill"]["n_grading_skipped"] == 0
+    built = reporting.build([history.assemble(root, None, ["test-run"])])
+    [row] = [r for r in built["matrix"]["rows"] if r["case"] == "behaviour-moo"]
+    assert reporting.show(row["cells"]["claude"]["pass"]) == "no data"
+
+
+def test_no_grader_runs_a_codex_suite_with_expectations_without_the_graders_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = fake_root(tmp_path, GRADED_CASES)
+    binary = pinned_executable(root)
+    binary.parent.mkdir(parents=True)
+    binary.touch()
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    (home / "auth.json").write_text('{"auth_mode": "apikey", "OPENAI_API_KEY": "sk-fake"}')
+    started: list[RunSettings] = []
+
+    def run_suite(settings: RunSettings) -> int:
+        started.append(settings)
+        return 0
+
+    monkeypatch.setattr(evals_cli, "run_suite", run_suite)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    argv = ["evals", "run", "cowsay", "--agent", "codex", "--no-grader", "--root", str(root)]
+    monkeypatch.setattr(sys, "argv", argv)
+    with pytest.raises(SystemExit) as exited:
+        evals_cli.main()
+    assert exited.value.code == 0
+    (settings,) = started
+    assert (settings.grader, settings.grading_skipped) == (None, True)
+
+
+def test_the_dry_run_without_the_grader_plans_no_grader_calls() -> None:
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CODE_OAUTH_TOKEN"}
+    result = run_cli(
+        "cowsay", "--agent", "claude", "--no-grader", "--dry-run", "--root", str(ROOT), env=env
+    )
+    assert result.returncode == 0, result.stderr
+    assert "grader calls: 0 (grading skipped)" in result.stdout
+    # Nine agent calls at $1.00 each, and nothing for the grader.
+    assert "spend cap: $9.00" in result.stdout

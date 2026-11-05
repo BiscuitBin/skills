@@ -26,6 +26,9 @@ SKILL_ONLY = ("trigger_accuracy", "skill_use_pass_rate")
 METRICS = (*SKILL_ONLY, *DELTA_METRICS)
 EXCLUSIONS = ("n_infra_error", "n_contaminated", "n_secret_found")
 GRADING_FAILURES = ("grader_error", "invalid_reply", "rejected")
+# The status of a trial whose expectations were never sent to a grader (`--no-grader`).
+GRADING_SKIPPED = "grading_skipped"
+GRADING_SKIPPED_NOTE = "grading skipped: graded and outcome rates not measured"
 # The statuses of a grading that holds a verdict; grader_error holds none.
 VERDICT_STATUSES = ("ok", "rejected", "invalid_reply")
 DESCRIPTIVE = (
@@ -120,7 +123,11 @@ def _has_verdicts(
 
 
 def _score(
-    case: Mapping[str, Any], trial: Mapping[str, Any], grading: Mapping[str, Any] | None
+    case: Mapping[str, Any],
+    trial: Mapping[str, Any],
+    grading: Mapping[str, Any] | None,
+    *,
+    grading_skipped: bool = False,
 ) -> _Scored:
     def results(cls: str) -> list[str]:
         return [
@@ -140,6 +147,10 @@ def _score(
     }
     if not case["expectations"]:
         return _Scored(values)
+    if grading_skipped:
+        # Half the outcome unmeasured: a partial rate would look comparable and is not.
+        values["outcome_pass_rate"] = None
+        return _Scored(values, GRADING_SKIPPED)
     if not _has_verdicts(grading, case):
         # No reply, no file or a file off the rubric: the trial leaves only the metrics the grader
         # feeds, so every outcome_pass_rate denominator has the same mix of measures.
@@ -166,13 +177,14 @@ def _metrics(scored: Sequence[_Scored], *, baseline: bool) -> dict[str, Any]:
     return metrics
 
 
-def _arm(
+def _arm(  # noqa: PLR0913 -- the arm's trials and how the run scored them
     case: Mapping[str, Any],
     trials: Sequence[Mapping[str, Any]],
     gradings: Mapping[str, Mapping[str, Any] | None],
     planned: int,
     *,
     baseline: bool,
+    grading_skipped: bool,
 ) -> tuple[dict[str, Any], list[_Scored]]:
     counts = dict.fromkeys(("n_scored", *EXCLUSIONS), 0)
     scored = []
@@ -183,8 +195,8 @@ def _arm(
             continue
         counts["n_scored"] += 1
         grading = gradings.get(trial["grading"]) if trial["grading"] is not None else None
-        scored.append(_score(case, trial, grading))
-    for status in GRADING_FAILURES:
+        scored.append(_score(case, trial, grading, grading_skipped=grading_skipped))
+    for status in (*GRADING_FAILURES, GRADING_SKIPPED):
         counts[f"n_{status}"] = sum(s.grading_status == status for s in scored)
     counts["n_arm_disclosed"] = sum(s.disclosed for s in scored)
     metrics = _metrics(scored, baseline=baseline)
@@ -200,15 +212,27 @@ def _case(
     """The case's record, and its scored trials by arm for pooling."""
     mine = [t for t in trials if t["case"] == case["id"]]
     planned = run["trials_per_case"]
+    # Absent from runs before `--no-grader` existed, which always graded.
+    skipped = run.get("grading_skipped", False) is True
     skill, skill_scored = _arm(
-        case, [t for t in mine if t["arm"] == "skill"], gradings, planned, baseline=False
+        case,
+        [t for t in mine if t["arm"] == "skill"],
+        gradings,
+        planned,
+        baseline=False,
+        grading_skipped=skipped,
     )
     scored = {"skill": skill_scored}
     baseline: dict[str, Any] | str = "skipped"
     delta: dict[str, Any] = {}
     if case["in_baseline"]:
         baseline, scored["baseline"] = _arm(
-            case, [t for t in mine if t["arm"] == "baseline"], gradings, planned, baseline=True
+            case,
+            [t for t in mine if t["arm"] == "baseline"],
+            gradings,
+            planned,
+            baseline=True,
+            grading_skipped=skipped,
         )
         delta = {m: _delta(skill["metrics"][m], baseline["metrics"][m]) for m in DELTA_METRICS}
     expectations = [
@@ -250,6 +274,9 @@ def _notes(
         if row["baseline"] is not None
         and all(0 < arm["n"] == arm["passed"] for arm in (row["skill"], row["baseline"]))
     ]
+    arms = [skill] if isinstance(baseline, str) else [skill, baseline]
+    if any(arm[f"n_{GRADING_SKIPPED}"] for arm in arms):
+        notes.append(GRADING_SKIPPED_NOTE)
     if isinstance(baseline, str):
         return notes
     notes += [
@@ -404,8 +431,12 @@ def _delta_cell(delta: Mapping[str, Any] | None) -> str:
 def _arm_counts(arm: Mapping[str, Any]) -> str:
     counted = [
         f"{key.removeprefix('n_').replace('_', ' ')} {arm[key]}"
-        for key in (*EXCLUSIONS, *(f"n_{s}" for s in GRADING_FAILURES), "n_arm_disclosed")
-        if arm[key]
+        for key in (
+            *EXCLUSIONS,
+            *(f"n_{s}" for s in (*GRADING_FAILURES, GRADING_SKIPPED)),
+            "n_arm_disclosed",
+        )
+        if arm.get(key)
     ]
     return f"scored {arm['n_scored']}/{arm['n_planned']}" + "".join(f", {c}" for c in counted)
 

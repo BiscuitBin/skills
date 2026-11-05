@@ -70,6 +70,10 @@ _Avoid_: Version, snapshot, release
 A metric that fell by more than the report's threshold between an agent's last two benchmarks of the same skill.
 _Avoid_: Failure, drop
 
+**Changed skill**:
+A skill with an eval suite whose skill or eval files changed since the merge base with main; a change to the shared eval code or the pinned agent CLIs changes every one.
+_Avoid_: Affected skill, dirty skill
+
 **Contamination**:
 Anything the agent could see during a trial other than the skill under test and the agent's built-in skills, such as this repo's dev skills, other shipped skills or the user's own skills.
 _Avoid_: Leakage, pollution
