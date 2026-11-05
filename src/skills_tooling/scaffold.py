@@ -1,0 +1,201 @@
+"""Scaffold a shipped skill, its eval suite and its marketplace entry: `just new-skill <name>`.
+
+The skill passes the validator straight away, but every part the author still has
+to write holds the validator's placeholder marker, and every starter eval case is
+a placeholder that `just eval` refuses to run. See CONTRIBUTING.md.
+"""
+
+import argparse
+import json
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from skills_tooling.validator import PLACEHOLDER, name_error
+
+VERSION = "0.1.0"
+MARKETPLACE = ".claude-plugin/marketplace.json"
+
+
+class ScaffoldError(Exception):
+    """The skill was not created; nothing was written."""
+
+
+def _title(name: str) -> str:
+    return " ".join(word.capitalize() for word in name.split("-"))
+
+
+def _skill_md(name: str, description: str) -> str:
+    return f"""---
+name: {name}
+description: {description}
+license: MIT
+---
+
+# {_title(name)}
+
+{PLACEHOLDER} Replace this stub with the instructions an agent follows once the
+skill loads. Write the eval cases first and run a baseline without the skill;
+CONTRIBUTING.md describes the loop.
+
+## Steps
+
+1. {PLACEHOLDER} The first thing the agent does.
+"""
+
+
+def _openai_yaml(name: str) -> str:
+    return f"""interface:
+  display_name: '{_title(name)}'
+  short_description: '{PLACEHOLDER} A label for the skill picker'
+"""
+
+
+def _plugin_json(name: str, description: str) -> str:
+    # A literal, not json.dumps, so the file is already in Prettier's format.
+    return f"""{{
+  "name": {json.dumps(name)},
+  "version": {json.dumps(VERSION)},
+  "description": {json.dumps(description)},
+  "author": {{
+    "name": "BiscuitBin"
+  }},
+  "license": "MIT",
+  "skills": ["./"]
+}}
+"""
+
+
+def _evals_json(name: str) -> str:
+    def case(case_id: str, kind: str, prompt: str, *, should: bool) -> dict[str, object]:
+        return {
+            "id": case_id,
+            "kind": kind,
+            "prompt": f"{PLACEHOLDER} {prompt}",
+            "should_trigger": should,
+            "placeholder": True,
+        }
+
+    behaviour = case(
+        "behaviour-placeholder",
+        "behaviour",
+        f"A task whose answer {name} should change.",
+        should=True,
+    )
+    behaviour["expected_output"] = f"{PLACEHOLDER} What a good answer contains."
+    behaviour["assertions"] = [
+        {"type": "skill_triggered"},
+        {"type": "output_contains", "value": f"{PLACEHOLDER} Text the answer must contain."},
+    ]
+    suite = {
+        "skill_name": name,
+        "evals": [
+            case(
+                "trigger-placeholder",
+                "trigger",
+                f"A request that should load {name}.",
+                should=True,
+            ),
+            case(
+                "no-trigger-placeholder",
+                "trigger",
+                f"A nearby request that should not load {name}.",
+                should=False,
+            ),
+            behaviour,
+        ],
+    }
+    return json.dumps(suite, indent=2) + "\n"
+
+
+def _marketplace(root: Path, name: str) -> tuple[Path, str, dict[str, Any]]:
+    path = root / MARKETPLACE
+    try:
+        text = path.read_text()
+        marketplace = json.loads(text)
+        if not isinstance(marketplace["plugins"], list):
+            msg = "plugins is not a list"
+            raise TypeError(msg)  # noqa: TRY301 -- reported with the parse errors below
+        listed = {entry["name"] for entry in marketplace["plugins"]}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        msg = f"cannot read the plugin list in {MARKETPLACE}: {error}"
+        raise ScaffoldError(msg) from error
+    if name in listed:
+        msg = f"{name} is already listed in {MARKETPLACE}"
+        raise ScaffoldError(msg)
+    return path, text, marketplace
+
+
+def scaffold(root: Path, name: str) -> list[Path]:
+    """Create the skill, its evals and its marketplace entry; return the files written."""
+    problem = name_error(name)
+    if problem is not None:
+        msg = f"{problem}; use 1-64 lowercase letters and digits with single inner hyphens"
+        raise ScaffoldError(msg)
+    for parent in ("skills", "evals", "dev-skills"):
+        if (root / parent / name).exists() or (root / parent / name).is_symlink():
+            msg = f"{parent}/{name} already exists; pick another name"
+            raise ScaffoldError(msg)
+    path, original, marketplace = _marketplace(root, name)
+    description = f"{PLACEHOLDER} Say what {name} does and when an agent should use it."
+    files = {
+        f"skills/{name}/SKILL.md": _skill_md(name, description),
+        f"skills/{name}/agents/openai.yaml": _openai_yaml(name),
+        f"skills/{name}/.claude-plugin/plugin.json": _plugin_json(name, description),
+        f"evals/{name}/evals.json": _evals_json(name),
+    }
+    moved: list[Path] = []
+    # Built beside the destinations, so each move is a rename on one filesystem.
+    with tempfile.TemporaryDirectory(dir=root, prefix=".new-skill-") as staging:
+        try:
+            for relative, text in files.items():
+                target = Path(staging) / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text)
+            for parent in ("skills", "evals"):
+                destination = root / parent / name
+                (Path(staging) / parent / name).rename(destination)
+                moved.append(destination)
+            marketplace["plugins"].append(
+                {
+                    "name": name,
+                    "description": description,
+                    "source": f"./skills/{name}",
+                    "version": VERSION,
+                }
+            )
+            path.write_text(json.dumps(marketplace, indent=2) + "\n")
+        except OSError as error:
+            for directory in moved:
+                shutil.rmtree(directory, ignore_errors=True)
+            if path.exists() and path.read_text() != original:
+                path.write_text(original)
+            msg = f"could not write the skill, so nothing was kept: {error}"
+            raise ScaffoldError(msg) from error
+    return [root / relative for relative in files] + [path]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="just new-skill", description=__doc__)
+    parser.add_argument("name", help="The skill's name: lowercase letters, digits and hyphens.")
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    args = parser.parse_args()
+    root: Path = args.root.resolve()
+    try:
+        written = scaffold(root, args.name)
+    except ScaffoldError as error:
+        print(f"new-skill: {error}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Created {args.name}:")
+    for path in written:
+        print(f"  {path.relative_to(root)}")
+    print(
+        f"Every {PLACEHOLDER} and every placeholder eval case is yours to write. "
+        "CONTRIBUTING.md has the steps."
+    )
+
+
+if __name__ == "__main__":
+    main()

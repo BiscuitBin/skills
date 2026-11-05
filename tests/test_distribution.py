@@ -39,6 +39,90 @@ def test_version_drift_fails_with_a_repair_hint(tmp_path: Path) -> None:
     assert "just format" in result.stderr
 
 
+def distribution_root(tmp_path: Path, plugins: list[dict[str, str]]) -> Path:
+    (tmp_path / "skills").mkdir()
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin/marketplace.json").write_text(json.dumps({"plugins": plugins}))
+    return tmp_path
+
+
+def check_distribution(root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "skills_tooling.distribution", "--root", str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_an_unlisted_skill_fails_with_the_entry_to_add(tmp_path: Path) -> None:
+    root = distribution_root(tmp_path, [])
+    plugin = root / "skills/tea-timer/.claude-plugin"
+    plugin.mkdir(parents=True)
+    (plugin / "plugin.json").write_text(
+        '{"name": "tea-timer", "version": "0.2.0", "description": "Time tea."}'
+    )
+    result = check_distribution(root)
+    assert result.returncode == 1
+    assert "skills/tea-timer is not listed in .claude-plugin/marketplace.json" in result.stderr
+    assert (
+        '{"name": "tea-timer", "description": "Time tea.", '
+        '"source": "./skills/tea-timer", "version": "0.2.0"}'
+    ) in result.stderr
+
+
+def test_an_unlisted_skill_without_a_plugin_manifest_says_to_create_one(tmp_path: Path) -> None:
+    root = distribution_root(tmp_path, [])
+    (root / "skills/tea-timer").mkdir()
+    result = check_distribution(root)
+    assert result.returncode == 1
+    assert "Create skills/tea-timer/.claude-plugin/plugin.json" in result.stderr
+    assert '"skills": ["./"]' in result.stderr
+    assert '"source": "./skills/tea-timer"' in result.stderr
+
+
+def test_a_listed_plugin_with_no_skill_fails_with_the_entry_to_remove(tmp_path: Path) -> None:
+    root = distribution_root(tmp_path, [{"name": "gone", "source": "./skills/gone"}])
+    result = check_distribution(root)
+    assert result.returncode == 1
+    assert (
+        "remove the gone entry from .claude-plugin/marketplace.json; skills/gone does not exist"
+    ) in result.stderr
+
+
+def test_description_drift_fails_and_just_format_copies_it(tmp_path: Path) -> None:
+    root = distribution_root(
+        tmp_path,
+        [
+            {
+                "name": "tea-timer",
+                "description": "TODO(new-skill) Old.",
+                "source": "./skills/tea-timer",
+                "version": "0.1.0",
+            }
+        ],
+    )
+    plugin = root / "skills/tea-timer/.claude-plugin"
+    plugin.mkdir(parents=True)
+    (plugin / "plugin.json").write_text(
+        '{"name": "tea-timer", "version": "0.1.0", "description": "Time tea."}'
+    )
+    result = check_distribution(root)
+    assert result.returncode == 1
+    assert "tea-timer: marketplace description differs from plugin.json" in result.stderr
+    assert "just format" in result.stderr
+    write = subprocess.run(
+        [sys.executable, "-m", "skills_tooling.distribution", "--root", str(root), "--write"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert write.returncode == 0, write.stderr
+    entry = json.loads((root / ".claude-plugin/marketplace.json").read_text())["plugins"][0]
+    assert entry["description"] == "Time tea."
+    assert check_distribution(root).returncode == 0
+
+
 def test_uncommitted_distribution_files_fail_before_installing(tmp_path: Path) -> None:
     env = isolated_environment(tmp_path)
     project = tmp_path / "repo"
@@ -197,25 +281,28 @@ def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Pat
     return installed
 
 
-def install_skills(project: Path, env: dict[str, str], agents: list[str]) -> list[Path]:
+def install_skills(
+    project: Path, env: dict[str, str], agents: list[str], shipped: set[str]
+) -> list[Path]:
     # npm exec is npx's implementation; --prefix selects the locked local
     # binary while cwd remains the throwaway project. Offline forbids fetches.
     npx = ["npm", "exec", "--offline", "--no", "--prefix", str(ROOT), "--", "skills"]
     listing = run([*npx, "add", "BiscuitBin/skills", "--list"], project, env)
     listing = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", listing)
-    assert "Found 1 skill" in listing
-    assert "cowsay" in listing
+    assert f"Found {len(shipped)} skill" in listing
+    assert all(name in listing for name in shipped)
     assert "cross-model-review" not in listing
     output = run([*npx, "add", "BiscuitBin/skills", "--agent", *agents, "--yes"], project, env)
-    assert "cowsay" in output
+    assert all(name in output for name in shipped)
     installs = []
     for agent in agents:
         discovered = ".claude/skills" if agent == "claude-code" else ".agents/skills"
         directory = project / discovered
-        assert {path.name for path in directory.iterdir()} == {"cowsay"}
-        installed = directory / "cowsay"
-        assert installed.resolve().is_relative_to(project)
-        installs.append(installed)
+        assert {path.name for path in directory.iterdir()} == shipped
+        for name in sorted(shipped):
+            installed = directory / name
+            assert installed.resolve().is_relative_to(project)
+            installs.append(installed)
     return installs
 
 
@@ -232,13 +319,17 @@ def test_committed_install_round_trip(
     run(["git", "init", "--quiet"], project, env)
     assert run(["git", "status", "--porcelain"], source, env) == ""
     redirect_git_source(source, env)
-    shipped = source / "skills/cowsay"
+    # Every skill the clone ships, so a second skill is installed and checked too.
     expected = {
-        str(path.relative_to(shipped)): path.read_bytes()
-        for path in shipped.rglob("*")
-        if path.is_file()
+        skill.name: {
+            str(path.relative_to(skill)): path.read_bytes()
+            for path in skill.rglob("*")
+            if path.is_file()
+        }
+        for skill in (source / "skills").iterdir()
+        if skill.is_dir()
     }
-    assert set(expected) == {
+    assert set(expected["cowsay"]) == {
         "SKILL.md",
         "scripts/cowsay.py",
         "agents/openai.yaml",
@@ -248,7 +339,7 @@ def test_committed_install_round_trip(
         [install_marketplace(source, project, env)]
         if agent == "marketplace"
         else install_skills(
-            project, env, ["claude-code", "codex"] if agent == "shared" else [agent]
+            project, env, ["claude-code", "codex"] if agent == "shared" else [agent], set(expected)
         )
     )
 
@@ -256,7 +347,7 @@ def test_committed_install_round_trip(
     record_property("installation_mode", ",".join(modes))
     print(f"{agent}: {','.join(modes)}")
     if agent == "shared":
-        assert modes == ["symlink", "copy"]
+        assert modes == ["symlink"] * len(expected) + ["copy"] * len(expected)
     # Remove every installer source/cache except the actual plugin payload.
     # npx's symlinks must point at its project-local canonical copy.
     shutil.rmtree(source)
@@ -265,13 +356,17 @@ def test_committed_install_round_trip(
         shutil.rmtree(marketplace_cache)
     assert_project_inventory(project, expected, installs, marketplace=agent == "marketplace")
     for installed in installs:
+        # The marketplace installs only cowsay, into a cache directory named by version.
+        name = "cowsay" if agent == "marketplace" else installed.name
         assert {
             str(path.relative_to(installed)): path.read_bytes()
             for path in installed.rglob("*")
             if path.is_file()
-        } == expected
+        } == expected[name]
         for path in installed.rglob("*"):
             assert path.resolve().is_relative_to(installed.resolve())
+        if name != "cowsay":
+            continue
         rendered = run(
             [
                 sys.executable,
@@ -289,7 +384,11 @@ def test_committed_install_round_trip(
 
 
 def assert_project_inventory(
-    project: Path, payload: dict[str, bytes], installs: list[Path], *, marketplace: bool
+    project: Path,
+    payloads: dict[str, dict[str, bytes]],
+    installs: list[Path],
+    *,
+    marketplace: bool,
 ) -> None:
     files = {Path(".claude/settings.json")} if marketplace else {Path("skills-lock.json")}
     roots: set[Path] = set()
@@ -297,8 +396,13 @@ def assert_project_inventory(
         roots = {path.relative_to(project) for path in installs} | {
             path.resolve().relative_to(project) for path in installs
         }
-        assert roots <= {Path(".agents/skills/cowsay"), Path(".claude/skills/cowsay")}
+        assert roots <= {
+            Path(parent) / name
+            for name in payloads
+            for parent in (".agents/skills", ".claude/skills")
+        }
         for prefix in roots:
+            payload = payloads[prefix.name]
             files.update(prefix / name for name in payload)
             installed = project / prefix
             assert {
@@ -307,10 +411,11 @@ def assert_project_inventory(
                 if path.is_file()
             } == payload
         lock = json.loads((project / "skills-lock.json").read_text())
-        assert set(lock["skills"]) == {"cowsay"}
-        assert lock["skills"]["cowsay"]["source"] == "BiscuitBin/skills"
-        assert lock["skills"]["cowsay"]["sourceType"] == "github"
-        assert lock["skills"]["cowsay"]["skillPath"] == "skills/cowsay/SKILL.md"
+        assert set(lock["skills"]) == set(payloads)
+        for name in payloads:
+            assert lock["skills"][name]["source"] == "BiscuitBin/skills"
+            assert lock["skills"][name]["sourceType"] == "github"
+            assert lock["skills"][name]["skillPath"] == f"skills/{name}/SKILL.md"
     directories = {parent for path in files for parent in path.parents}
     for path in project.rglob("*"):
         relative = path.relative_to(project)
@@ -318,8 +423,8 @@ def assert_project_inventory(
             continue
         if path.is_symlink():
             assert relative in roots
-            assert relative == Path(".claude/skills/cowsay")
-            assert path.resolve() == project / ".agents/skills/cowsay"
+            assert relative.parent == Path(".claude/skills")
+            assert path.resolve() == project / ".agents/skills" / relative.name
         elif path.is_dir():
             assert relative in directories, f"unexpected installed directory: {relative}"
         else:

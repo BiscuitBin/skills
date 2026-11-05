@@ -146,6 +146,12 @@ test:
 validate-skills:
     uv run --frozen python -m skills_tooling.validator
 
+# `--` keeps a name such as `-x` from reading as an option, so the scaffolder
+# rejects it with the name rule rather than a usage error.
+[doc('Scaffold a skill, its placeholder evals and its marketplace entry: `just new-skill <name>`.')]
+new-skill name:
+    uv run --frozen python -m skills_tooling.scaffold -- "$1"
+
 [doc('Validate every evals/*/evals.json against the case schema. Calls no agent.')]
 validate-evals:
     uv run --frozen python -m skills_tooling.evals validate

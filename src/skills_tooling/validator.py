@@ -24,6 +24,8 @@ TOKEN_WARNING = 5000
 SHORT_DESCRIPTION_MIN = 25
 SHORT_DESCRIPTION_MAX = 64
 MAX_PORT = 65535
+# `just new-skill` writes this marker wherever the author still has to write something.
+PLACEHOLDER = "TODO(new-skill)"
 
 SPEC_FIELDS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
 AGENTS = ("claude-code", "codex", "pi")
@@ -111,7 +113,8 @@ def _kind_matches(value: object, kind: str) -> bool:
     return isinstance(value, str)
 
 
-def _name_error(name: object) -> str | None:
+def name_error(name: object) -> str | None:
+    """Why `name` breaks the spec's name rule, or None when it is valid."""
     if not isinstance(name, str):
         return f"name must be a string, got {name!r}"
     if not 1 <= len(name) <= MAX_NAME:
@@ -260,12 +263,12 @@ class _Validator:
         extensions: Mapping[str, Extension],
     ) -> None:
         name = data.get("name")
-        name_error = _name_error(name)
-        if name_error is not None:
+        problem = name_error(name)
+        if problem is not None:
             self.report(
                 file,
                 "name-format",
-                name_error,
+                problem,
                 "use 1-64 lowercase ASCII letters/digits with single internal hyphens",
             )
         if isinstance(name, str) and name != self.root.name:
@@ -463,6 +466,24 @@ class _Validator:
             if "\0" not in content:
                 self.references(path, content)
 
+    def placeholders(self) -> None:
+        """Flag a scaffold that still holds the text `just new-skill` left to replace."""
+        for path in sorted(self.root.rglob("*")):
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError, UnicodeError:
+                continue  # Unreadable files are reported by the checks that need them.
+            if PLACEHOLDER in text:
+                self.report(
+                    path,
+                    "placeholder",
+                    f"still holds {PLACEHOLDER} text from just new-skill",
+                    f"replace every {PLACEHOLDER} with the real content",
+                    "warning",
+                )
+
     def openai(self) -> None:
         file = self.root / "agents/openai.yaml"
         if not file.exists() and not file.is_symlink():
@@ -585,6 +606,7 @@ def validate_skill(
         validator.fields(file, data, shipped, EXTENSIONS if extensions is None else extensions)
         validator.body(file, body)
     validator.openai()
+    validator.placeholders()
     return validator.diagnostics
 
 

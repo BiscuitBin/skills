@@ -6,16 +6,59 @@ import subprocess
 import sys
 from pathlib import Path
 
+MARKETPLACE = ".claude-plugin/marketplace.json"
+
+
+def _missing(root: Path, name: str) -> str:
+    """What to add for a shipped skill the marketplace does not list."""
+    manifest = f"skills/{name}/.claude-plugin/plugin.json"
+    try:
+        plugin = json.loads((root / manifest).read_text())
+        description, version = plugin["description"], plugin["version"]
+        create = ""
+    except OSError, ValueError, KeyError, TypeError:
+        description, version = "<one line on what the skill does>", "0.1.0"
+        plugin = {
+            "name": name,
+            "version": version,
+            "description": description,
+            "author": {"name": "BiscuitBin"},
+            "license": "MIT",
+            "skills": ["./"],
+        }
+        create = f"\n  Create {manifest} (set its description):\n    {json.dumps(plugin)}"
+    entry = {
+        "name": name,
+        "description": description,
+        "source": f"./skills/{name}",
+        "version": version,
+    }
+    return (
+        f"skills/{name} is not listed in {MARKETPLACE}.{create}"
+        f"\n  Add this entry to its plugins:\n    {json.dumps(entry)}"
+    )
+
 
 def check(root: Path, *, write: bool = False) -> None:
     """Keep the marketplace derived from the shipped plugin manifests."""
-    path = root / ".claude-plugin/marketplace.json"
+    path = root / MARKETPLACE
     marketplace = json.loads(path.read_text())
     shipped = {entry.name for entry in (root / "skills").iterdir() if entry.is_dir()}
     entries = marketplace["plugins"]
-    if len(entries) != len(shipped) or {entry["name"] for entry in entries} != shipped:
-        msg = "marketplace plugins must list exactly the shipped skills"
-        raise ValueError(msg)
+    names = [entry["name"] for entry in entries]
+    problems = [
+        f"{name} is listed more than once in {MARKETPLACE}; keep one entry"
+        for name in sorted({name for name in names if names.count(name) > 1})
+    ]
+    problems += [_missing(root, name) for name in sorted(shipped - set(names))]
+    problems += [
+        f"remove the {name} entry from {MARKETPLACE}; skills/{name} does not exist"
+        for name in sorted(set(names) - shipped)
+    ]
+    if problems:
+        raise ValueError(
+            "marketplace plugins must list exactly the shipped skills:\n" + "\n".join(problems)
+        )
     for entry in entries:
         name = entry["name"]
         if entry["source"] != f"./skills/{name}":
@@ -29,11 +72,14 @@ def check(root: Path, *, write: bool = False) -> None:
         ):
             msg = f"{name}: plugin manifest needs a matching name and a nonempty version"
             raise ValueError(msg)
-        if entry.get("version") != plugin["version"]:
+        # plugin.json is the source of both; a manifest without a description has none to copy.
+        for field in ("version", "description"):
+            if field not in plugin or entry.get(field) == plugin[field]:
+                continue
             if not write:
-                msg = f"{name}: marketplace version differs from plugin.json; run just format"
+                msg = f"{name}: marketplace {field} differs from plugin.json; run just format"
                 raise ValueError(msg)
-            entry["version"] = plugin["version"]
+            entry[field] = plugin[field]
     if write:
         path.write_text(json.dumps(marketplace, indent=2) + "\n")
 
@@ -78,7 +124,7 @@ def main() -> None:
     except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         print(f"distribution: {error}", file=sys.stderr)
         sys.exit(1)
-    print("Marketplace sources and plugin versions match.")
+    print("Marketplace sources, plugin versions and descriptions match.")
 
 
 if __name__ == "__main__":

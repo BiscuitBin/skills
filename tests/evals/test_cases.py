@@ -1,6 +1,7 @@
 """The eval case schema: what loads, and what is rejected with a reason."""
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -236,3 +237,98 @@ def test_validate_command_checks_the_repo_suites_without_an_agent(tmp_path: Path
     )
     assert result.returncode == 1
     assert "evals/cowsay/evals.json: not valid JSON" in result.stderr
+
+
+def test_a_placeholder_case_loads_marked_as_a_placeholder(tmp_path: Path) -> None:
+    write_suite(
+        tmp_path,
+        {"skill_name": "cowsay", "evals": [{**trigger(), "placeholder": True}, behaviour()]},
+    )
+    assert [case.placeholder for case in load_suite(tmp_path, "cowsay").cases] == [True, False]
+
+
+def test_placeholder_false_is_rejected(tmp_path: Path) -> None:
+    problems = errors(tmp_path, {"skill_name": "cowsay", "evals": [behaviour(placeholder=False)]})
+    assert any("placeholder must be true, or left out" in p for p in problems), problems
+
+
+def run_command(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CODE_OAUTH_TOKEN"}
+    return subprocess.run(
+        [sys.executable, "-m", "skills_tooling.evals", *args, "--root", str(root)],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
+PLACEHOLDER_SUITE = {
+    "skill_name": "cowsay",
+    "evals": [
+        {**trigger("trigger-todo"), "placeholder": True},
+        behaviour(placeholder=True, id="behaviour-todo"),
+        trigger("trigger-written"),
+    ],
+}
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_eval_refuses_placeholder_cases_before_any_agent_call(
+    tmp_path: Path, *, dry_run: bool
+) -> None:
+    write_suite(tmp_path, PLACEHOLDER_SUITE)
+    flags = ["--dry-run"] if dry_run else []
+    result = run_command(tmp_path, "run", "cowsay", "--agent", "claude", *flags)
+    assert result.returncode == 2
+    assert "UNWRITTEN cowsay/trigger-todo" in result.stderr
+    assert "UNWRITTEN cowsay/behaviour-todo" in result.stderr
+    assert "trigger-written" not in result.stderr
+    # Refused before the credential check, so no agent could have started.
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in result.stderr
+    assert not (tmp_path / "eval-results").exists()
+
+
+def test_eval_runs_written_cases_picked_out_of_a_placeholder_suite(tmp_path: Path) -> None:
+    write_suite(tmp_path, PLACEHOLDER_SUITE)
+    result = run_command(
+        tmp_path, "run", "cowsay", "--agent", "claude", "--case", "trigger-written", "--dry-run"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "skill arm: 1 agent calls" in result.stdout
+
+
+def list_in_marketplace(root: Path, *names: str) -> None:
+    (root / ".claude-plugin").mkdir(exist_ok=True)
+    plugins = [{"name": name, "source": f"./skills/{name}"} for name in names]
+    (root / ".claude-plugin/marketplace.json").write_text(json.dumps({"plugins": plugins}))
+
+
+def test_validate_warns_when_a_distributed_skill_has_only_placeholder_cases(
+    tmp_path: Path,
+) -> None:
+    only_placeholders = {"skill_name": "cowsay", "evals": PLACEHOLDER_SUITE["evals"][:2]}
+    write_suite(tmp_path, only_placeholders)
+    list_in_marketplace(tmp_path, "cowsay")
+    result = run_command(tmp_path, "validate")
+    assert result.returncode == 0, result.stderr
+    assert (
+        "warning: cowsay is in .claude-plugin/marketplace.json but "
+        "evals/cowsay/evals.json has only placeholder cases"
+    ) in result.stderr
+
+
+@pytest.mark.parametrize("listed", [True, False])
+def test_validate_is_quiet_about_written_or_undistributed_suites(
+    tmp_path: Path, *, listed: bool
+) -> None:
+    write_suite(
+        tmp_path,
+        PLACEHOLDER_SUITE
+        if listed
+        else {**PLACEHOLDER_SUITE, "evals": PLACEHOLDER_SUITE["evals"][:2]},
+    )
+    if listed:
+        list_in_marketplace(tmp_path, "cowsay")
+    result = run_command(tmp_path, "validate")
+    assert (result.returncode, result.stderr) == (0, "")

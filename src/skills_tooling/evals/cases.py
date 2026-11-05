@@ -25,6 +25,7 @@ CASE_KEYS = {
     "files",
     "assertions",
     "expectations",
+    "placeholder",
 }
 EXPECTATION_KEYS = {"text", "needs_transcript"}
 # Each assertion type's required and optional fields, beyond `type`.
@@ -70,6 +71,8 @@ class Case:
     expected_output: str | None
     assertions: tuple[Assertion, ...]
     expectations: tuple[Expectation, ...] = ()
+    # A starter case from `just new-skill`, not yet written; `just eval` refuses to run it.
+    placeholder: bool = False
 
 
 @dataclass(frozen=True)
@@ -211,6 +214,9 @@ def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Cas
         for index, item in enumerate(raw_assertions)
     ]
     expectations = _expectations(data, where, problems)
+    # false is the default; two spellings of one thing are rejected.
+    if "placeholder" in data and data["placeholder"] is not True:
+        problems.append(f"{where}: placeholder must be true, or left out")
     if kind == "behaviour":
         if should is not True:
             problems.append(f"{where}: behaviour cases need should_trigger: true")
@@ -226,6 +232,7 @@ def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Cas
         expected_output=expected,
         assertions=tuple(a for a in assertions if a is not None),
         expectations=tuple(expectations),
+        placeholder="placeholder" in data,
     )
 
 
