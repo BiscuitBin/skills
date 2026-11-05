@@ -98,6 +98,14 @@ def test_an_existing_iteration_name_is_never_overwritten(tmp_path: Path) -> None
         record(tmp_path, "first", [run_id], now=NOW)
 
 
+def test_a_run_already_recorded_is_refused_under_another_name(tmp_path: Path) -> None:
+    run_id = stored_run(tmp_path, "paired")
+    record(tmp_path, "first", [run_id], now=NOW)
+    with pytest.raises(HistoryError, match=f"run {run_id} is already recorded in iteration first"):
+        record(tmp_path, "second", [run_id], now=NOW)
+    assert not (tmp_path / "benchmarks/cowsay/second.json").exists()
+
+
 @pytest.mark.parametrize("name", ["", ".hidden", "a/b", "../up", "with space", "unrecorded"])
 def test_an_iteration_name_must_be_a_plain_file_name(tmp_path: Path, name: str) -> None:
     run_id = stored_run(tmp_path, "paired")

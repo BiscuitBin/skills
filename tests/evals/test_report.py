@@ -347,6 +347,15 @@ def test_regressions_compare_an_agents_own_runs_in_the_order_they_ran(
     assert (claude["from"], claude["to"]) == ("A", "B")
 
 
+def test_a_run_counted_twice_is_compared_once(history: History) -> None:
+    good = history.iteration("good", history.run())
+    fell = history.run(edit=both(base, set_trigger(TRIGGER, (False, False, False))))
+    # The fallen run is recorded, then passed again with --run.
+    report = build([good, history.iteration("fell", fell), history.iteration(None, fell)])
+    assert ("claude", TRIGGER, "trigger_accuracy") in flagged(report)
+    assert (report["comparisons"][0]["from"], report["comparisons"][0]["to"]) == ("good", "fell")
+
+
 def test_an_unrecorded_run_is_compared_with_the_last_recorded_benchmark(
     history: History,
 ) -> None:

@@ -278,10 +278,13 @@ def _compare(
     """The agent's last two benchmarks compared: what differs, and each fall beyond threshold."""
     # By when the agent's own run started: an iteration's runs can start days apart, so
     # the order of the iterations is not always the order of one agent's runs.
-    ran = sorted(
-        (i for i, column in enumerate(runs) if agent in column),
-        key=lambda i: (str(runs[i][agent]["started_at"]), i),
-    )
+    # A run in two columns (recorded, then passed again with --run) counts once, at its
+    # first column, or it would be compared with itself and hide a fall.
+    first: dict[str, int] = {}
+    for i, column in enumerate(runs):
+        if agent in column:
+            first.setdefault(column[agent]["run_id"], i)
+    ran = sorted(first.values(), key=lambda i: (str(runs[i][agent]["started_at"]), i))
     if len(ran) < 2:  # noqa: PLR2004 -- a comparison needs two benchmarks
         return None, []
     b, a = ran[-2], ran[-1]

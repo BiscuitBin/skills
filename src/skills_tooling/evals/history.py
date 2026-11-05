@@ -116,6 +116,13 @@ def record(root: Path, name: str, run_ids: Sequence[str], *, now: datetime | Non
     if path.exists():
         msg = f"iteration {name!r} is already recorded at {path.relative_to(root)}"
         raise HistoryError(msg)
+    for earlier in load(root, iteration["skill"]):
+        for run in earlier["runs"]:
+            if run["run_id"] in run_ids:
+                msg = (
+                    f"run {run['run_id']} is already recorded in iteration {earlier['iteration']}"
+                )
+                raise HistoryError(msg)
     # The run files were scrubbed when written; nothing new is added here.
     results.write_json(path, iteration, [])
     return path
