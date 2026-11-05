@@ -31,8 +31,15 @@ def _title(name: str) -> str:
 
 
 def _yaml_scalar(text: str) -> str:
-    """The text as YAML reads it back: plain, or quoted when YAML would take another type."""
-    return text if yaml.safe_load(text) == text else f"'{text}'"
+    """The text as YAML reads it back: plain, or quoted when YAML would take another type.
+
+    A name is only [a-z0-9-], so single quotes never need escaping.
+    """
+    try:
+        plain = yaml.safe_load(text) == text
+    except yaml.YAMLError, ValueError:  # An impossible date, such as 2026-99-99.
+        plain = False
+    return text if plain else f"'{text}'"
 
 
 def _skill_md(name: str, description: str) -> str:

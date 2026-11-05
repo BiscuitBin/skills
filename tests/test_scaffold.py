@@ -179,7 +179,9 @@ def test_the_starter_evals_are_reported_unwritten_not_run(root: Path) -> None:
     assert "cowsay" not in validated.stderr
 
 
-@pytest.mark.parametrize("name", ["123", "true", "null", "yes", "off", "2026-11-05", "1e3"])
+@pytest.mark.parametrize(
+    "name", ["123", "true", "null", "yes", "off", "2026-11-05", "2026-99-99", "2026-02-30", "1e3"]
+)
 def test_a_name_yaml_would_read_as_another_type_still_validates(root: Path, name: str) -> None:
     result = new_skill(root, name)
     assert result.returncode == 0, result.stderr
