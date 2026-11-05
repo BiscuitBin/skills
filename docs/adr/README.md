@@ -17,3 +17,4 @@ Each record states one decision that is hard to reverse, would surprise a reader
 | [0011](0011-eval-case-location-and-isolation.md) | Eval cases live in evals/; trials are isolated by redirection and proven by the agent's own reports |
 | [0012](0012-llm-grader-and-benchmark-statistics.md) | The LLM grader runs on the pinned Claude Code, and failures it can be blamed for count against the trial |
 | [0013](0013-pi-deferred-past-mvp.md) | The MVP evaluates Claude Code and Codex; Pi is installable but deferred |
+| [0014](0014-benchmark-history.md) | Benchmark history is committed under benchmarks/, one file per named iteration |

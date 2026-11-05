@@ -1,0 +1,713 @@
+{
+  "schema": 1,
+  "iteration": "ticket-08",
+  "skill": "cowsay",
+  "recorded_at": "2026-11-04T06:16:53.112577+00:00",
+  "runs": [
+    {
+      "run_id": "20261031T183632Z-1aef",
+      "agent": "claude",
+      "skill": "cowsay",
+      "started_at": "2026-10-31T18:36:32.334+00:00",
+      "trials_per_case": 10,
+      "baseline": true,
+      "provenance": {
+        "git_commit": "226d7b709b4b90da6d7f44382b7bd177e0e00588",
+        "git_dirty": false,
+        "skill_sha256": "b505fdd68ff457d3bef211fecf0ab86a54cdd210210f4f41cd2767bef2f04258",
+        "evals_sha256": "50a3864a8ac1f37a6ca34c7aa51ad0ca2ad3f40ce5b53493f964560ef376903c",
+        "grader_prompt_sha256": "85c2b2d642175728fcc066105f7e0c309aec0c69865bec06e25a6d9b0bb189cd",
+        "agent": "claude",
+        "requested_model": "claude-sonnet-5-5",
+        "agent_cli_versions": [
+          "2.1.309"
+        ],
+        "agent_models": [
+          "claude-sonnet-5-5"
+        ],
+        "grader_model_requested": "claude-opus-5-5",
+        "grader_models": [
+          "claude-opus-5-5"
+        ],
+        "grader_cli_versions": [
+          "2.1.309"
+        ]
+      },
+      "cases": [
+        {
+          "id": "trigger-talking-cow",
+          "kind": "trigger",
+          "should_trigger": true,
+          "expectations": [],
+          "in_baseline": false
+        },
+        {
+          "id": "trigger-cowsay-output",
+          "kind": "trigger",
+          "should_trigger": true,
+          "expectations": [],
+          "in_baseline": false
+        },
+        {
+          "id": "trigger-cow-speech-bubble",
+          "kind": "trigger",
+          "should_trigger": true,
+          "expectations": [],
+          "in_baseline": false
+        },
+        {
+          "id": "trigger-explicit-invocation",
+          "kind": "trigger",
+          "should_trigger": true,
+          "expectations": [],
+          "in_baseline": false
+        },
+        {
+          "id": "no-trigger-cow-facts",
+          "kind": "trigger",
+          "should_trigger": false,
+          "expectations": [],
+          "in_baseline": false
+        },
+        {
+          "id": "no-trigger-ascii-cat",
+          "kind": "trigger",
+          "should_trigger": false,
+          "expectations": [],
+          "in_baseline": false
+        },
+        {
+          "id": "no-trigger-cow-haiku",
+          "kind": "trigger",
+          "should_trigger": false,
+          "expectations": [],
+          "in_baseline": false
+        },
+        {
+          "id": "behaviour-ship-it",
+          "kind": "behaviour",
+          "should_trigger": true,
+          "expectations": [
+            {
+              "text": "The response shows an ASCII-art cow together with a speech bubble.",
+              "blinded": true
+            },
+            {
+              "text": "The speech bubble contains the text 'Ship it, team!' exactly, with the same capitalisation and punctuation.",
+              "blinded": true
+            },
+            {
+              "text": "The cow and its speech bubble are shown in a code block or other monospaced formatting, so the art stays aligned.",
+              "blinded": true
+            }
+          ],
+          "in_baseline": true
+        },
+        {
+          "id": "behaviour-wrapped-text",
+          "kind": "behaviour",
+          "should_trigger": true,
+          "expectations": [
+            {
+              "text": "The response shows an ASCII-art cow together with a speech bubble.",
+              "blinded": true
+            },
+            {
+              "text": "Every word of 'The quick brown fox jumps over the lazy dog by the river' appears inside the speech bubble, in order, with no words added, removed or changed.",
+              "blinded": true
+            },
+            {
+              "text": "The speech bubble's text is split across more than one line inside the bubble.",
+              "blinded": true
+            }
+          ],
+          "in_baseline": true
+        }
+      ],
+      "benchmark": {
+        "cases": {
+          "trigger-talking-cow": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": null,
+                "deterministic_pass_rate": null,
+                "graded_pass_rate": null,
+                "outcome_pass_rate": null
+              }
+            },
+            "baseline": "skipped",
+            "delta": {},
+            "expectations": [],
+            "notes": []
+          },
+          "trigger-cowsay-output": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": null,
+                "deterministic_pass_rate": null,
+                "graded_pass_rate": null,
+                "outcome_pass_rate": null
+              }
+            },
+            "baseline": "skipped",
+            "delta": {},
+            "expectations": [],
+            "notes": []
+          },
+          "trigger-cow-speech-bubble": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": null,
+                "deterministic_pass_rate": null,
+                "graded_pass_rate": null,
+                "outcome_pass_rate": null
+              }
+            },
+            "baseline": "skipped",
+            "delta": {},
+            "expectations": [],
+            "notes": []
+          },
+          "trigger-explicit-invocation": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": null,
+                "deterministic_pass_rate": null,
+                "graded_pass_rate": null,
+                "outcome_pass_rate": null
+              }
+            },
+            "baseline": "skipped",
+            "delta": {},
+            "expectations": [],
+            "notes": []
+          },
+          "no-trigger-cow-facts": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": null,
+                "deterministic_pass_rate": null,
+                "graded_pass_rate": null,
+                "outcome_pass_rate": null
+              }
+            },
+            "baseline": "skipped",
+            "delta": {},
+            "expectations": [],
+            "notes": []
+          },
+          "no-trigger-ascii-cat": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": null,
+                "deterministic_pass_rate": null,
+                "graded_pass_rate": null,
+                "outcome_pass_rate": null
+              }
+            },
+            "baseline": "skipped",
+            "delta": {},
+            "expectations": [],
+            "notes": []
+          },
+          "no-trigger-cow-haiku": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": null,
+                "deterministic_pass_rate": null,
+                "graded_pass_rate": null,
+                "outcome_pass_rate": null
+              }
+            },
+            "baseline": "skipped",
+            "delta": {},
+            "expectations": [],
+            "notes": []
+          },
+          "behaviour-ship-it": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "deterministic_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "graded_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "outcome_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                }
+              }
+            },
+            "baseline": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": "not_applicable",
+                "skill_use_pass_rate": "not_applicable",
+                "deterministic_pass_rate": {
+                  "mean": 0.4,
+                  "stddev": 0.21081851067789195,
+                  "min": 0.0,
+                  "max": 0.5,
+                  "n": 10
+                },
+                "graded_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "outcome_pass_rate": {
+                  "mean": 0.76,
+                  "stddev": 0.08432740427115681,
+                  "min": 0.6,
+                  "max": 0.8,
+                  "n": 10
+                }
+              }
+            },
+            "delta": {
+              "deterministic_pass_rate": {
+                "value": 0.6,
+                "n_skill": 10,
+                "n_baseline": 10
+              },
+              "graded_pass_rate": {
+                "value": 0.0,
+                "n_skill": 10,
+                "n_baseline": 10
+              },
+              "outcome_pass_rate": {
+                "value": 0.24,
+                "n_skill": 10,
+                "n_baseline": 10
+              }
+            },
+            "expectations": [
+              {
+                "text": "The response shows an ASCII-art cow together with a speech bubble.",
+                "blinded": true,
+                "skill": {
+                  "passed": 10,
+                  "n": 10
+                },
+                "baseline": {
+                  "passed": 10,
+                  "n": 10
+                }
+              },
+              {
+                "text": "The speech bubble contains the text 'Ship it, team!' exactly, with the same capitalisation and punctuation.",
+                "blinded": true,
+                "skill": {
+                  "passed": 10,
+                  "n": 10
+                },
+                "baseline": {
+                  "passed": 10,
+                  "n": 10
+                }
+              },
+              {
+                "text": "The cow and its speech bubble are shown in a code block or other monospaced formatting, so the art stays aligned.",
+                "blinded": true,
+                "skill": {
+                  "passed": 10,
+                  "n": 10
+                },
+                "baseline": {
+                  "passed": 10,
+                  "n": 10
+                }
+              }
+            ],
+            "notes": [
+              "non-discriminating: 'The response shows an ASCII-art cow together with a speech bubble.' passed in every graded trial of both arms",
+              "non-discriminating: \"The speech bubble contains the text 'Ship it, team!' exactly, with the same capitalisation and punctuation.\" passed in every graded trial of both arms",
+              "non-discriminating: 'The cow and its speech bubble are shown in a code block or other monospaced formatting, so the art stays aligned.' passed in every graded trial of both arms"
+            ]
+          },
+          "behaviour-wrapped-text": {
+            "skill": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "skill_use_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "deterministic_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "graded_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "outcome_pass_rate": {
+                  "mean": 1.0,
+                  "stddev": 0.0,
+                  "min": 1.0,
+                  "max": 1.0,
+                  "n": 10
+                }
+              }
+            },
+            "baseline": {
+              "n_planned": 10,
+              "n_scored": 10,
+              "n_infra_error": 0,
+              "n_contaminated": 0,
+              "n_secret_found": 0,
+              "n_grader_error": 0,
+              "n_invalid_reply": 0,
+              "n_rejected": 0,
+              "n_arm_disclosed": 0,
+              "metrics": {
+                "trigger_accuracy": "not_applicable",
+                "skill_use_pass_rate": "not_applicable",
+                "deterministic_pass_rate": {
+                  "mean": 0.05,
+                  "stddev": 0.15811388300841897,
+                  "min": 0.0,
+                  "max": 0.5,
+                  "n": 10
+                },
+                "graded_pass_rate": {
+                  "mean": 0.5,
+                  "stddev": 0.45133546692422,
+                  "min": 0.0,
+                  "max": 1.0,
+                  "n": 10
+                },
+                "outcome_pass_rate": {
+                  "mean": 0.32,
+                  "stddev": 0.3011090610836324,
+                  "min": 0.0,
+                  "max": 0.8,
+                  "n": 10
+                }
+              }
+            },
+            "delta": {
+              "deterministic_pass_rate": {
+                "value": 0.95,
+                "n_skill": 10,
+                "n_baseline": 10
+              },
+              "graded_pass_rate": {
+                "value": 0.5,
+                "n_skill": 10,
+                "n_baseline": 10
+              },
+              "outcome_pass_rate": {
+                "value": 0.6799999999999999,
+                "n_skill": 10,
+                "n_baseline": 10
+              }
+            },
+            "expectations": [
+              {
+                "text": "The response shows an ASCII-art cow together with a speech bubble.",
+                "blinded": true,
+                "skill": {
+                  "passed": 10,
+                  "n": 10
+                },
+                "baseline": {
+                  "passed": 6,
+                  "n": 10
+                }
+              },
+              {
+                "text": "Every word of 'The quick brown fox jumps over the lazy dog by the river' appears inside the speech bubble, in order, with no words added, removed or changed.",
+                "blinded": true,
+                "skill": {
+                  "passed": 10,
+                  "n": 10
+                },
+                "baseline": {
+                  "passed": 5,
+                  "n": 10
+                }
+              },
+              {
+                "text": "The speech bubble's text is split across more than one line inside the bubble.",
+                "blinded": true,
+                "skill": {
+                  "passed": 10,
+                  "n": 10
+                },
+                "baseline": {
+                  "passed": 4,
+                  "n": 10
+                }
+              }
+            ],
+            "notes": []
+          }
+        },
+        "pooled": {
+          "skill": {
+            "trigger_accuracy": {
+              "mean": 1.0,
+              "stddev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 90
+            },
+            "skill_use_pass_rate": {
+              "mean": 1.0,
+              "stddev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 20
+            },
+            "deterministic_pass_rate": {
+              "mean": 1.0,
+              "stddev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 20
+            },
+            "graded_pass_rate": {
+              "mean": 1.0,
+              "stddev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 20
+            },
+            "outcome_pass_rate": {
+              "mean": 1.0,
+              "stddev": 0.0,
+              "min": 1.0,
+              "max": 1.0,
+              "n": 20
+            }
+          },
+          "baseline": {
+            "trigger_accuracy": "not_applicable",
+            "skill_use_pass_rate": "not_applicable",
+            "deterministic_pass_rate": {
+              "mean": 0.225,
+              "stddev": 0.2552088927670202,
+              "min": 0.0,
+              "max": 0.5,
+              "n": 20
+            },
+            "graded_pass_rate": {
+              "mean": 0.75,
+              "stddev": 0.40284078958614156,
+              "min": 0.0,
+              "max": 1.0,
+              "n": 20
+            },
+            "outcome_pass_rate": {
+              "mean": 0.54,
+              "stddev": 0.3118704184348635,
+              "min": 0.0,
+              "max": 0.8,
+              "n": 20
+            }
+          }
+        },
+        "delta": {
+          "deterministic_pass_rate": {
+            "value": 0.7749999999999999,
+            "n_cases": 2
+          },
+          "graded_pass_rate": {
+            "value": 0.25,
+            "n_cases": 2
+          },
+          "outcome_pass_rate": {
+            "value": 0.45999999999999996,
+            "n_cases": 2
+          }
+        },
+        "notes": []
+      },
+      "notes": [
+        "No significance test or confidence interval: with a few trials per arm the delta and spreads are descriptive."
+      ]
+    }
+  ]
+}

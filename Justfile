@@ -158,6 +158,16 @@ validate-evals:
 eval +args:
     uv run --frozen python -m skills_tooling.evals run "$@"
 
+[doc('Record finished runs, one per agent, as a named benchmark iteration: `just eval-record <name> <run-id>...`.')]
+eval-record +args:
+    uv run --frozen python -m skills_tooling.evals record "$@"
+
+# Offline: reads benchmarks/ (and any --run under eval-results/), calls no agent
+# and no network, and writes eval-results/report.html.
+[doc('Build the offline benchmark report: `just eval-report [skill] [--run ID] [--threshold X] [--fail-on-regression] [--out PATH]`.')]
+eval-report *args:
+    uv run --frozen python -m skills_tooling.evals report "$@"
+
 [doc('Check distribution versions and validate the marketplace and shipped plugins strictly.')]
 validate-distribution:
     uv run --frozen python -m skills_tooling.distribution --committed

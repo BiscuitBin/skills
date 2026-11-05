@@ -16,6 +16,8 @@ The eval harness runs a skill's eval cases against a pinned agent CLI, headless,
 | `… --baseline` | Also runs, n times, every selected case that has an outcome to measure, with no skill installed (the baseline arm). Trigger-only cases are skipped in the baseline and listed. |
 | `… --grader-model <id>` | The grader's model, default `claude-opus-5-5`. |
 | `… --dry-run` | Prints the plan and exits 0: agent calls per arm, the cases skipped in the baseline, the most grader calls the run can make, and the spend cap. It reads no credential, creates no workspace and writes nothing. A real run prints the same plan first. |
+| `just eval-record <name> <run-id>...` | Records finished runs as a named iteration. See [history and report](#history-and-report). |
+| `just eval-report [skill]` | Builds the offline benchmark report from the recorded iterations. |
 
 **Live evals need an authenticated agent and are never part of the PR gate.** `just eval` calls a paid model, so it runs only locally or from a manual job that holds the secret ([ADR 0004](../adr/0004-eval-tiers-and-ci.md)). `just check` and PR CI cover the harness without credentials: the tests drive the real pinned CLIs against local fake APIs (`tests/evals/fake_anthropic.py`, `tests/evals/fake_openai.py`) and parse recorded transcripts (`tests/fixtures/evals/claude/`, `tests/fixtures/evals/codex/`).
 
@@ -230,6 +232,35 @@ For each agent, case and arm it counts `n_planned`, `n_scored` (status ok, uncon
 - In the printed table, a case's baseline reads `off` when the run had no baseline arm, and `skipped` when the baseline ran without that case.
 
 **Provenance**, recorded at the start of the run: the agent CLI versions and models the trials reported, the grader model requested and reported and its CLI version, `git_commit` and `git_dirty` (`git status --porcelain` is not empty; git runs without the user's config, except their global ignore file), `skill_sha256` (the sorted relative paths and bytes of `skills/<skill>/`, without `__pycache__`), `evals_sha256` (`evals/<skill>/evals.json`, cases and rubric), `grader_prompt_sha256`, the trial count, whether the baseline ran, and the cases it skipped.
+
+## History and report
+
+`just eval-record <name> <run-id>...` records finished runs, one per agent, as an **iteration** of their skill: `benchmarks/<skill>/<name>.json`, committed ([ADR 0014](../adr/0014-benchmark-history.md)). It holds each run's `run_id`, `agent`, `started_at`, `trials_per_case`, `baseline`, `provenance`, the `cases` from `results.json`, and the agent's block of `benchmark.json`. It refuses a name that is already recorded, a run already recorded in another iteration of the skill, a name other than letters, digits, `.`, `_` and `-`, a run without a `benchmark.json`, two runs of one agent, and runs that differ in skill, `skill_sha256` or `evals_sha256`. Runs of one case file that selected different cases with `--case` are allowed; a case one agent did not run shows as `case not run`. Iterations are ordered by their latest run's `started_at`, then `recorded_at`, then name, so a backfilled run takes its true place.
+
+`just eval-report [skill]` reads `benchmarks/`, every skill or the one named, and writes one self-contained page, `eval-results/report.html` (or `--out <path>`): inline CSS, no script, nothing fetched. It calls no agent and no network. For each skill it shows:
+
+- **Agents by cases**, for the latest iteration, with a column for every agent the harness runs, benchmarked or not: each case's expectation (trigger or no trigger), and per agent its trigger accuracy, its pass rate (`outcome_pass_rate`: outcome assertions and expectations together) and that pass rate's delta against the baseline, each as mean ± stddev (n), with a row over all cases.
+- **Delta against the baseline** per agent: the agent's deterministic, graded and outcome deltas, with the number of cases behind each.
+- **Provenance** per iteration and agent: the run, the agent CLI versions, the requested and reported agent models, the requested and reported grader models, the grader CLI versions, trials per case, whether the baseline ran, and the commit.
+- **History** per agent: every metric and delta, over all cases and per case, in every iteration that measured it.
+
+Missing data is shown by its reason, never as 0, never averaged and never compared: `not run` (the agent was not in that iteration), `case not run` (its run did not include the case), `no scored trials` (every trial was excluded), `n/a` (nothing of that kind to measure, such as a pass rate for a trigger-only case), `no baseline` (the run had no baseline arm), and `no data` (trials were scored but none measured it, such as when every grading failed).
+
+**Regressions.** For each agent, the report compares the agent's last two benchmarks of the skill, by when the agent's own run started, which need not be the last two iterations. A run that appears twice, such as a recorded run passed again with `--run`, counts once. Any metric or delta that fell by more than `--threshold` (default 0.1, between 0 and 1) is flagged, in the page and on stdout. A value missing on either side is never flagged. Each flag carries labels when the comparison is not like-for-like, and the page's line for each agent's comparison lists every label that applies to all its figures, plus `case changed` when any case it ran on both sides changed, or says `like-for-like`:
+
+| Label | When | On |
+| --- | --- | --- |
+| `cases or rubric changed` | `evals_sha256` differs | every metric |
+| `agent model changed` | the requested model or the reported models differ | every metric |
+| `agent CLI version changed` | the reported CLI versions differ | every metric |
+| `grader prompt changed`, `grader model changed`, `grader CLI version changed` | the grader's prompt hash, requested or reported model, or CLI version differs | graded and outcome metrics and their deltas |
+| `case changed` | the case's kind, `should_trigger` or expectations differ | that case |
+| `case set changed` | the runs ran different cases | the figures over all cases |
+| `measured over different cases` | the cases with a value for that metric differ, such as a case whose every trial was excluded on one side | the figures over all cases |
+
+A new `skill_sha256` or commit is the change being measured and carries no label. A reported list that is empty on one side (no grading ran) is not a difference. A flag on fewer than three values on either side also says `thin sample`. `--fail-on-regression` exits 1 when any metric is flagged, labelled or not; without it the report exits 0. A usage error exits 2.
+
+`--run <run-id>` (repeatable, one per agent) adds finished runs from `eval-results/` as a last, unrecorded iteration, without writing it, so a change can be checked against the last recorded benchmark before it is recorded.
 
 ## Results
 
