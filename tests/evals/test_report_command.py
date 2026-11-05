@@ -87,3 +87,18 @@ def test_an_unrecorded_run_is_reported_without_being_written(tmp_path: Path) -> 
         "v1.json",
         "v2.json",
     ]
+
+
+def test_the_report_writes_the_headline_matrix_as_markdown(tmp_path: Path) -> None:
+    root = history_root(tmp_path)
+    markdown = tmp_path / "summary.md"
+    result = run_cli("report", "cowsay", "--root", str(root), "--markdown", str(markdown))
+    assert result.returncode == 0, result.stderr
+    text = markdown.read_text()
+    assert text.startswith("### cowsay: iteration v2\n")
+    assert "| case | expects | claude trigger | claude pass rate | claude Δ pass rate |" in text
+    assert "| should-not-trigger | no trigger |" in text
+    # Codex was not rerun in v2: a state, never a 0.
+    assert "| not run | not run | not run |" in text
+    assert "| all cases |" in text
+    assert "claude behaviour-ship-it trigger_accuracy: 1.00 ± 0.00 (n=3) -> 0.33" in text

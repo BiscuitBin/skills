@@ -168,6 +168,17 @@ eval-record +args:
 eval-report *args:
     uv run --frozen python -m skills_tooling.evals report "$@"
 
+# Offline: reads git and evals/, calls no agent.
+[doc('List the skills with evals changed since the merge base with main: `just eval-changed [--base REF]`.')]
+eval-changed *args:
+    uv run --frozen python -m skills_tooling.evals.dispatch changed "$@"
+
+# What .github/workflows/live-evals.yml runs around `just eval` and
+# `just eval-report`. See docs/how-to/live-evals-in-ci.md.
+[doc('Live-eval CI helpers: `just eval-ci plan|runs|scan ...`.')]
+eval-ci +args:
+    uv run --frozen python -m skills_tooling.evals.dispatch "$@"
+
 [doc('Check distribution versions and validate the marketplace and shipped plugins strictly.')]
 validate-distribution:
     uv run --frozen python -m skills_tooling.distribution --committed

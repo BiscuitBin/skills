@@ -62,6 +62,7 @@ def describe(args: argparse.Namespace, cases: list[Case]) -> str:
         grader_model=args.grader_model,
         # Only Claude Code takes a per-call budget.
         agent_budget_usd=float(BUDGET_USD) if args.agent == "claude" else None,
+        grading_skipped=args.no_grader,
     )
 
 
@@ -84,8 +85,9 @@ def grader_settings(
     """The grader, when a selected case has expectations; raises CredentialError without its token.
 
     The grader is always Claude, so a Codex run reads CLAUDE_CODE_OAUTH_TOKEN too.
+    With --no-grader there is no grader and no token is read for one.
     """
-    if not any(case.expectations for case in cases):
+    if args.no_grader or not any(case.expectations for case in cases):
         return None
     claude = ClaudeCode(root / "node_modules/.bin/claude")
     try:
@@ -132,6 +134,7 @@ def run(args: argparse.Namespace) -> int:
         trials=args.trials,
         baseline=args.baseline,
         grader=grader,
+        grading_skipped=args.no_grader,
     )
     print(describe(args, cases))
     return run_suite(settings)
@@ -186,6 +189,9 @@ def report(args: argparse.Namespace) -> int:
     out: Path = args.out if args.out is not None else root / "eval-results/report.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(reporting.render_html(reports))
+    if args.markdown is not None:
+        args.markdown.parent.mkdir(parents=True, exist_ok=True)
+        args.markdown.write_text("\n".join(reporting.markdown(each) for each in reports))
     for each in reports:
         print(reporting.summary(each), end="")
     print(f"Report: {out}")
@@ -239,6 +245,11 @@ def main() -> None:
         help=f"The grader's model. Default: {GRADER_MODEL}.",
     )
     live.add_argument(
+        "--no-grader",
+        action="store_true",
+        help="Skip grading: cases with expectations rest on their assertions alone.",
+    )
+    live.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the planned agent and grader calls and the spend cap, then exit.",
@@ -269,6 +280,11 @@ def main() -> None:
         help=f"Exit {REGRESSED} when any metric is flagged.",
     )
     show.add_argument("--out", type=Path, help="Default: eval-results/report.html.")
+    show.add_argument(
+        "--markdown",
+        type=Path,
+        help="Also write the headline matrix and regressions as Markdown, for a job summary.",
+    )
     show.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     handlers = {"run": run, "record": record, "report": report}

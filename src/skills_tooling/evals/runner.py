@@ -52,8 +52,10 @@ class RunSettings:
     system_root: Path = Path("/")
     trials: int = 1
     baseline: bool = False
-    # Grades rubric expectations; None only when no selected case has any.
+    # Grades rubric expectations; None when no selected case has any, or grading is skipped.
     grader: GraderSettings | None = None
+    # `--no-grader`: expectations go ungraded and the trials rest on their assertions.
+    grading_skipped: bool = False
 
     @property
     def results_dir(self) -> Path:
@@ -132,11 +134,12 @@ def describe_plan(  # noqa: PLR0913 -- every figure the plan prints
     baseline: bool,
     grader_model: str,
     agent_budget_usd: float | None,
+    grading_skipped: bool = False,
 ) -> str:
     """The calls a run will make, and its spend cap, before anything is spent."""
     planned = schedule(cases, trials, baseline=baseline)
     calls = {arm: sum(p.arm == arm for p in planned) for arm in ("skill", "baseline")}
-    graded = sum(grader_calls(p.case) for p in planned)
+    graded = 0 if grading_skipped else sum(grader_calls(p.case) for p in planned)
     skipped = [case.id for case in cases if baseline and not in_baseline(case)]
     lines = [
         (
@@ -150,7 +153,10 @@ def describe_plan(  # noqa: PLR0913 -- every figure the plan prints
             f"  baseline arm: {calls['baseline']} agent calls",
             f"  skipped in the baseline: {', '.join(skipped) or 'none'}",
         ]
-    lines.append(f"  grader calls: at most {graded} ({grader_model})")
+    if grading_skipped:
+        lines.append("  grader calls: 0 (grading skipped)")
+    else:
+        lines.append(f"  grader calls: at most {graded} ({grader_model})")
     per_call = f"${GRADER_BUDGET_USD:.2f}"
     if agent_budget_usd is None:
         cap = graded * GRADER_BUDGET_USD
@@ -405,7 +411,9 @@ def run_trial(
         record["finished_at"] = _now()
     # After the sweep, so a workspace that held a credential never reaches the
     # grader, and with the trace scrubbed: the sweep never sees the transcript.
-    if trial is not None and trace is not None and case.expectations and _scorable(record):
+    # Skipped grading leaves graded null, so the trial rests on its assertions.
+    graded_now = bool(case.expectations) and not settings.grading_skipped
+    if trial is not None and trace is not None and graded_now and _scorable(record):
         record |= _grade(settings, planned, _scrubbed(trace, secrets), trial, secrets)
     graded = record["graded"]
     record["valid"] = _scorable(record) and (graded is None or graded["status"] != "grader_error")
@@ -523,7 +531,11 @@ def run_suite(settings: RunSettings) -> int:
     passed = all(t["passed"] if t["arm"] == "skill" else t["valid"] for t in trials)
     skipped = [case.id for case in cases if settings.baseline and not in_baseline(case)]
     # The grader that ran, if any case had expectations to grade.
-    used = settings.grader if any(case.expectations for case in cases) else None
+    used = (
+        settings.grader
+        if any(case.expectations for case in cases) and not settings.grading_skipped
+        else None
+    )
     credential_env = list(settings.adapter.credential_env)
     if used is not None:
         # The grader is Claude for every agent, so a Codex run reads its token too.
@@ -540,6 +552,7 @@ def run_suite(settings: RunSettings) -> int:
         "trials_per_case": settings.trials,
         "baseline": settings.baseline,
         "grader_model_requested": used.model if used is not None else None,
+        "grading_skipped": settings.grading_skipped,
         "cases": [
             {
                 "id": case.id,
