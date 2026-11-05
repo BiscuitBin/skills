@@ -195,7 +195,7 @@ The marketplace entry still has the old description. `plugin.json` is the source
 just format
 ```
 
-Among its output is `Marketplace sources, plugin versions and descriptions match.`, printed after the copy. `git diff .claude-plugin/marketplace.json` shows the new description.
+Among its output is `Marketplace sources, plugin versions and descriptions match.`, printed after the copy. Prettier, which runs next, lists `.claude-plugin/marketplace.json` as unchanged because the copy already left it formatted. `git diff .claude-plugin/marketplace.json` shows the `biscuit-signoff` entry, now with the new description.
 
 Check the skill again:
 
