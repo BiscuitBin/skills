@@ -177,3 +177,13 @@ def test_the_starter_evals_are_reported_unwritten_not_run(root: Path) -> None:
     assert validated.returncode == 0, validated.stderr
     assert "warning: tea-timer is in .claude-plugin/marketplace.json" in validated.stderr
     assert "cowsay" not in validated.stderr
+
+
+@pytest.mark.parametrize("name", ["123", "true", "null", "yes", "off", "2026-11-05", "1e3"])
+def test_a_name_yaml_would_read_as_another_type_still_validates(root: Path, name: str) -> None:
+    result = new_skill(root, name)
+    assert result.returncode == 0, result.stderr
+    skill = root / "skills" / name
+    assert [d for d in validate_skill(skill) if d.severity == "error"] == []
+    load_suite(root, name)
+    distribution.check(root)

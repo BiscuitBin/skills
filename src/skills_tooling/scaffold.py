@@ -14,6 +14,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from skills_tooling.distribution import MARKETPLACE
 from skills_tooling.validator import PLACEHOLDER, name_error
 
@@ -28,9 +30,14 @@ def _title(name: str) -> str:
     return " ".join(word.capitalize() for word in name.split("-"))
 
 
+def _yaml_scalar(text: str) -> str:
+    """The text as YAML reads it back: plain, or quoted when YAML would take another type."""
+    return text if yaml.safe_load(text) == text else f"'{text}'"
+
+
 def _skill_md(name: str, description: str) -> str:
     return f"""---
-name: {name}
+name: {_yaml_scalar(name)}
 description: {description}
 license: MIT
 ---
