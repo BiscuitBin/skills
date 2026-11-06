@@ -363,7 +363,7 @@ args = sys.argv[1:]
 log = os.environ.get("FAKE_LOG")
 if log:
     with open(log, "a") as handle:
-        handle.write(name + " " + " ".join(args) + "\\n")
+        handle.write(sys.argv[0] + " " + " ".join(args) + "\\n")
 if args[:2] in (["login", "status"], ["auth", "status"]):
     sys.exit(1 if os.environ.get("FAKE_UNAUTHED") == name else 0)
 brief = sys.stdin.read()
@@ -379,7 +379,11 @@ print("brief was: " + brief.strip())
 
 
 class CliTest(unittest.TestCase):
-    """Drives the script as a subprocess with only fake reviewer CLIs on PATH."""
+    """Drives the script as a subprocess with fake reviewer CLIs in the project.
+
+    PATH holds only the brief, the log and any global CLI a test adds, and each
+    log line starts with the shim's full path, so the two installs can be told apart.
+    """
 
     def setUp(self) -> None:
         self.root = Path(tempfile.mkdtemp()).resolve()
@@ -392,36 +396,57 @@ class CliTest(unittest.TestCase):
         self.brief.write_text("review this diff\n")
         self.log = self.bin / "calls.log"
         self.env = {"PATH": str(self.bin), "FAKE_ROOT": str(self.root), "FAKE_LOG": str(self.log)}
+        self.pinned = self.root / "node_modules" / ".bin"
+        self.pinned.mkdir(parents=True)
 
-    def install(self, *names: str) -> None:
+    def _write_shims(self, directory: Path, *names: str) -> None:
         for name in names:
-            shim = self.bin / name
+            shim = directory / name
             shim.write_text(FAKE_REVIEWER.format(python=sys.executable))
             shim.chmod(0o755)
 
+    def install(self, *names: str) -> None:
+        self._write_shims(self.pinned, *names)
+
+    def install_global(self, *names: str) -> None:
+        self._write_shims(self.bin, *names)
+
+    def called(self) -> list[Path]:
+        """The executable behind each logged call, in order."""
+        if not self.log.exists():
+            return []
+        return [Path(line.split()[0]) for line in self.log.read_text().splitlines()]
+
     def cli(self, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
+        return self.cli_in(None, *args, **env)
+
+    def cli_in(self, cwd: Path | None, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(SCRIPT), *args],
             capture_output=True,
             text=True,
+            cwd=cwd,
             env={**self.env, **env},
             check=False,
         )
 
+    def select(self, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
+        return self.cli("select", *args, "--root", str(self.root), **env)
+
     def run_review(self, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
         return self.cli("run", *args, "--brief", str(self.brief), "--root", str(self.root), **env)
 
-    def test_select_hidden_codex_refuses_same_family_fallback(self) -> None:
+    def test_select_missing_codex_refuses_same_family_fallback(self) -> None:
         self.install("claude")
-        result = self.cli("select", "--implementer", "claude-code")
+        result = self.select("--implementer", "claude-code")
         self.assertEqual(result.returncode, review.EXIT_UNAVAILABLE)
         self.assertIn("cross-model review unavailable", result.stderr)
-        self.assertIn("codex not found on PATH", result.stderr)
+        self.assertIn("codex not installed at node_modules/.bin", result.stderr)
         self.assertIn("same model family", result.stderr)
 
-    def test_select_hidden_codex_falls_back_for_other_family(self) -> None:
+    def test_select_missing_codex_falls_back_for_other_family(self) -> None:
         self.install("claude")
-        result = self.cli("select", "--implementer", "other", "--model", "gemini-3-pro")
+        result = self.select("--implementer", "other", "--model", "gemini-3-pro")
         self.assertEqual(result.returncode, 0, result.stderr)
         selection = json.loads(result.stdout)
         self.assertEqual(selection["reviewer"], "claude")
@@ -429,9 +454,71 @@ class CliTest(unittest.TestCase):
 
     def test_select_unauthenticated_reviewer_is_unavailable(self) -> None:
         self.install("codex", "claude")
-        result = self.cli("select", "--implementer", "codex", FAKE_UNAUTHED="claude")
+        result = self.select("--implementer", "codex", FAKE_UNAUTHED="claude")
         self.assertEqual(result.returncode, review.EXIT_UNAVAILABLE)
         self.assertIn("not authenticated", result.stderr)
+
+    def test_run_never_falls_through_to_a_global_cli(self) -> None:
+        def absent(_: Path) -> None:
+            pass
+
+        def dangling(path: Path) -> None:
+            path.symlink_to(self.root / "no-such-target")
+
+        def not_executable(path: Path) -> None:
+            path.write_text("not a program\n")
+            path.chmod(0o644)
+
+        self.install_global("codex", "claude")
+        self.install("claude")
+        for name, damage in (
+            ("absent", absent),
+            ("dangling symlink", dangling),
+            ("not executable", not_executable),
+        ):
+            codex = self.pinned / "codex"
+            codex.unlink(missing_ok=True)
+            self.log.unlink(missing_ok=True)
+            damage(codex)
+            with self.subTest(name):
+                result = self.run_review("--implementer", "claude-code")
+                self.assertEqual(result.returncode, review.EXIT_UNAVAILABLE, result.stderr)
+                self.assertIn("codex not installed at node_modules/.bin", result.stderr)
+                self.assertEqual([p for p in self.called() if p.parent == self.bin], [])
+
+    def test_run_uses_only_the_pinned_cli_when_both_are_installed(self) -> None:
+        self.install_global("codex", "claude")
+        self.install("codex", "claude")
+        result = self.run_review("--implementer", "claude-code")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(self.called()), {self.pinned / "codex"})
+
+    def test_select_defaults_to_the_pinned_cli_of_the_git_toplevel(self) -> None:
+        git = shutil.which("git")
+        assert git is not None
+        path = f"{self.bin}{os.pathsep}{Path(git).parent}"
+        subprocess.run([git, "init", "-q", str(self.root)], check=True)
+        self.install_global("codex")
+        self.install("codex")
+        result = self.cli_in(
+            self.root / "src", "select", "--implementer", "claude-code", PATH=path
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.called(), [self.pinned / "codex"])
+
+    def test_select_outside_a_git_repository_needs_root(self) -> None:
+        git = shutil.which("git")
+        assert git is not None
+        result = self.cli_in(
+            self.root,
+            "select",
+            "--implementer",
+            "claude-code",
+            PATH=str(Path(git).parent),
+            GIT_CEILING_DIRECTORIES=str(self.root.parent),
+        )
+        self.assertEqual(result.returncode, review.EXIT_ERROR, result.stderr)
+        self.assertIn("pass --root", result.stderr)
 
     def test_run_saves_findings_in_scratch_folder(self) -> None:
         self.install("codex", "claude")
@@ -452,7 +539,7 @@ class CliTest(unittest.TestCase):
             line.split() for line in self.log.read_text().splitlines() if "status" not in line
         ]
         codex_call, claude_call = calls
-        self.assertEqual(codex_call[:2], ["codex", "exec"])
+        self.assertEqual(codex_call[:2], [str(self.pinned / "codex"), "exec"])
         for flags in (
             ["-m", "gpt-6-astra"],
             ["--sandbox", "read-only"],
@@ -465,7 +552,7 @@ class CliTest(unittest.TestCase):
         ):
             with self.subTest(codex=flags):
                 self.assertTrue(contains(codex_call, flags))
-        self.assertEqual(claude_call[:2], ["claude", "-p"])
+        self.assertEqual(claude_call[:2], [str(self.pinned / "claude"), "-p"])
         for flags in (
             ["--model", "claude-opus-5-5"],
             ["--tools", "Read,Grep,Glob"],
@@ -490,7 +577,7 @@ class CliTest(unittest.TestCase):
 
     def test_usage_error_is_not_reported_as_unavailable(self) -> None:
         self.install("codex", "claude")
-        result = self.cli("select", "--implementer", "pi")
+        result = self.select("--implementer", "pi")
         self.assertEqual(result.returncode, 2)
         self.assertNotEqual(review.EXIT_UNAVAILABLE, 2)
 

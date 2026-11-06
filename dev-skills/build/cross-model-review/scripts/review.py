@@ -3,7 +3,7 @@
 
 Subcommands:
 
-  select --implementer {claude-code,codex,other} [--model ID]
+  select --implementer {claude-code,codex,other} [--model ID] [--root DIR]
       Print the reviewer the cross-model rule picks, as JSON.
   run --implementer ... [--model ID] --brief FILE [--root DIR] [--timeout SECONDS]
       Run that reviewer on the brief (sent on stdin), save its final output
@@ -13,6 +13,10 @@ Subcommands:
       any file outside ai_tmp/, .git/ and known CLI runtime state changed, saving
       the output as ai_tmp/rejected-<timestamp>-<reviewer>.md instead.
 
+Both take the reviewer CLIs from <root>/node_modules/.bin and never from PATH,
+so a global install cannot stand in for the pinned one. <root> defaults to the
+git toplevel.
+
 Exit codes: 0 ok, 1 error before any review ran (including unreadable paths), 2 usage error (argparse),
 3 cross-model review unavailable, 4 worktree changed during the review.
 Python 3 standard library only.
@@ -21,11 +25,11 @@ Python 3 standard library only.
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import os
 import re
-import shutil
 import stat
 import subprocess
 import sys
@@ -71,11 +75,16 @@ IMPLEMENTER_DEFAULT_FAMILY: dict[Implementer, Family] = {
 }
 
 
+def _pinned(reviewer: Reviewer, root: Path) -> Path:
+    """The project's own CLI. Never resolved through PATH."""
+    return root / "node_modules" / ".bin" / reviewer
+
+
 def reviewer_command(reviewer: Reviewer, root: Path) -> list[str]:
     """The read-only invocation. Read-only comes from these flags, not from the brief."""
     if reviewer == "codex":
         return [
-            "codex", "exec",
+            str(_pinned("codex", root)), "exec",
             "-m", REVIEWERS["codex"].model,
             "--sandbox", "read-only",
             "--ephemeral",
@@ -91,7 +100,7 @@ def reviewer_command(reviewer: Reviewer, root: Path) -> list[str]:
             "-",
         ]  # fmt: skip
     return [
-        "claude", "-p",
+        str(_pinned("claude", root)), "-p",
         "--model", REVIEWERS["claude"].model,
         "--tools", "Read,Grep,Glob",
         "--restricted",
@@ -200,12 +209,13 @@ def select_reviewer(
     raise ReviewUnavailableError("cross-model review unavailable:\n- " + "\n- ".join(notes))
 
 
-def default_probe(reviewer: Reviewer) -> str | None:
-    """Check the reviewer CLI is on PATH and logged in."""
+def default_probe(reviewer: Reviewer, root: Path) -> str | None:
+    """Check the project's pinned reviewer CLI is executable and logged in."""
     spec = REVIEWERS[reviewer]
-    binary = shutil.which(reviewer)
-    if binary is None:
-        return f"{reviewer} not found on PATH"
+    binary = _pinned(reviewer, root)
+    # Also false for a dangling symlink or a file without the execute bit.
+    if not os.access(binary, os.X_OK):
+        return f"{reviewer} not installed at node_modules/.bin; run `just initialize`"
     shown = " ".join((reviewer, *spec.auth_args))
     try:
         result = subprocess.run(
@@ -422,9 +432,13 @@ def build_parser() -> argparse.ArgumentParser:
         cmd = sub.add_parser(name)
         cmd.add_argument("--implementer", required=True, choices=get_args(Implementer))
         cmd.add_argument("--model", help="model the implementer is actually running")
+        cmd.add_argument(
+            "--root",
+            type=Path,
+            help="worktree root, whose node_modules/.bin supplies the CLIs (default: git toplevel)",
+        )
         if name == "run":
             cmd.add_argument("--brief", required=True, type=Path, help="review brief file")
-            cmd.add_argument("--root", type=Path, help="worktree root (default: git toplevel)")
             cmd.add_argument("--timeout", type=float, default=1800, help="seconds per reviewer")
     return parser
 
@@ -432,18 +446,19 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        root = (args.root or _git_root()).resolve()
+        probe = functools.partial(default_probe, root=root)
         if args.command == "select":
-            selection = select_reviewer(args.implementer, args.model, default_probe)
+            selection = select_reviewer(args.implementer, args.model, probe)
             print(json.dumps(asdict(selection), indent=2))
             return 0
-        root = (args.root or _git_root()).resolve()
         try:
             brief = args.brief.read_text()
         except OSError as error:
             message = f"cannot read brief: {error}"
             raise SetupError(message) from error
         path, selection = run_review(
-            args.implementer, args.model, brief, root, default_probe, args.timeout
+            args.implementer, args.model, brief, root, probe, args.timeout
         )
     except SetupError as error:
         print(f"error: {error}", file=sys.stderr)
