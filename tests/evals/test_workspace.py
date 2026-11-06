@@ -323,3 +323,44 @@ def test_a_pending_signal_starts_no_agent(tmp_path: Path, monkeypatch: pytest.Mo
         )
     assert stopped.value.code == 128 + signal.SIGTERM
     assert not (tmp_path / "out").exists()
+
+
+def test_a_signal_to_the_python_wrapper_reaches_the_interpreter(tmp_path: Path) -> None:
+    trial = workspace.create_trial(tmp_path, "run", "case")
+    ready = tmp_path / "ready"
+    gone = tmp_path / "gone"
+    code = (
+        "import pathlib, signal, sys, time\n"
+        "def stop(*_): pathlib.Path(sys.argv[2]).touch(); sys.exit(3)\n"
+        "signal.signal(signal.SIGTERM, stop)\n"
+        "pathlib.Path(sys.argv[1]).touch()\n"
+        "time.sleep(30)\n"
+    )
+    process = subprocess.Popen(
+        [str(trial.bin / "python3"), "-c", code, str(ready), str(gone)],
+        env={"PATH": "/usr/bin:/bin"},
+    )
+    try:
+        deadline = time.monotonic() + 10
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        process.terminate()
+        assert process.wait(timeout=10) == 3
+    finally:
+        process.kill()
+    assert gone.exists()
+    assert workspace.python_calls(trial)[-1].exit_code == 3
+
+
+def test_the_python_wrapper_passes_stdin_to_the_interpreter(tmp_path: Path) -> None:
+    trial = workspace.create_trial(tmp_path, "run", "case")
+    done = subprocess.run(
+        [str(trial.bin / "python3"), "-c", "import sys; print(sys.stdin.read().upper())"],
+        env={"PATH": "/usr/bin:/bin"},
+        input="moo",
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    assert done.stdout == "MOO\n"

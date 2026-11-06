@@ -48,10 +48,10 @@ This plain form checks that the skill passes its cases. Add `--baseline` when yo
 Each run writes `eval-results/<run-id>/`, and its `results.json` and `benchmark.json` are described under [results](../reference/evals.md#results). `ls -t eval-results` lists the newest run first, along with `report.html` once you have built a report. To count the passes of a run after the terminal output has gone:
 
 ```sh
-just run uv run --frozen python -c 'import json, sys; r = json.load(open(sys.argv[1])); t = r["trials"]; print(r["agent"], sum(x["passed"] is True for x in t), "of", len(t), "trials passed")' eval-results/<run-id>/results.json
+just run uv run --frozen python -c 'import json, sys; r = json.load(open(sys.argv[1])); t = [x for x in r["trials"] if x["arm"] == "skill"]; print(r["agent"], sum(x["passed"] is True for x in t), "of", len(t), "trials passed")' eval-results/<run-id>/results.json
 ```
 
-It prints, for example, `claude 9 of 9 trials passed`. The first word is the agent, so this is also how to tell which run is which for the next step.
+It prints, for example, `claude 9 of 9 trials passed`. It counts the skill arm, because baseline trials are never judged. The first word is the agent, so this is also how to tell which run is which for the next step.
 
 ## 4. Build the report
 

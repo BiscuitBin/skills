@@ -13,4 +13,5 @@ The skipped names are an installer internal, not a documented contract. `tests/t
 ## Considered options
 
 - **`dev-skills/dist/`.** Rejected: `dist` is also skipped, but `.gitignore` ignores it.
+- **`metadata.internal: true`.** The installer drops such a skill before listing or installing it, even by explicit path, but the flag must be the boolean `true`, and the validator and ADR 0010 keep `metadata` values as strings, as the Agent Skills spec requires. Rejected: it would need an exception to the spec for dev skills.
 - **Accept the leak and document `--full-depth` as out of contract.** Rejected: dev skills must be excluded from `npx skills`, and that flag names no skill.

@@ -74,8 +74,15 @@ def _write_bin(trial: TrialPaths) -> None:
     wrapper = (
         "#!/bin/sh\n"
         "# Written by the eval harness: records this call for the script_ran assertion.\n"
-        f'{shlex.quote(str(real))} "$@"\n'
+        # In the background so a trap can run while it waits, which ignores SIGINT in
+        # the child: every signal goes on as SIGTERM, and stdin needs passing explicitly.
+        f'{shlex.quote(str(real))} "$@" <&0 &\n'
+        "child=$!\n"
+        "trap 'kill -TERM \"$child\" 2>/dev/null' TERM INT HUP\n"
+        'wait "$child"\n'
         "code=$?\n"
+        # A trapped signal ends the wait, not the interpreter.
+        'while kill -0 "$child" 2>/dev/null; do wait "$child"; code=$?; done\n'
         f'{{ printf \'%s{FIELD_END}\' "$PWD" "$code" "$@"; printf \'{RECORD_END}\'; }} >>{log}\n'
         'exit "$code"\n'
     )
