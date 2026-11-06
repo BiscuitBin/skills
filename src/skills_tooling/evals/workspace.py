@@ -187,6 +187,10 @@ def run_isolated(  # noqa: PLR0913 -- one keyword per stream and limit
     with _stoppable():
         pass
     with stdout.open("wb") as out, stderr.open("wb") as err:
+        # Again, for one during the opens. Raising inside Popen could lose the process, so
+        # one landing there waits for the `_stoppable` below, which ends the group.
+        with _stoppable():
+            pass
         process = subprocess.Popen(  # noqa: S603 -- argv is built by the adapter
             argv,
             cwd=cwd,

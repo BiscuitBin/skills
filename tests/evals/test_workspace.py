@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -324,6 +325,59 @@ def test_a_pending_signal_starts_no_agent(tmp_path: Path, monkeypatch: pytest.Mo
         )
     assert stopped.value.code == 128 + signal.SIGTERM
     assert not (tmp_path / "out").exists()
+
+
+def test_a_signal_while_the_output_files_open_starts_no_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(workspace, "_termination", workspace._Termination())
+    monkeypatch.setattr(subprocess, "Popen", lambda *_args, **_kwargs: pytest.fail("launched"))
+    out = tmp_path / "out"
+    real_open = Path.open
+
+    def signalling_open(self: Path, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        if self == out:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", signalling_open)
+    with pytest.raises(SystemExit) as stopped, workspace.end_on_termination():
+        workspace.run_isolated(
+            ["/usr/bin/true"],
+            cwd=tmp_path,
+            env={},
+            stdout=out,
+            stderr=tmp_path / "err",
+            timeout=5,
+        )
+    assert stopped.value.code == 128 + signal.SIGTERM
+
+
+def test_a_signal_during_the_launch_ends_the_agent_it_started(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pins the documented limit: the launch cannot be stopped, so its agent is ended at once.
+    monkeypatch.setattr(workspace, "_termination", workspace._Termination())
+    real_popen = subprocess.Popen
+    started = []
+
+    def signalling_popen(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        os.kill(os.getpid(), signal.SIGTERM)
+        started.append(real_popen(*args, **kwargs))
+        return started[-1]
+
+    monkeypatch.setattr(subprocess, "Popen", signalling_popen)
+    with pytest.raises(SystemExit) as stopped, workspace.end_on_termination():
+        workspace.run_isolated(
+            ["/bin/sleep", "30"],
+            cwd=tmp_path,
+            env={},
+            stdout=tmp_path / "out",
+            stderr=tmp_path / "err",
+            timeout=30,
+        )
+    assert stopped.value.code == 128 + signal.SIGTERM
+    assert started[0].poll() is not None
 
 
 def test_a_signal_to_the_python_wrapper_reaches_the_interpreter(tmp_path: Path) -> None:

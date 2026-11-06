@@ -1,5 +1,6 @@
 """A fake secret reaches the agent, and never the results, transcripts or workspace."""
 
+import contextlib
 import json
 import os
 from dataclasses import replace
@@ -208,6 +209,27 @@ def test_a_results_path_it_cannot_read_deletes_the_rest_and_names_no_secret(
     (tmp_path / "leaked.json").write_text(SECRET)
     locked = tmp_path / f"d-{SECRET}"
     locked.mkdir()
+    (locked / "token.txt").write_text(SECRET)
+    locked.chmod(0)
+    try:
+        with pytest.raises(SecretLeakError) as raised:
+            verify_clean(tmp_path, [SECRET])
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            locked.chmod(0o755)
+    assert SECRET not in str(raised.value)
+    assert "could not be deleted" not in str(raised.value)
+    assert not tmp_path.exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+def test_a_results_directory_that_stays_locked_says_so_and_names_no_secret(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(workspace, "restore_access", lambda _root: None)
+    (tmp_path / "leaked.json").write_text(SECRET)
+    locked = tmp_path / f"d-{SECRET}"
+    locked.mkdir()
     locked.chmod(0)
     try:
         with pytest.raises(SecretLeakError) as raised:
@@ -217,3 +239,42 @@ def test_a_results_path_it_cannot_read_deletes_the_rest_and_names_no_secret(
     assert SECRET not in str(raised.value)
     assert "could not be deleted" in str(raised.value)
     assert not (tmp_path / "leaked.json").exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write anywhere")
+def test_a_leak_in_a_read_only_directory_is_deleted(tmp_path: Path) -> None:
+    locked = tmp_path / "a_locked"
+    locked.mkdir()
+    (locked / f"{SECRET}.txt").write_text("{}")
+    (tmp_path / "z.json").write_text(SECRET)
+    locked.chmod(0o555)
+    try:
+        with pytest.raises(SecretLeakError) as raised:
+            verify_clean(tmp_path, [SECRET])
+    finally:
+        locked.chmod(0o755)
+    assert SECRET not in str(raised.value)
+    assert "secret found and deleted" in str(raised.value)
+    assert list(locked.iterdir()) == []
+    assert not (tmp_path / "z.json").exists()
+
+
+def test_a_leak_that_cannot_be_deleted_says_so_and_the_rest_still_go(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stuck = tmp_path / f"a-{SECRET}.txt"
+    stuck.write_text("{}")
+    (tmp_path / "z.json").write_text(SECRET)
+    real_unlink = Path.unlink
+
+    def unlink(self: Path, *, missing_ok: bool = False) -> None:
+        if self == stuck:
+            raise PermissionError(1, "denied", str(self))
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    with pytest.raises(SecretLeakError) as raised:
+        verify_clean(tmp_path, [SECRET])
+    assert SECRET not in str(raised.value)
+    assert "1 could not be deleted" in str(raised.value)
+    assert not (tmp_path / "z.json").exists()

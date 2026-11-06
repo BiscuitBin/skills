@@ -11,6 +11,8 @@ import stat
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
+from skills_tooling.evals import workspace
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -18,7 +20,10 @@ REDACTED = "[REDACTED]"
 
 
 class SecretLeakError(Exception):
-    """A results file held a secret after scrubbing, or could not be checked; it was deleted."""
+    """A results file held a secret after scrubbing, or could not be checked.
+
+    It was deleted, unless the message says it could not be.
+    """
 
 
 def scrub(text: str, secrets: Iterable[str]) -> str:
@@ -67,20 +72,32 @@ def files_holding(directory: Path, secrets: Iterable[str]) -> list[Path]:
 def verify_clean(directory: Path, secrets: Iterable[str]) -> None:
     """Delete, and raise for, every file under directory that holds a secret.
 
-    A path it cannot read could hold one, so the whole directory goes.
+    A path it cannot read could hold one, so the whole directory goes. Access is
+    restored first, so a locked path goes too; the message says if anything stays.
     """
     secrets = list(secrets)
     try:
         leaked = files_holding(directory, secrets)
     except OSError as error:
         # The type only: the message could quote a path, which may hold a secret.
+        workspace.restore_access(directory)
         shutil.rmtree(directory, ignore_errors=True)
         state = "some of it could not be deleted" if directory.exists() else "deleted"
         msg = f"could not check every results file for secrets ({type(error).__name__}); {state}"
         raise SecretLeakError(msg) from None
+    if not leaked:
+        return
+    workspace.restore_access(directory)
+    kept = 0
     for path in leaked:
-        path.unlink()
-    if leaked:
-        names = scrub(", ".join(str(path) for path in leaked), secrets)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            # Counted, not raised: the error would quote the path, and stop the other deletions.
+            kept += 1
+    names = scrub(", ".join(str(path) for path in leaked), secrets)
+    if kept:
+        msg = f"secret found in {names}; {kept} could not be deleted"
+    else:
         msg = f"secret found and deleted from {names}"
-        raise SecretLeakError(msg)
+    raise SecretLeakError(msg)
