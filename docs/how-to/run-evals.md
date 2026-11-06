@@ -12,7 +12,10 @@ Log Codex in. The login is kept in the project's own Codex home, `.tools/agent-h
 
 ```sh
 just run ./node_modules/.bin/codex login
+just run ./node_modules/.bin/codex login status
 ```
+
+The second command confirms the login before a paid run.
 
 Create a Claude Code token, if you do not have one. This opens a browser and prints the token:
 
@@ -42,7 +45,7 @@ This plain form checks that the skill passes its cases. Add `--baseline` when yo
 
 ## 3. Read the results
 
-Each run writes `eval-results/<run-id>/`, and its `results.json` and `benchmark.json` are described under [results](../reference/evals.md#results). `ls -t eval-results` lists the newest run first. To count the passes of a run after the terminal output has gone:
+Each run writes `eval-results/<run-id>/`, and its `results.json` and `benchmark.json` are described under [results](../reference/evals.md#results). `ls -t eval-results` lists the newest run first, along with `report.html` once you have built a report. To count the passes of a run after the terminal output has gone:
 
 ```sh
 just run uv run --frozen python -c 'import json, sys; r = json.load(open(sys.argv[1])); t = r["trials"]; print(r["agent"], sum(x["passed"] is True for x in t), "of", len(t), "trials passed")' eval-results/<run-id>/results.json
