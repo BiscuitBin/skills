@@ -5,7 +5,7 @@ source skill; `just check` and CI include this recipe. For a single skill, run
 `just run uv run --frozen python -m skills_tooling.validator <directory>`.
 Add `--dev` for a dev skill. The public boundaries are a
 `validate_skill(path, shipped=...)` function returning diagnostics and a CLI
-that discovers shipped skills in `skills/` and dev skills in `dev-skills/`.
+that discovers shipped skills in `skills/` and dev skills in `dev-skills/build/`.
 Diagnostics include a file, stable rule ID, severity, explanation and fix hint.
 The CLI exits nonzero if any error occurs; warnings alone pass.
 

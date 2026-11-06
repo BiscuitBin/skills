@@ -149,7 +149,7 @@ def scaffold(root: Path, name: str) -> list[Path]:
     if problem is not None:
         msg = f"{problem}; use 1-64 lowercase letters and digits with single inner hyphens"
         raise ScaffoldError(msg)
-    for parent in ("skills", "evals", "dev-skills"):
+    for parent in ("skills", "evals", "dev-skills/build"):
         if (root / parent / name).exists() or (root / parent / name).is_symlink():
             msg = f"{parent}/{name} already exists; pick another name"
             raise ScaffoldError(msg)

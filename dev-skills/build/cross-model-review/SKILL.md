@@ -11,7 +11,7 @@ metadata:
 
 A repo-internal **dev skill**. It is never shipped and never visible in eval workspaces.
 
-The protocol below follows ticket `.scratch/foundation/issues/01-cross-model-review-dev-skill.md`, which is its source of truth. Run every command from the repo root. `REVIEW` means `just run uv run --frozen python dev-skills/cross-model-review/scripts/review.py`. Prepend the project `node_modules/.bin` to `PATH` when invoking it so reviewer selection uses the pinned CLIs.
+The protocol below follows ticket `.scratch/foundation/issues/01-cross-model-review-dev-skill.md`, which is its source of truth. Run every command from the repo root. `REVIEW` means `just run uv run --frozen python dev-skills/build/cross-model-review/scripts/review.py`. Prepend the project `node_modules/.bin` to `PATH` when invoking it so reviewer selection uses the pinned CLIs.
 
 ## 1. Pick the reviewer by the cross-model rule
 
@@ -33,7 +33,7 @@ REVIEW select --implementer other --model <id>     # any other agent: the model 
 Dispatch a subagent with the brief below. It writes the review brief to `ai_tmp/brief-<topic>.md` and runs:
 
 ```sh
-just run env PATH="$PWD/node_modules/.bin:$PATH" uv run --frozen python dev-skills/cross-model-review/scripts/review.py run --implementer <you> [--model <id>] --brief ai_tmp/brief-<topic>.md
+just run env PATH="$PWD/node_modules/.bin:$PATH" uv run --frozen python dev-skills/build/cross-model-review/scripts/review.py run --implementer <you> [--model <id>] --brief ai_tmp/brief-<topic>.md
 ```
 
 `run` repeats the selection, runs the reviewer with read-only CLI flags (enforced by the flags, not the prompt), saves the reviewer's final output to `ai_tmp/review-<timestamp>-<reviewer>.md` (with a `-<n>` suffix if that name is taken) and prints JSON with `findings_path` and `selection`. It snapshots the worktree by content and permission bits before and after, and exits 4 with the changed paths if anything outside `ai_tmp/`, `.git/` and known Claude runtime paths changed, whether the reviewer or a concurrent process changed it. Only known runtime paths are excluded (the `_runtime_state` allowlist in the runner): Claude's auth, cache, debug and backup paths, and Codex's caches, logs, temporary files and state databases. Persistent settings (including `.claude.json` and Codex's `config.toml` and `auth.json`), project memory and Codex memories, instructions, skills and agent-home symlinks remain monitored. Treat any other change as a failed review: the output it keeps as `ai_tmp/rejected-*.md` is for inspection only and is never triaged. Leave the worktree alone while `run` is going, check the listed paths, and rerun. If the preferred reviewer fails at runtime, `run` tries the allowed fallback itself.
@@ -44,8 +44,8 @@ A run takes up to `--timeout` seconds (default 1800) per reviewer, twice that wi
 
 > You run an external review. You are not the reviewer: do not review the code yourself and do not start a review of your own.
 >
-> 1. Write `ai_tmp/brief-<topic>.md` from the review brief template in `dev-skills/cross-model-review/SKILL.md`, filling in the acceptance criteria and the work under review: `git diff <base>...HEAD` for commits, `git diff HEAD` for staged and unstaged work, and the full contents of each file listed by `git ls-files --others --exclude-standard`, each headed by its path. For a design review, paste the proposal instead.
-> 2. Run `just run env PATH="$PWD/node_modules/.bin:$PATH" uv run --frozen python dev-skills/cross-model-review/scripts/review.py run --implementer <implementer> [--model <id>] --brief ai_tmp/brief-<topic>.md` in the background (it can take 30+ minutes; in a sandboxed shell, with network access) and wait until it exits.
+> 1. Write `ai_tmp/brief-<topic>.md` from the review brief template in `dev-skills/build/cross-model-review/SKILL.md`, filling in the acceptance criteria and the work under review: `git diff <base>...HEAD` for commits, `git diff HEAD` for staged and unstaged work, and the full contents of each file listed by `git ls-files --others --exclude-standard`, each headed by its path. For a design review, paste the proposal instead.
+> 2. Run `just run env PATH="$PWD/node_modules/.bin:$PATH" uv run --frozen python dev-skills/build/cross-model-review/scripts/review.py run --implementer <implementer> [--model <id>] --brief ai_tmp/brief-<topic>.md` in the background (it can take 30+ minutes; in a sandboxed shell, with network access) and wait until it exits.
 > 3. Return only the `findings_path` and the `selection` JSON it prints, or its stderr and exit code if it failed. Do not paste the findings.
 
 **Review brief template** (the text the external reviewer receives):

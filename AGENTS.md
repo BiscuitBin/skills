@@ -25,7 +25,7 @@ Global installs (`npm install -g`, `uv tool install`, `pip install --user`) and 
 
 ## Cross-model review
 
-Every ticket's review checkpoint uses the `cross-model-review` dev skill (`dev-skills/cross-model-review/SKILL.md`):
+Every ticket's review checkpoint uses the `cross-model-review` dev skill (`dev-skills/build/cross-model-review/SKILL.md`):
 
 - A reviewer from a **different model family** reviews the work: Codex (`gpt-6-astra`) for Claude models, Claude Code (`claude-opus-5-5`) for OpenAI models. If none is available, stop and report it; do not review your own work instead.
 - A reviewer subagent runs the read-only external review and saves the findings to `ai_tmp/`. A separate triage subagent marks each finding valid, invalid or out of scope, with evidence.
@@ -33,4 +33,4 @@ Every ticket's review checkpoint uses the `cross-model-review` dev skill (`dev-s
 
 ## Dev skills
 
-Dev skills are repo-internal skills for working on this repo. They live in `dev-skills/<name>/`, and relative symlinks in `.claude/skills/` and `.agents/skills/` make them discoverable. Every dev skill is marked `metadata.scope: repo-internal` and must be excluded from distribution (marketplace, plugin and `npx skills`; ticket 04) and from eval workspaces (ticket 05).
+Dev skills are repo-internal skills for working on this repo. They live in `dev-skills/build/<name>/`, and relative symlinks in `.claude/skills/` and `.agents/skills/` make them discoverable. Every dev skill is marked `metadata.scope: repo-internal` and must be excluded from distribution (marketplace, plugin and `npx skills`; ticket 04) and from eval workspaces (ticket 05).

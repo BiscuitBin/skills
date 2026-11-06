@@ -89,8 +89,8 @@ NO_READ_FLAGS = {"--help", "--version", "-h", "-V"}
 SHELLS = {"bash", "zsh", "sh"}
 # Characters the shell expands, so the name in the text is not the directory read.
 UNPLACEABLE = re.compile(r"[*?\[\]{}$~`]")
-# The directory a skill directory sits in: .agents/skills, skills, dev-skills, .system.
-SKILLS_DIR = re.compile(r"skills$|^\.system$")
+# The directory a skill directory sits in: .agents/skills, skills, dev-skills/build, .system.
+SKILLS_DIR = re.compile(r"skills$|(?:^|/)dev-skills/build$|(?:^|/)\.system$")
 # auth.json fields that are not secret. Short strings are not secret either:
 # keys, tokens and account ids are long, and a short label such as a plan name
 # would scrub every occurrence of a common word.
@@ -511,7 +511,7 @@ def skills_read(command: str) -> tuple[list[str], bool]:
 
     `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path counts only when
     its grandparent is a skills directory (`.agents/skills`, `skills`,
-    `.system`), so `/tmp/cowsay/SKILL.md` is not a skill, nor unplaceable. A
+    `dev-skills/build`, `.system`), so `/tmp/cowsay/SKILL.md` is not a skill, nor unplaceable. A
     path the text cannot place (`SKILL.md` or `cowsay/SKILL.md` run in another
     `workdir`, `../SKILL.md`, a glob, a variable) names no skill; it can still back
     Codex's own implicit event (see `parse_stream`).
@@ -524,7 +524,7 @@ def skills_read(command: str) -> tuple[list[str], bool]:
         skill = path.parent.name
         if skill in ("", "..") or UNPLACEABLE.search(skill):
             unplaceable = True
-        elif SKILLS_DIR.search(path.parent.parent.name):
+        elif SKILLS_DIR.search(path.parent.parent.as_posix()):
             skills.append(skill)
         elif UNPLACEABLE.search(path.parent.parent.name) or (
             not path.is_absolute() and path.parent.parent.name in ("", "..")

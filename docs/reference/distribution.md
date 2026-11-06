@@ -1,9 +1,19 @@
 # Distribution
 
 The Claude Code marketplace and `npx skills` ship every skill in `skills/`, currently `skills/cowsay/`.
-Dev skills stay in `dev-skills/`, exposed to repository agents through relative
+Dev skills stay in `dev-skills/build/`, exposed to repository agents through relative
 symlinks in `.claude/skills/` and `.agents/skills/`. They are excluded from both
-installation channels. See [ADR 0010](../adr/0010-distribution-boundaries.md).
+installation channels when no skill is named. See [ADR 0010](../adr/0010-distribution-boundaries.md)
+and [ADR 0015](../adr/0015-dev-skills-under-build.md).
+
+`build` is not generated output: the folder is tracked, and nothing writes to it.
+The name matters because `skills@1.7.4` skips a fixed list of directory names
+(`build` among them) in the recursive scan it runs for `--full-depth` or when it
+finds no shipped skills. That list is an installer internal, so the round trips
+below fail if a new pin stops skipping `build`. The exclusion covers unnamed
+discovery: the default, `--full-depth` and a repository with no shipped skills.
+An explicit path to a dev skill, such as `skills add <repo>/dev-skills/build/<name>`,
+is outside it.
 
 ## Manifests and versions
 
@@ -47,7 +57,10 @@ the hosted Git-source behavior. Claude installs cowsay into its plugin cache and
 recorded `gitCommitSha` must match the local clone's HEAD;
 the other three installs use the default `skills add --agent <agent> --yes`
 behavior without naming a skill, exercising installation of all shipped skills.
-The listing assertion also names no skill. The per-agent cases exercise copies;
+The listing assertions also name no skill: `--list` and `--list --full-depth`
+must both find exactly the shipped skills. Separate tests install with
+`--full-depth` and list a clone with `skills/` removed, which must report
+`No skills found` and exit 1. The per-agent cases exercise copies;
 the combined-agent case exercises a Claude symlink and the shared canonical copy.
 Observed modes are recorded as the JUnit property `installation_mode` in
 `ai_tmp/pytest.xml` and printed in successful-test output in the `just check`

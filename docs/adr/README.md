@@ -18,3 +18,4 @@ Each record states one decision that is hard to reverse, would surprise a reader
 | [0012](0012-llm-grader-and-benchmark-statistics.md) | The LLM grader runs on the pinned Claude Code, and failures it can be blamed for count against the trial |
 | [0013](0013-pi-deferred-past-mvp.md) | The MVP evaluates Claude Code and Codex; Pi is installable but deferred |
 | [0014](0014-benchmark-history.md) | Benchmark history is committed under benchmarks/, one file per named iteration |
+| [0015](0015-dev-skills-under-build.md) | Real dev skill folders live under dev-skills/build/, where the installer's recursive scan cannot reach them |

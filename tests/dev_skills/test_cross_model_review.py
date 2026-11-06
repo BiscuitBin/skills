@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = REPO_ROOT / "dev-skills" / "cross-model-review" / "scripts" / "review.py"
+SCRIPT = REPO_ROOT / "dev-skills" / "build" / "cross-model-review" / "scripts" / "review.py"
 
 
 def _load_review() -> ModuleType:

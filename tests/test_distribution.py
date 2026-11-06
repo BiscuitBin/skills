@@ -339,18 +339,28 @@ def install_marketplace(source: Path, project: Path, env: dict[str, str]) -> Pat
     return installed
 
 
+# npm exec is npx's implementation; --prefix selects the locked local
+# binary while cwd remains the throwaway project. Offline forbids fetches.
+NPX = ["npm", "exec", "--offline", "--no", "--prefix", str(ROOT), "--", "skills"]
+# Every way of asking for skills without naming one. The dev skills' placement
+# rests on a directory name the installer's recursive scan skips, so these
+# listings are what fail if a new installer pin stops skipping it.
+UNNAMED_LISTINGS = (["--list"], ["--list", "--full-depth"])
+
+
+def plain(output: str) -> str:
+    return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
+
+
 def install_skills(
     project: Path, env: dict[str, str], agents: list[str], shipped: set[str]
 ) -> list[Path]:
-    # npm exec is npx's implementation; --prefix selects the locked local
-    # binary while cwd remains the throwaway project. Offline forbids fetches.
-    npx = ["npm", "exec", "--offline", "--no", "--prefix", str(ROOT), "--", "skills"]
-    listing = run([*npx, "add", "BiscuitBin/skills", "--list"], project, env)
-    listing = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", listing)
-    assert f"Found {len(shipped)} skill" in listing
-    assert all(name in listing for name in shipped)
-    assert "cross-model-review" not in listing
-    output = run([*npx, "add", "BiscuitBin/skills", "--agent", *agents, "--yes"], project, env)
+    for flags in UNNAMED_LISTINGS:
+        listing = plain(run([*NPX, "add", "BiscuitBin/skills", *flags], project, env))
+        assert f"Found {len(shipped)} skill" in listing
+        assert all(name in listing for name in shipped)
+        assert "cross-model-review" not in listing
+    output = run([*NPX, "add", "BiscuitBin/skills", "--agent", *agents, "--yes"], project, env)
     assert all(name in output for name in shipped)
     installs = []
     for agent in agents:
@@ -364,19 +374,82 @@ def install_skills(
     return installs
 
 
+def committed_clone(tmp_path: Path, env: dict[str, str]) -> Path:
+    """A clone of the committed tree, which the `BiscuitBin/skills` shorthand now resolves to."""
+    run([sys.executable, "-m", "skills_tooling.distribution", "--committed"], ROOT, env)
+    source = tmp_path / "source"
+    run(["git", "clone", "--no-local", str(ROOT), str(source)], tmp_path, env)
+    assert run(["git", "status", "--porcelain"], source, env) == ""
+    redirect_git_source(source, env)
+    return source
+
+
+def throwaway_project(tmp_path: Path, env: dict[str, str]) -> Path:
+    project = tmp_path / "project"
+    project.mkdir()
+    run(["git", "init", "--quiet"], project, env)
+    return project
+
+
+def test_full_depth_install_copies_only_shipped_skills(tmp_path: Path) -> None:
+    env = isolated_environment(tmp_path)
+    source = committed_clone(tmp_path, env)
+    project = throwaway_project(tmp_path, env)
+    shipped = {skill.name for skill in (source / "skills").iterdir() if skill.is_dir()}
+    run(
+        [*NPX, "add", "BiscuitBin/skills", "--full-depth", "--agent", "codex", "--yes"],
+        project,
+        env,
+    )
+    assert {path.name for path in (project / ".agents/skills").iterdir()} == shipped
+
+
+@pytest.mark.parametrize("flags", UNNAMED_LISTINGS, ids=["default", "full-depth"])
+def test_with_no_shipped_skills_the_listing_finds_nothing(
+    tmp_path: Path, flags: list[str]
+) -> None:
+    env = isolated_environment(tmp_path)
+    source = committed_clone(tmp_path, env)
+    run(["git", "rm", "-r", "--quiet", "skills"], source, env)
+    run(
+        [
+            "git",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "Ship nothing",
+        ],
+        source,
+        env,
+    )
+    project = throwaway_project(tmp_path, env)
+    # The installer treats an empty result as a failure, so this cannot go through run().
+    result = subprocess.run(
+        [*NPX, "add", "BiscuitBin/skills", *flags],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    output = plain(result.stdout + result.stderr)
+    assert "cross-model-review" not in output
+    assert "No skills found" in output
+    assert result.returncode == 1
+
+
 @pytest.mark.parametrize("agent", ["marketplace", "claude-code", "codex", "pi", "shared"])
 def test_committed_install_round_trip(
     tmp_path: Path, agent: str, record_property: Callable[[str, object], None]
 ) -> None:
     env = isolated_environment(tmp_path)
-    run([sys.executable, "-m", "skills_tooling.distribution", "--committed"], ROOT, env)
-    project = tmp_path / "project"
-    project.mkdir()
-    source = tmp_path / "source"
-    run(["git", "clone", "--no-local", str(ROOT), str(source)], project, env)
-    run(["git", "init", "--quiet"], project, env)
-    assert run(["git", "status", "--porcelain"], source, env) == ""
-    redirect_git_source(source, env)
+    source = committed_clone(tmp_path, env)
+    project = throwaway_project(tmp_path, env)
     # Every skill the clone ships, so a second skill is installed and checked too.
     expected = {
         skill.name: {
