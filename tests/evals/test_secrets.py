@@ -1,6 +1,7 @@
 """A fake secret reaches the agent, and never the results, transcripts or workspace."""
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -9,7 +10,7 @@ import pytest
 
 from skills_tooling.evals import workspace
 from skills_tooling.evals.claude_code import ClaudeCode
-from skills_tooling.evals.results import SecretLeakError, scrub, verify_clean
+from skills_tooling.evals.results import SecretLeakError, files_holding, scrub, verify_clean
 from skills_tooling.evals.runner import run_suite
 from tests.evals.fake_anthropic import serve, text, tool
 from tests.evals.test_runner import CASES, GOOD, TRIGGER, fake_root, settings
@@ -166,3 +167,35 @@ def test_failure_diagnostics_on_stdout_are_scrubbed(
     out = capsys.readouterr().out
     assert SECRET not in out
     assert "agent reported an error: [REDACTED]" in out
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+@pytest.mark.parametrize("mode", [0o000, 0o100, 0o200, 0o300, 0o400, 0o600])
+def test_a_directory_the_sweep_cannot_enter_raises_instead_of_passing(
+    tmp_path: Path, mode: int
+) -> None:
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    (locked / "token.txt").write_text(SECRET)
+    locked.chmod(mode)
+    try:
+        with pytest.raises(PermissionError):
+            files_holding(tmp_path, [SECRET])
+    finally:
+        locked.chmod(0o755)
+
+
+def test_the_sweep_reads_files_and_names_links_but_never_opens_anything_else(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "held").mkdir()
+    (tmp_path / "held/token.txt").write_text(SECRET)
+    (tmp_path / "clean.txt").write_text("moo")
+    os.mkfifo(tmp_path / "pipe")
+    (tmp_path / f"{SECRET}-file").symlink_to(tmp_path / "clean.txt")
+    (tmp_path / f"{SECRET}-dir").symlink_to(tmp_path / "held")
+    assert files_holding(tmp_path, [SECRET]) == [
+        tmp_path / "held/token.txt",
+        tmp_path / f"{SECRET}-dir",
+        tmp_path / f"{SECRET}-file",
+    ]

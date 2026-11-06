@@ -492,6 +492,21 @@ def test_a_read_after_pwd_must_print_more_than_pwd(tmp_path: Path) -> None:
     assert (trace.skills_triggered, trace.skills_invoked) == ([], ["cowsay"])
 
 
+def test_file_headers_alone_are_not_a_read(tmp_path: Path) -> None:
+    # Given several files, `tail -n 0` exits 0 and prints only their headers.
+    def replace_read(event: dict[str, Any]) -> dict[str, Any]:
+        item = event.get("item", {})
+        if "SKILL.md" in item.get("command", ""):
+            command = "tail -n 0 .agents/skills/cowsay/SKILL.md README.md"
+            output = "==> .agents/skills/cowsay/SKILL.md <==\n\n==> README.md <==\n"
+            event = {**event, "item": {**item, "command": command, "aggregated_output": output}}
+        return event
+
+    path = edited(tmp_path, "fake-should-trigger", replace_read)
+    trace = parse_stream(raw_run(path, without_invocations("fake-should-trigger")))
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], ["cowsay"])
+
+
 def test_a_record_header_a_tool_printed_starts_no_record() -> None:
     # Unchecked, the printed header reads as Codex's own event.
     assert "skill_invocation skill.name=fake skill.invocation_type=implicit" in kept_lines(

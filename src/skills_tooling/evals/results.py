@@ -6,11 +6,12 @@ rereads it all: a file that still holds a secret is deleted and the run fails.
 
 import json
 import os
-from typing import TYPE_CHECKING, Any
+import stat
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, NoReturn
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from pathlib import Path
 
 REDACTED = "[REDACTED]"
 
@@ -35,23 +36,33 @@ def write_json(path: Path, data: dict[str, Any], secrets: Iterable[str]) -> None
     write_text(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n", secrets)
 
 
+def _raise(error: OSError) -> NoReturn:
+    raise error
+
+
 def files_holding(directory: Path, secrets: Iterable[str]) -> list[Path]:
     """Files and symlinks under directory whose contents or path hold a secret.
 
-    The path too: the grader lists every output file by its path.
+    The path too: the grader lists every output file by its path. Raises OSError
+    for anything it cannot enter or read, so a locked directory never passes as clean.
     """
     needles = [s.encode() for s in secrets if s]
     if not needles:
         return []
     found = []
-    for path in sorted(directory.rglob("*")):
-        # is_symlink first: is_file follows the link, and a link is never read.
-        if path.is_symlink() or path.is_file():
-            name = os.fsencode(path.relative_to(directory))
-            data = b"" if path.is_symlink() else path.read_bytes()
-            if any(needle in name or needle in data for needle in needles):
-                found.append(path)
-    return found
+    # dirnames too: the walk lists a symlink to a directory there.
+    for parent, dirnames, filenames in os.walk(directory, onerror=_raise):
+        for entry in [*dirnames, *filenames]:
+            path = Path(parent, entry)
+            # lstat, not is_file: is_file hides a denied stat, and reports a link's target.
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode) or stat.S_ISREG(mode):
+                name = os.fsencode(path.relative_to(directory))
+                # A link is never read, nor a FIFO, which would hang.
+                data = path.read_bytes() if stat.S_ISREG(mode) else b""
+                if any(needle in name or needle in data for needle in needles):
+                    found.append(path)
+    return sorted(found)
 
 
 def verify_clean(directory: Path, secrets: Iterable[str]) -> None:

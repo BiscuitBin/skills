@@ -62,7 +62,7 @@ Every file `just eval` writes is already scrubbed of the run's credentials, and 
 - the values of the environment variables in `SCANNED_ENV` (`src/skills_tooling/evals/dispatch.py`): `CLAUDE_CODE_OAUTH_TOKEN` and `OPENAI_API_KEY`
 - the secret fields of the Codex login, `$CODEX_HOME/auth.json`
 
-It also fails on any symlink, because the upload would follow it. It prints only the names of the files that match, scrubbed, never a value, and exits 1. To scan for another secret, add its variable to `SCANNED_ENV` and to the **Scan** step's `env`.
+It also fails on any symlink, because the upload would follow it, and on any path it cannot read, because it cannot vouch for it. It prints only the names of the files that match, scrubbed, never a value, and exits 1. To scan for another secret, add its variable to `SCANNED_ENV` and to the **Scan** step's `env`.
 
 ## Cost
 

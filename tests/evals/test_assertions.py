@@ -130,6 +130,25 @@ def test_script_ran_fails_when_the_command_errored() -> None:
     assert not check(SCRIPT_RAN, trace(commands=[Command(RUN, ok=False, output=COW)]))
 
 
+def test_script_ran_fails_when_a_fallback_masks_the_failed_script() -> None:
+    masked = trace(
+        commands=[Command(f"{RUN} || echo fallback", ok=True, output=COW)],
+        python_calls=(replace(CALL, exit_code=2),),
+    )
+    assert not check(SCRIPT_RAN, masked)
+    no_args = trace(
+        commands=[
+            Command(
+                "python3 .claude/skills/cowsay/scripts/cowsay.py || echo fallback",
+                ok=True,
+                output="fallback",
+            )
+        ],
+        python_calls=(PythonCall(str(WORKSPACE), (CALL.argv[0],), exit_code=2),),
+    )
+    assert not check(Assertion("script_ran", script=SCRIPT), no_args)
+
+
 def test_script_ran_fails_without_a_python_call_for_the_installed_copy() -> None:
     assert not check(SCRIPT_RAN, trace(python_calls=()))
     elsewhere = PythonCall("/repo", ("skills/cowsay/scripts/cowsay.py", *ARGS))
@@ -235,6 +254,18 @@ def test_expected_output_never_waits_on_stdin_or_hangs(
     monkeypatch.setattr(assertions, "SCRIPT_TIMEOUT", 0.5)
     with pytest.raises(subprocess.TimeoutExpired):
         expected_script_output(tmp_path / "skill", "scripts/hangs.py", ())
+
+
+def test_expected_output_points_home_and_temp_at_the_throwaway_directory(tmp_path: Path) -> None:
+    scripts = tmp_path / "skill/scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "where.py").write_text(
+        "import pathlib, tempfile\n"
+        "cwd = pathlib.Path.cwd().resolve()\n"
+        "print(pathlib.Path(tempfile.gettempdir()).resolve() == cwd)\n"
+        "print(pathlib.Path.home().resolve() == cwd)\n"
+    )
+    assert expected_script_output(tmp_path / "skill", "scripts/where.py", ()) == "True\nTrue\n"
 
 
 def test_a_timed_out_script_leaves_no_descendants(

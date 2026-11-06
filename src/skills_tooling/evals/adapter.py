@@ -60,6 +60,7 @@ class PythonCall:
 
     cwd: str
     argv: tuple[str, ...]
+    exit_code: int = 0
 
 
 @dataclass(frozen=True)

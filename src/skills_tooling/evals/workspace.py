@@ -8,6 +8,7 @@ import os
 import shlex
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -18,9 +19,12 @@ from typing import TYPE_CHECKING
 from skills_tooling.evals.adapter import PythonCall, TrialPaths
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterator, Mapping
+    from types import FrameType
 
 GRACE_SECONDS = 2.0
+# Signals that end a run. SIGKILL cannot be caught; that limit is documented.
+TERMINATING = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 # Git sees neither the user's nor the system's config, so no hooks, helpers or
 # templates reach the workspace.
@@ -64,14 +68,16 @@ def create_trial(base: Path, run_id: str, case_id: str) -> TrialPaths:
 
 
 def _write_bin(trial: TrialPaths) -> None:
-    """python3 and python log each call, then run the harness's own interpreter."""
+    """python3 and python run the harness's own interpreter, then log the call and its status."""
     real = Path(sys.executable).resolve()
     log = shlex.quote(str(trial.python_log))
     wrapper = (
         "#!/bin/sh\n"
         "# Written by the eval harness: records this call for the script_ran assertion.\n"
-        f"{{ printf '%s{FIELD_END}' \"$PWD\" \"$@\"; printf '{RECORD_END}'; }} >>{log}\n"
-        f'exec {shlex.quote(str(real))} "$@"\n'
+        f'{shlex.quote(str(real))} "$@"\n'
+        "code=$?\n"
+        f'{{ printf \'%s{FIELD_END}\' "$PWD" "$code" "$@"; printf \'{RECORD_END}\'; }} >>{log}\n'
+        'exit "$code"\n'
     )
     for name in ("python3", "python"):
         path = trial.bin / name
@@ -80,6 +86,63 @@ def _write_bin(trial: TrialPaths) -> None:
     found = shutil.which("git", path=SYSTEM_PATH)
     if found is not None:
         (trial.bin / "git").symlink_to(found)
+
+
+@dataclass
+class _Termination:
+    """The signal that is ending the run, if any, and whether it may raise now."""
+
+    received: int | None = None
+    stoppable: bool = False
+
+    def stop_if_received(self) -> None:
+        if self.received is not None and self.stoppable:
+            # Cleared first: the unwinding runs cleanup, which no signal may interrupt.
+            self.stoppable = False
+            raise SystemExit(128 + self.received)
+
+
+_termination = _Termination()
+
+
+def _on_termination(signum: int, _frame: FrameType | None) -> None:
+    if _termination.received is None:
+        _termination.received = signum
+    _termination.stop_if_received()
+
+
+@contextlib.contextmanager
+def _stoppable() -> Iterator[None]:
+    _termination.stoppable = True
+    try:
+        _termination.stop_if_received()
+        yield
+    finally:
+        _termination.stoppable = False
+
+
+@contextlib.contextmanager
+def end_on_termination() -> Iterator[None]:
+    """While a run lasts, a terminating signal ends it without cutting cleanup short.
+
+    The signal raises SystemExit only while run_isolated waits on an agent, the
+    one wait worth breaking, so the `finally` blocks run as they do for any other
+    failure. Anywhere else it waits for the next agent or the end of the run, so
+    it cannot land inside cleanup. A signal already ignored, as under nohup, stays
+    ignored. Installed only here, so library callers and tests keep their handlers.
+    """
+    _termination.received = None
+    previous = {signum: signal.getsignal(signum) for signum in TERMINATING}
+    for signum, handler in previous.items():
+        if handler != signal.SIG_IGN:
+            signal.signal(signum, _on_termination)
+    try:
+        yield
+        with _stoppable():
+            pass
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 @dataclass(frozen=True)
@@ -99,11 +162,12 @@ def run_isolated(  # noqa: PLR0913 -- one keyword per stream and limit
     stderr: Path,
     timeout: float,
 ) -> Finished:
-    """Run argv in its own process group, and end the whole group on every path.
+    """Run argv in its own process group, and end the whole group however the wait ends.
 
     A descendant the agent started in the background would otherwise outlive the
     run, and could write files after the harness has checked them. One that
-    calls setsid leaves the group; that limit is documented.
+    calls setsid leaves the group, and a SIGKILL of the harness skips this; those
+    limits are documented.
     """
     started = time.monotonic()
     timed_out = False
@@ -118,7 +182,8 @@ def run_isolated(  # noqa: PLR0913 -- one keyword per stream and limit
             start_new_session=True,
         )
         try:
-            process.wait(timeout=timeout)
+            with _stoppable():
+                process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
         finally:
@@ -152,6 +217,25 @@ def _group_alive(group: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _grant(path: Path, bits: int) -> None:
+    """Add bits to path's mode, unless it is a link: chmod would follow it out of the trial."""
+    with contextlib.suppress(OSError):
+        mode = path.lstat().st_mode
+        if not stat.S_ISLNK(mode):
+            path.chmod(stat.S_IMODE(mode) | bits)
+
+
+def restore_access(root: Path) -> None:
+    """Give the owner back whatever the agent locked under root, as far as chmod can."""
+    _grant(root, stat.S_IRWXU)
+    # Top-down, so each directory opens before the walk descends into it.
+    for directory, dirnames, filenames in os.walk(root):
+        for name in dirnames:
+            _grant(Path(directory, name), stat.S_IRWXU)
+        for name in filenames:
+            _grant(Path(directory, name), stat.S_IRUSR | stat.S_IWUSR)
 
 
 def teardown(trial: TrialPaths) -> None:
@@ -208,6 +292,20 @@ def python_calls(trial: TrialPaths) -> tuple[PythonCall, ...]:
         raw = trial.python_log.read_text(errors="replace")
     except FileNotFoundError:
         return ()
-    # Each record is the cwd, then each argument, each ending in FIELD_END.
+    # Each record is the cwd, the exit status, then each argument, each ending in FIELD_END.
     records = [record.split(FIELD_END) for record in raw.split(RECORD_END)]
-    return tuple(PythonCall(f[0], tuple(f[1:-1])) for f in records if len(f) > 1)
+    return tuple(call for call in map(_python_call, records) if call is not None)
+
+
+def _python_call(fields: list[str]) -> PythonCall | None:
+    """The call in one record, or None for a malformed one, which counts as no run.
+
+    An argument can hold RECORD_END and the agent can write to the log, so a
+    record may be a fragment.
+    """
+    if len(fields) < 3:  # noqa: PLR2004 -- the cwd, the status and the final empty field
+        return None
+    try:
+        return PythonCall(fields[0], tuple(fields[2:-1]), int(fields[1]))
+    except ValueError:
+        return None

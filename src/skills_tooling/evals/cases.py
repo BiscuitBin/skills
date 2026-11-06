@@ -217,6 +217,8 @@ def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Cas
     # false is the default; two spellings of one thing are rejected.
     if "placeholder" in data and data["placeholder"] is not True:
         problems.append(f"{where}: placeholder must be true, or left out")
+    if kind == "trigger" and raw_assertions:
+        problems.append(f"{where}: assertions are allowed on behaviour cases only")
     if kind == "behaviour":
         if should is not True:
             problems.append(f"{where}: behaviour cases need should_trigger: true")

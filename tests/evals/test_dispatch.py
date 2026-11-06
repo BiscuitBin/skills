@@ -1,6 +1,7 @@
 """Planning a manual live-eval dispatch: changed-skill selection, input checks, the secret scan."""
 
 import json
+import os
 import subprocess
 import sys
 from typing import TYPE_CHECKING
@@ -304,6 +305,25 @@ def test_a_symlink_fails_the_scan(tmp_path: Path) -> None:
     result = run_dispatch("scan", str(directory), env={})
     assert result.returncode == 1
     assert "run/auth.json is a symlink" in result.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+@pytest.mark.parametrize("mode", [0o000, 0o600])
+def test_a_directory_the_scan_cannot_enter_fails_it_and_prints_no_path(
+    tmp_path: Path, mode: int
+) -> None:
+    directory = results_dir(tmp_path)
+    locked = directory / f"run/{TOKEN}"
+    locked.mkdir()
+    (locked / "x.txt").write_text("hi")
+    locked.chmod(mode)
+    try:
+        result = run_dispatch("scan", str(directory), env={"CLAUDE_CODE_OAUTH_TOKEN": TOKEN})
+    finally:
+        locked.chmod(0o755)
+    assert result.returncode == 1
+    assert "could not read every file" in result.stderr
+    assert TOKEN not in result.stdout + result.stderr
 
 
 def test_a_file_moved_out_of_a_skill_selects_it(tmp_path: Path) -> None:

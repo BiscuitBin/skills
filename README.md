@@ -31,7 +31,7 @@ npx skills@1.7.4 add BiscuitBin/skills --agent pi --yes
 ```
 
 Claude Code discovers the result in `.claude/skills/cowsay`; Codex and Pi use `.agents/skills/cowsay`.
-Invoke it with `/cowsay` in Claude Code, `$cowsay` in Codex, or `/skill:cowsay` in Pi.
+Invoke it with `/cowsay` in Claude Code, `$cowsay:cowsay` in Codex (it reads the skill's plugin manifest, so the name carries a prefix), or `/skill:cowsay` in Pi.
 Pi requires project trust before loading project skills.
 List available skills without installing with `npx skills@1.7.4 add BiscuitBin/skills --list`.
 
@@ -50,7 +50,7 @@ The [distribution reference](docs/reference/distribution.md) describes the manif
 
 **How Python is obtained.** You do not need Python installed. uv downloads the exact version in `.python-version` into `.tools/python`, and never uses a Python found on the host.
 
-**How Node is obtained.** Node is the one runtime you install yourself, at the exact version in `.node-version`. Any version manager that reads `.node-version` (fnm, nvm, mise, Volta) will pick it up. With any other version, `npm ci` stops with an engine error.
+**How Node is obtained.** Node is the one runtime you install yourself, at the exact version in `.node-version`. fnm reads `.node-version` as it stands. mise reads it only once you enable that with `mise settings add idiomatic_version_file_enable_tools node`, which changes your global mise config. nvm and Volta do not read it, so name the version yourself: `nvm install "$(cat .node-version)"`, or `volta install "node@$(cat .node-version)"`, which also changes your default Node. With any other version, `npm ci` stops with an engine error.
 
 ## Getting started
 
