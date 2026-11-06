@@ -11,7 +11,7 @@ Then the whole repo gets a cross-model adversarial review. Valid findings are fi
 
 **Blocked by:** 10 (Manual live-eval CI job), 11 (New-skill authoring workflow and docs).
 
-**Status:** awaiting the user's confirmation of the open items in Completion notes
+**Status:** done, except ticket 10's Codex secret-present dispatch, which the user accepted as open (see Completion notes)
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). A fresh-context subagent must perform the walkthrough with authenticated access to Claude Code and Codex, plus the configured grader when grading is enabled. Claude Code is also required for marketplace installation. The full-repo review and fix review require a reviewer from a different model family, plus separate reviewer and triage subagents.
 
@@ -19,7 +19,7 @@ Then the whole repo gets a cross-model adversarial review. Valid findings are fi
 
 **Walkthrough:**
 
-- [ ] A fresh-context subagent, given only the repo URL or a fresh clone and the instruction to follow the docs, completes these steps:
+- [x] A fresh-context subagent, given only the repo URL or a fresh clone and the instruction to follow the docs, completes these steps:
   - `just initialize` and `just check`, both green
   - `just eval cowsay` on Claude Code and Codex, all passing
   - `just eval-report`
@@ -37,7 +37,7 @@ Then the whole repo gets a cross-model adversarial review. Valid findings are fi
 - [x] A cross-model adversarial review covers the whole repo, not just a diff. It is checked against the foundation goals in the research notes and every earlier ticket's acceptance criteria.
 - [x] Every finding is triaged, valid fixes are applied, and `just check` is green afterwards.
 - [x] Residual gaps, deferred items and out-of-scope findings are written as follow-up notes in the foundation scratch folder. The deferred items are description-routing evals, description optimisation, a catalogue site, a Codex package manifest, a custom installer, and the Pi adapter and evals (future ticket 07).
-- [ ] Every ticket in the foundation set has its completion notes and a done status, except where a mandatory criterion is still unmet. Those criteria are listed by ticket in this ticket's completion notes as open, not as follow-ups, and the user confirms them before the foundation is called done.
+- [x] Every ticket in the foundation set has its completion notes and a done status, except where a mandatory criterion is still unmet. Those criteria are listed by ticket in this ticket's completion notes as open, not as follow-ups, and the user confirms them before the foundation is called done.
 
 ## Review checkpoints
 
@@ -71,7 +71,7 @@ Fresh `general-purpose` subagents, one per round, each given only a fresh clone 
 **Deviations and limits:**
 
 - **Hand-off.** The criterion says the subagent completes the step. By your decision, the session never held the token: each round's agent wrote the credential and eval commands to a hand-off file, you ran them in your terminal, and the agent read `eval-results/`. So `read -rs` and `codex login` were run by you, and the agent saw neither them nor the exit codes.
-- **Not confirmed:** whether `just run ./node_modules/.bin/claude setup-token` and `read -rs` work as `docs/how-to/run-evals.md` says. See the open items.
+- **Confirmed by you at sign-off:** `setup-token` through `just run` and `read -rs` both work as the guide says.
 - **The one pre-emptive doc fix.** Before any walkthrough, commit 5e3ba9b added the "Check the install channels from a checkout" section, because the README's bare `claude` and `npx` would have written the marketplace to the real `~/.claude/plugins`. Every other gap was left for the walkthrough to find.
 - **What "installed through `npx skills`" means here.** The agents used the pinned `node_modules/.bin/skills` from the checkout, the docs' route for a clone. The literal `npx skills@1.7.4` and the README's end-user commands were not run, to stay out of the real homes. `tests/test_distribution.py` covers the hosted Git-source shorthand. `BiscuitBin/skills` was tried by hand once before round 1.
 - **Round 4's brief differed.** To stop logging choices the docs settle and agents' own extra checks, the brief narrowed what to log, and step 3 asked for a report showing the new runs. "None" therefore reads against that narrower rule.
@@ -178,14 +178,12 @@ The first pass returned 3 findings in 6 minutes, so the plan's by-area passes fo
 
 `just check` in this worktree, on this commit's tree: 869 passed, 2 skipped in 205.01s (0:03:25). Only ticket text changed since. Round 4 also ran it in a clean clone at fb7f76e: 869 passed, 2 skipped. Round 4 was before this commit's ticket-only changes.
 
-### Open items, for you to confirm
+### Open items and sign-off
 
 **Ticket 10, mandatory criterion, recorded by your decision:** the Codex secret-present dispatch has not been shown, because `OPENAI_API_KEY` is unset, and neither has an API-key login's trial auth. Ticket 10 stays "done, except", and it is also in the follow-ups as the action to take.
 
-**Ticket 12, to confirm:**
+**Ticket 12, confirmed by you on 2026-11-05:**
 
-- That the hand-off deviation satisfies "a fresh-context subagent completes these steps". That criterion stays unticked until you say so.
-- That `setup-token` through `just run` and `read -rs` work as the guide says. You ran `read -rs` and may have run `setup-token`, and only you saw them. If either misbehaved, the guide needs fixing.
-- That ticket 10's open item is acceptable for calling the foundation done.
-
-Ticket 12 is not marked done until you confirm these.
+- The hand-off meets "a fresh-context subagent completes these steps". It stays recorded as a deviation under Walkthrough.
+- `setup-token` through `just run` and `read -rs` both work as `docs/how-to/run-evals.md` says.
+- The foundation is done with ticket 10's open item still open.
