@@ -332,3 +332,23 @@ def test_a_file_moved_out_of_a_skill_selects_it(tmp_path: Path) -> None:
     git(root, "mv", "skills/haiku/SKILL.md", "docs/haiku.md")
     git(root, "commit", "--quiet", "-m", "move")
     assert dispatch.changed(root, "main") == ["haiku"]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+@pytest.mark.parametrize("kind", ["directory", "file"])
+def test_a_path_the_scan_cannot_read_fails_it_with_no_secret_configured(
+    tmp_path: Path, kind: str
+) -> None:
+    directory = results_dir(tmp_path)
+    locked = directory / "locked"
+    if kind == "directory":
+        locked.mkdir()
+    else:
+        locked.write_text("moo")
+    locked.chmod(0)
+    try:
+        result = run_dispatch("scan", str(directory), env={})
+    finally:
+        locked.chmod(0o755)
+    assert result.returncode == 1
+    assert "could not read every file" in result.stderr

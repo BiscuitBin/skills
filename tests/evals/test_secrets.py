@@ -199,3 +199,19 @@ def test_the_sweep_reads_files_and_names_links_but_never_opens_anything_else(
         tmp_path / f"{SECRET}-dir",
         tmp_path / f"{SECRET}-file",
     ]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+def test_a_results_path_it_cannot_read_deletes_the_rest_and_names_no_secret(tmp_path: Path) -> None:
+    (tmp_path / "leaked.json").write_text(SECRET)
+    locked = tmp_path / f"d-{SECRET}"
+    locked.mkdir()
+    locked.chmod(0)
+    try:
+        with pytest.raises(SecretLeakError) as raised:
+            verify_clean(tmp_path, [SECRET])
+    finally:
+        locked.chmod(0o755)
+    assert SECRET not in str(raised.value)
+    assert "could not be deleted" in str(raised.value)
+    assert not (tmp_path / "leaked.json").exists()

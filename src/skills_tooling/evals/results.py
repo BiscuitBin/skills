@@ -6,6 +6,7 @@ rereads it all: a file that still holds a secret is deleted and the run fails.
 
 import json
 import os
+import shutil
 import stat
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
@@ -17,7 +18,7 @@ REDACTED = "[REDACTED]"
 
 
 class SecretLeakError(Exception):
-    """A results file still held a secret after scrubbing; it has been deleted."""
+    """A results file held a secret after scrubbing, or could not be checked; it was deleted."""
 
 
 def scrub(text: str, secrets: Iterable[str]) -> str:
@@ -47,8 +48,6 @@ def files_holding(directory: Path, secrets: Iterable[str]) -> list[Path]:
     for anything it cannot enter or read, so a locked directory never passes as clean.
     """
     needles = [s.encode() for s in secrets if s]
-    if not needles:
-        return []
     found = []
     # dirnames too: the walk lists a symlink to a directory there.
     for parent, dirnames, filenames in os.walk(directory, onerror=_raise):
@@ -66,9 +65,19 @@ def files_holding(directory: Path, secrets: Iterable[str]) -> list[Path]:
 
 
 def verify_clean(directory: Path, secrets: Iterable[str]) -> None:
-    """Delete, and raise for, every file under directory that holds a secret."""
+    """Delete, and raise for, every file under directory that holds a secret.
+
+    A path it cannot read could hold one, so the whole directory goes.
+    """
     secrets = list(secrets)
-    leaked = files_holding(directory, secrets)
+    try:
+        leaked = files_holding(directory, secrets)
+    except OSError as error:
+        # The type only: the message could quote a path, which may hold a secret.
+        shutil.rmtree(directory, ignore_errors=True)
+        state = "some of it could not be deleted" if directory.exists() else "deleted"
+        msg = f"could not check every results file for secrets ({type(error).__name__}); {state}"
+        raise SecretLeakError(msg) from None
     for path in leaked:
         path.unlink()
     if leaked:

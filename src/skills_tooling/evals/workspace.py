@@ -171,6 +171,9 @@ def run_isolated(  # noqa: PLR0913 -- one keyword per stream and limit
     """
     started = time.monotonic()
     timed_out = False
+    # A signal that arrived outside a wait ends the run before this agent starts.
+    with _stoppable():
+        pass
     with stdout.open("wb") as out, stderr.open("wb") as err:
         process = subprocess.Popen(  # noqa: S603 -- argv is built by the adapter
             argv,
