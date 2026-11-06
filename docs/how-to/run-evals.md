@@ -1,8 +1,8 @@
 # Run a skill's evals
 
-This guide runs an existing skill's eval cases on Claude Code and Codex, reads the results and builds the report. It uses `cowsay`; any skill in `evals/` works the same way. [Evals](../reference/evals.md) describes every option and file.
+This guide runs an existing skill's eval cases on Claude Code and Codex, reads the results and builds the report. It uses `cowsay`; any skill in `evals/` works the same way. Run every command from the repository root. [Evals](../reference/evals.md) describes every option and file.
 
-These runs call paid models. Run `just eval cowsay --agent claude --dry-run` to see what a run would call and its spend cap. It needs no credentials.
+These runs call paid models. Run `just eval cowsay --agent claude --dry-run` to see what a run would call and its spend cap, and the same with `--agent codex`. It needs no credentials. Codex agent calls have no per-call cap, and the results do not record what a run cost. The `cowsay` cases took one to two minutes per agent when measured.
 
 ## 1. Set up the credentials
 
@@ -48,7 +48,7 @@ Each run writes `eval-results/<run-id>/`, and its `results.json` and `benchmark.
 just run uv run --frozen python -c 'import json, sys; r = json.load(open(sys.argv[1])); t = r["trials"]; print(r["agent"], sum(x["passed"] is True for x in t), "of", len(t), "trials passed")' eval-results/<run-id>/results.json
 ```
 
-It prints, for example, `claude 9 of 9 trials passed`.
+It prints, for example, `claude 9 of 9 trials passed`. The first word is the agent, so this is also how to tell which run is which for the next step.
 
 ## 4. Build the report
 

@@ -96,10 +96,11 @@ just run sh -c 'mkdir -p .tools/tmp/install-check && cd .tools/tmp/install-check
 ```
 
 It reports `Successfully installed plugin: cowsay@biscuitbin-skills (scope: project)`.
-The project's `.claude/settings.json` now enables the plugin, and the plugin
+Its `declared in user settings` line refers to the project's Claude Code home,
+`.tools/agent-homes/claude/settings.json`, not your own. The project's `.claude/settings.json` now enables the plugin, and the plugin
 itself is cached in `.tools/agent-homes/claude/plugins/cache/`.
 
-Install it through `skills`, once per agent:
+Install it through `skills`, the binary that `npx skills@1.7.4` runs, once per agent:
 
 ```sh
 just run sh -c 'cd .tools/tmp/install-check && DO_NOT_TRACK=1 ../../../node_modules/.bin/skills add ../../.. --agent claude-code --yes'
@@ -115,11 +116,10 @@ for each agent.
 
 `../../..` is this checkout, which is the form to use unless you are checking a
 release. To check what is published on GitHub, replace it with `BiscuitBin/skills`
-in the `marketplace add` and `skills add` commands. The pinned `skills` binary is
-the same version as the README's `npx skills@1.7.4`.
+in the `marketplace add` and `skills add` commands.
 
-Remove the plugin, the marketplace, the plugin's cache and the throwaway project
-when you finish:
+When you have checked the results, remove the plugin, the marketplace, the
+plugin's cache and the throwaway project:
 
 ```sh
 just run sh -c 'cd .tools/tmp/install-check && ../../../node_modules/.bin/claude plugin uninstall cowsay@biscuitbin-skills --scope project && ../../../node_modules/.bin/claude plugin marketplace remove biscuitbin-skills'

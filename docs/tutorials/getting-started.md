@@ -32,7 +32,7 @@ Nothing has been staged, committed, tagged, or pushed.
 just check
 ```
 
-This checks the lockfiles, runs every lint and format check, then mypy, pytest, and prints the version of each pinned agent CLI. When every step passes, your setup matches CI's. pytest reports a few skipped tests on a developer machine, which is expected: the contamination canaries plant files in `/etc/claude-code`, so they run only in CI.
+This checks the lockfiles, runs every lint and format check, then mypy, pytest, and prints the version of each pinned agent CLI. When every step passes, your setup matches CI's. pytest reports a few skipped tests on a developer machine, which is expected: the contamination canaries plant files in `/etc/claude-code`, so they run only in CI. `ai_tmp/pytest.xml` gives the reason for each skip.
 
 ## Next
 
