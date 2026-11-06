@@ -1,6 +1,7 @@
 """Per-trial isolation: the workspace, the homes, the constructed PATH and teardown."""
 
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -352,10 +353,15 @@ def test_a_signal_to_the_python_wrapper_reaches_the_interpreter(tmp_path: Path) 
     assert workspace.python_calls(trial)[-1].exit_code == 3
 
 
-def test_the_python_wrapper_passes_stdin_to_the_interpreter(tmp_path: Path) -> None:
+# dash is /bin/sh on Ubuntu, and gives a background job /dev/null as stdin.
+SHELLS = [name for name in ("sh", "dash", "bash") if shutil.which(name)]
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_python_wrapper_passes_stdin_to_the_interpreter(tmp_path: Path, shell: str) -> None:
     trial = workspace.create_trial(tmp_path, "run", "case")
     done = subprocess.run(
-        [str(trial.bin / "python3"), "-c", "import sys; print(sys.stdin.read().upper())"],
+        [shell, str(trial.bin / "python3"), "-c", "import sys; print(sys.stdin.read().upper())"],
         env={"PATH": "/usr/bin:/bin"},
         input="moo",
         capture_output=True,
@@ -364,3 +370,34 @@ def test_the_python_wrapper_passes_stdin_to_the_interpreter(tmp_path: Path) -> N
         check=True,
     )
     assert done.stdout == "MOO\n"
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_python_wrapper_runs_with_stdin_closed(tmp_path: Path, shell: str) -> None:
+    trial = workspace.create_trial(tmp_path, "run", "case")
+    done = subprocess.run(
+        [shell, str(trial.bin / "python3"), "-c", "raise SystemExit(7)"],
+        env={"PATH": "/usr/bin:/bin"},
+        preexec_fn=lambda: os.close(0),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert (done.returncode, done.stderr) == (7, "")
+    assert workspace.python_calls(trial)[-1].exit_code == 7
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_python_wrapper_does_not_leak_its_stdin_copy(tmp_path: Path, shell: str) -> None:
+    trial = workspace.create_trial(tmp_path, "run", "case")
+    done = subprocess.run(
+        [shell, str(trial.bin / "python3"), "-c", "import os; print(os.get_inheritable(9))"],
+        env={"PATH": "/usr/bin:/bin"},
+        input="",
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert "Bad file descriptor" in done.stderr

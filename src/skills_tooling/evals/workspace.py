@@ -75,9 +75,14 @@ def _write_bin(trial: TrialPaths) -> None:
         "#!/bin/sh\n"
         "# Written by the eval harness: records this call for the script_ran assertion.\n"
         # In the background so a trap can run while it waits, which ignores SIGINT in
-        # the child: every signal goes on as SIGTERM, and stdin needs passing explicitly.
-        f'{shlex.quote(str(real))} "$@" <&0 &\n'
+        # the child: every signal goes on as SIGTERM. A background job's stdin is
+        # /dev/null, and in dash `<&0` then copies that, so stdin goes through fd 9.
+        # The subshell tries the copy first: a failed `exec` redirection ends the shell.
+        "exec 9</dev/null\n"
+        "(exec 9<&0) 2>/dev/null && exec 9<&0\n"
+        f'{shlex.quote(str(real))} "$@" <&9 9<&- &\n'
         "child=$!\n"
+        "exec 9<&-\n"
         "trap 'kill -TERM \"$child\" 2>/dev/null' TERM INT HUP\n"
         'wait "$child"\n'
         "code=$?\n"
