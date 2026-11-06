@@ -310,9 +310,7 @@ def test_teardown_removes_homes_and_keeps_the_workspace(tmp_path: Path) -> None:
 def test_a_pending_signal_starts_no_agent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # A fresh state: the signal would otherwise stay recorded for later tests.
     monkeypatch.setattr(workspace, "_termination", workspace._Termination())
-    monkeypatch.setattr(
-        workspace.subprocess, "Popen", lambda *_args, **_kwargs: pytest.fail("launched")
-    )
+    monkeypatch.setattr(subprocess, "Popen", lambda *_args, **_kwargs: pytest.fail("launched"))
     with pytest.raises(SystemExit) as stopped, workspace.end_on_termination():
         os.kill(os.getpid(), signal.SIGTERM)
         workspace.run_isolated(
