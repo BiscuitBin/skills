@@ -6,7 +6,7 @@ The repo also gets its agent instructions, a documentation skeleton, the first A
 
 **Blocked by:** None (can start immediately). Ticket 01 runs in parallel and also writes the agent instructions file. Whichever ticket lands second merges the other's section, and neither overwrites the other.
 
-**Status:** done, except the CI criterion, which needs the first run on the PR
+**Status:** done
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). The pinned Claude Code and Codex CLIs must be installed for version checks; Pi's pin was removed ([ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md)). Authenticated live agent runs are not required outside the cross-model review checkpoint below.
 
@@ -37,7 +37,7 @@ The repo also gets its agent instructions, a documentation skeleton, the first A
   - the MIT licence
 - [x] The glossary defines skill, dev skill, eval case, trial, run, adapter, grader, baseline, benchmark, trigger and contamination, each in a sentence or two.
 - [x] A LICENSE file (MIT) is present, and the README describes the repo's purpose and how to start.
-- [ ] A PR CI workflow runs `just check` on Linux. It uses pinned action versions and needs no secrets.
+- [x] A PR CI workflow runs `just check` on Linux. It uses pinned action versions and needs no secrets.
 - [x] Agent scratch output, the tools folder, eval workspaces and eval results are gitignored.
 
 ## Review checkpoints
@@ -55,7 +55,7 @@ Use the repo's cross-model adversarial review skill from ticket 01. If it isn't 
 
 Implemented on branch `02-project-local-toolchain` by Claude Code running Claude Opus 5.5 (`claude-opus-5-5`). Commits: `c6aaaf0` (toolchain), `f3121b8` (hook through just), `1cd2e3e` (review fixes), `0aae982` (code-review fixes), `24cad2f` (re-review fixes).
 
-**Open:** the CI workflow (`.github/workflows/ci.yml`) has not run yet, because the branch has not been pushed. Its criterion stays unticked until the first PR run is green on `ubuntu-24.04`.
+**Closed by ticket 12:** the workflow's `just check (ubuntu-24.04)` job is green in run [41983369769](https://github.com/BiscuitBin/skills/actions/runs/41983369769), on `bd18420`. At the time of this ticket it had not run, because the branch had not been pushed.
 
 ### Where things landed
 
