@@ -621,7 +621,7 @@ def main() -> int:
     if args.paths:
         skills = [(path, not args.dev) for path in args.paths]
     else:
-        for root in (Path("skills"), Path("dev-skills")):
+        for root in (Path("skills"), Path("dev-skills/build")):
             try:
                 skills.extend(
                     (path, root.name == "skills")

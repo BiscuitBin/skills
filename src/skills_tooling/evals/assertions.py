@@ -52,7 +52,7 @@ def expected_script_output(skill_dir: Path, script: str, args: tuple[str, ...]) 
         done = workspace.run_isolated(
             argv,
             cwd=Path(scratch),
-            env={"PATH": "/usr/bin:/bin", "PYTHONUTF8": "1"},
+            env={"PATH": "/usr/bin:/bin", "PYTHONUTF8": "1", "HOME": scratch, "TMPDIR": scratch},
             stdout=out,
             stderr=err,
             timeout=SCRIPT_TIMEOUT,
@@ -150,7 +150,7 @@ def _same_script(argument: str, script: str) -> bool:
     """Whether the two paths agree on their trailing parts, as after `cd scripts`.
 
     The wrapper's log, resolved against the real working directory, is what
-    proves the installed copy ran; this only ties the command to the script.
+    proves the installed copy ran and exited 0; this only ties the command to the script.
     """
     have, want = Path(argument).parts, Path(script).parts
     shorter = min(len(have), len(want))
@@ -166,6 +166,8 @@ def _runs_script(command: Command, script: str) -> bool:
 
 
 def _called(call: PythonCall, target: Path, args: tuple[str, ...] | None) -> bool:
+    if call.exit_code != 0:
+        return False
     found = _script_argument(["python3", *call.argv])
     if found is None or (Path(call.cwd) / found[0]).resolve() != target:
         return False
@@ -200,7 +202,7 @@ def _script_ran(
         return AssertionResult(
             "script_ran",
             passed=False,
-            evidence=f"the trial's python3 never ran {target} with the case's text",
+            evidence=f"the trial's python3 never ran {target} with the case's text and exit 0",
         )
     return AssertionResult("script_ran", passed=True, evidence=good[0].command)
 

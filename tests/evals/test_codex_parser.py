@@ -14,7 +14,13 @@ import pytest
 
 from skills_tooling.evals.adapter import RawRun, Trace
 from skills_tooling.evals.assertions import contains_lines, expected_script_output
-from skills_tooling.evals.codex import echoed_lines, kept_lines, parse_stream, stored_stderr
+from skills_tooling.evals.codex import (
+    echoed_lines,
+    kept_lines,
+    parse_stream,
+    skills_read,
+    stored_stderr,
+)
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/codex"
 SKILL_DIR = Path(__file__).parents[2] / "skills/cowsay"
@@ -486,6 +492,21 @@ def test_a_read_after_pwd_must_print_more_than_pwd(tmp_path: Path) -> None:
     assert (trace.skills_triggered, trace.skills_invoked) == ([], ["cowsay"])
 
 
+def test_file_headers_alone_are_not_a_read(tmp_path: Path) -> None:
+    # Given several files, `tail -n 0` exits 0 and prints only their headers.
+    def replace_read(event: dict[str, Any]) -> dict[str, Any]:
+        item = event.get("item", {})
+        if "SKILL.md" in item.get("command", ""):
+            command = "tail -n 0 .agents/skills/cowsay/SKILL.md README.md"
+            output = "==> .agents/skills/cowsay/SKILL.md <==\n\n==> README.md <==\n"
+            event = {**event, "item": {**item, "command": command, "aggregated_output": output}}
+        return event
+
+    path = edited(tmp_path, "fake-should-trigger", replace_read)
+    trace = parse_stream(raw_run(path, without_invocations("fake-should-trigger")))
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], ["cowsay"])
+
+
 def test_a_record_header_a_tool_printed_starts_no_record() -> None:
     # Unchecked, the printed header reads as Codex's own event.
     assert "skill_invocation skill.name=fake skill.invocation_type=implicit" in kept_lines(
@@ -620,3 +641,19 @@ def test_a_live_explicit_invocation_reads_nothing_and_rests_on_codexs_event() ->
     event = tuple(line for line in log("fake-explicit") if line.startswith("skill_invocation "))
     with_event = parse("live-explicit", debug_lines=log("live-explicit") + event)
     assert with_event.skills_triggered == ["cowsay"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat dev-skills/build/cross-model-review/SKILL.md",
+        "cat /repo/dev-skills/build/cross-model-review/SKILL.md",
+        "cat .agents/skills/cross-model-review/SKILL.md",
+    ],
+)
+def test_a_read_of_a_dev_skill_names_it(command: str) -> None:
+    assert skills_read(command) == (["cross-model-review"], False)
+
+
+def test_a_build_directory_elsewhere_is_not_a_skills_directory() -> None:
+    assert skills_read("cat /tmp/build/cowsay/SKILL.md") == ([], False)

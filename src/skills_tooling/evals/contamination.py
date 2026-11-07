@@ -64,7 +64,7 @@ def never_appear(
     skills |= dict.fromkeys(
         (n for n in _names(repo_root / "skills") if n != skill), "another shipped skill"
     )
-    skills |= dict.fromkeys(_names(repo_root / "dev-skills"), "dev skill")
+    skills |= dict.fromkeys(_names(repo_root / "dev-skills/build"), "dev skill")
     # The user's own instruction files sit above every trial too: with loading
     # on, the CLI reads ~/.claude/CLAUDE.md as an ancestor's project instructions.
     candidates = [repo_root / name for name in INSTRUCTION_FILES]

@@ -67,7 +67,7 @@ ban-relative-imports = "all"
 "skills/**/scripts/*.py" = ["INP001"]
 "tests/**" = ["INP001", "PLR2004", "S101", "S105", "S603", "SLF001"]
 # The review script exists to run git and the reviewer CLIs.
-"dev-skills/cross-model-review/scripts/review.py" = ["S603", "S607"]
+"dev-skills/build/cross-model-review/scripts/review.py" = ["S603", "S607"]
 
 [tool.ruff.format]
 quote-style = "double"

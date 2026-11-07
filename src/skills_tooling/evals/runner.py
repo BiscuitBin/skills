@@ -343,6 +343,15 @@ def _scorable(record: Mapping[str, Any]) -> bool:
     return benchmark.exclusion(record) is None
 
 
+def _sweep(trial: TrialPaths, secrets: list[str]) -> tuple[list[Path], str]:
+    """The trial's files that hold a secret, and why it could not be swept, or ""."""
+    try:
+        return results.files_holding(trial.root, secrets), ""
+    except OSError as error:
+        # The type only: the message could quote a path, which may hold a secret.
+        return [], f"could not sweep the trial for secrets: {type(error).__name__}"
+
+
 def run_trial(
     settings: RunSettings,
     planned: Planned,
@@ -391,21 +400,26 @@ def run_trial(
         if trial is not None:
             # Before teardown removes the trial's home, on every path.
             unreadable = _collect_credentials(settings.adapter, trial, secrets, credentials)
+            # The agent can lock its own output, which rmtree and the sweep cannot enter.
+            workspace.restore_access(trial.root)
             workspace.teardown(trial)
-            leaked = results.files_holding(trial.root, secrets)
+            leaked, unswept = _sweep(trial, secrets)
+            unreadable = unreadable or unswept
             if leaked or unreadable:
                 # Anywhere in the trial, not only the workspace, so all of it goes.
                 shutil.rmtree(trial.root, ignore_errors=True)
             if leaked:
                 record["secret_found"] = {
                     "files": [path.relative_to(trial.root).as_posix() for path in leaked],
-                    "deleted": not trial.root.exists(),
+                    "deleted": results.gone(trial.root),
                 }
             if unreadable:
                 # A token the sweep cannot know of may be in the evidence, so none is kept.
                 if record["transcript"] is not None:
                     (settings.root / record["transcript"]).unlink(missing_ok=True)
                 record.pop("stderr", None)
+                if not results.gone(trial.root):
+                    unreadable += "; the trial directory could not be deleted"
                 record |= _not_scored(case, planned.arm, unreadable, [])
                 record["transcript"] = None
         record["finished_at"] = _now()

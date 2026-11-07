@@ -109,7 +109,7 @@ def test_a_run_already_recorded_is_refused_under_another_name(tmp_path: Path) ->
 @pytest.mark.parametrize("name", ["", ".hidden", "a/b", "../up", "with space", "unrecorded"])
 def test_an_iteration_name_must_be_a_plain_file_name(tmp_path: Path, name: str) -> None:
     run_id = stored_run(tmp_path, "paired")
-    with pytest.raises(HistoryError, match="iteration name"):
+    with pytest.raises(HistoryError, match=r"start with a letter or digit.*reserved"):
         record(tmp_path, name, [run_id], now=NOW)
 
 
@@ -148,6 +148,44 @@ def test_a_damaged_iteration_file_is_a_history_error(tmp_path: Path, missing: st
     path.write_text(json.dumps(data))
     with pytest.raises(HistoryError, match="not a schema-1 iteration"):
         load(tmp_path, "cowsay")
+
+
+def damage_first_run(path: Path, edit: Callable[[dict[str, Any]], None]) -> None:
+    data = json.loads(path.read_text())
+    edit(data["runs"][0])
+    path.write_text(json.dumps(data))
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "run_id",
+        "agent",
+        "started_at",
+        "trials_per_case",
+        "baseline",
+        "provenance",
+        "cases",
+        "benchmark",
+    ],
+)
+def test_a_run_missing_a_key_the_report_reads_is_a_history_error(
+    tmp_path: Path, missing: str
+) -> None:
+    path = record(tmp_path, "first", [stored_run(tmp_path, "paired")], now=NOW)
+    damage_first_run(path, lambda run: run.pop(missing))
+    with pytest.raises(HistoryError, match="not a schema-1 iteration"):
+        load(tmp_path, "cowsay")
+
+
+def test_recording_beside_an_iteration_with_an_emptied_run_is_a_history_error(
+    tmp_path: Path,
+) -> None:
+    path = record(tmp_path, "first", [stored_run(tmp_path, "paired")], now=NOW)
+    damage_first_run(path, lambda run: run.clear())
+    second = stored_run(tmp_path, "paired", run_id="20261102T000000Z-0002")
+    with pytest.raises(HistoryError, match="not a schema-1 iteration"):
+        record(tmp_path, "second", [second], now=NOW)
 
 
 def test_unrecorded_runs_assemble_into_an_iteration_that_is_not_written(

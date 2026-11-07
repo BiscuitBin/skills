@@ -121,7 +121,7 @@ def test_generated_files_are_already_formatted(root: Path) -> None:
         ("-tea", "leading or trailing hyphen"),
         ("t" * 65, "expected 1-64"),
         ("cowsay", "skills/cowsay already exists"),
-        ("cross-model-review", "dev-skills/cross-model-review already exists"),
+        ("cross-model-review", "dev-skills/build/cross-model-review already exists"),
     ],
 )
 def test_a_bad_name_is_rejected_and_nothing_is_written(root: Path, name: str, reason: str) -> None:

@@ -32,8 +32,8 @@ Nothing has been staged, committed, tagged, or pushed.
 just check
 ```
 
-This checks the lockfiles, runs every lint and format check, then mypy, pytest, and prints the version of each pinned agent CLI. When every step passes, your setup matches CI's.
+This checks the lockfiles, runs every lint and format check, then mypy, pytest, and prints the version of each pinned agent CLI. When every step passes, your setup matches CI's. pytest reports 2 skipped tests on a developer machine, which is expected: the contamination canaries plant files in `/etc/claude-code`, so they run only in CI. `ai_tmp/pytest.xml` gives the reason for each skip.
 
 ## Next
 
-Run `just` on its own to list every recipe, or read the [commands reference](../reference/commands.md).
+Run `just` on its own to list every recipe, or read the [commands reference](../reference/commands.md). To go further, [run a skill's evals](../how-to/run-evals.md), [check the install channels](../reference/distribution.md#check-the-install-channels-from-a-checkout) or [write your first skill](first-skill.md).

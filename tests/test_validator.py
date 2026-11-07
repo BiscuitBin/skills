@@ -328,9 +328,9 @@ def test_cli_error_status_and_warning_status(tmp_path: Path) -> None:
 
 
 def test_default_discovery_checks_dev_and_shipped_but_not_nested_resources(tmp_path: Path) -> None:
-    for root in ("skills", "dev-skills"):
+    for root in ("skills", "dev-skills/build"):
         directory = tmp_path / root
-        directory.mkdir()
+        directory.mkdir(parents=True)
         skill = materialize(
             directory,
             {
@@ -347,7 +347,7 @@ def test_default_discovery_checks_dev_and_shipped_but_not_nested_resources(tmp_p
         check=False,
     )
     assert result.returncode == 0 and "Validated 2 skills" in result.stdout
-    (tmp_path / "dev-skills/example/SKILL.md").unlink()
+    (tmp_path / "dev-skills/build/example/SKILL.md").unlink()
     result = subprocess.run(
         [sys.executable, "-m", "skills_tooling.validator"],
         cwd=tmp_path,
@@ -503,7 +503,7 @@ def test_discovery_missing_roots_is_actionable(tmp_path: Path) -> None:
     )
     assert result.returncode == 1
     assert "skills: error [discovery]" in result.stdout
-    assert "dev-skills: error [discovery]" in result.stdout
+    assert "dev-skills/build: error [discovery]" in result.stdout
     assert "hint:" in result.stdout and "repository root" in result.stdout
     assert "Traceback" not in result.stderr
 
@@ -588,7 +588,7 @@ def test_entrypoint_requires_exact_case_in_api_and_discovery(
     tmp_path: Path, entrypoint: str
 ) -> None:
     (tmp_path / "skills").mkdir()
-    (tmp_path / "dev-skills").mkdir()
+    (tmp_path / "dev-skills/build").mkdir(parents=True)
     skill = materialize(tmp_path / "skills", {"yaml": "name: example\ndescription: Example.\n"})
     temporary = skill / "entrypoint.tmp"
     (skill / "SKILL.md").rename(temporary)

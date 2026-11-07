@@ -1,9 +1,19 @@
 # Distribution
 
 The Claude Code marketplace and `npx skills` ship every skill in `skills/`, currently `skills/cowsay/`.
-Dev skills stay in `dev-skills/`, exposed to repository agents through relative
+Dev skills stay in `dev-skills/build/`, exposed to repository agents through relative
 symlinks in `.claude/skills/` and `.agents/skills/`. They are excluded from both
-installation channels. See [ADR 0010](../adr/0010-distribution-boundaries.md).
+installation channels when no skill is named. See [ADR 0010](../adr/0010-distribution-boundaries.md)
+and [ADR 0015](../adr/0015-dev-skills-under-build.md).
+
+`build` is not generated output: the folder is tracked, and nothing writes to it.
+The name matters because `skills@1.7.4` skips a fixed list of directory names
+(`build` among them) in the recursive scan it runs for `--full-depth` or when it
+finds no shipped skills. That list is an installer internal, so the round trips
+below fail if a new pin stops skipping `build`. The exclusion covers unnamed
+discovery: the default, `--full-depth` and a repository with no shipped skills.
+An explicit path to a dev skill, such as `skills add <repo>/dev-skills/build/<name>`,
+is outside it.
 
 ## Manifests and versions
 
@@ -47,7 +57,10 @@ the hosted Git-source behavior. Claude installs cowsay into its plugin cache and
 recorded `gitCommitSha` must match the local clone's HEAD;
 the other three installs use the default `skills add --agent <agent> --yes`
 behavior without naming a skill, exercising installation of all shipped skills.
-The listing assertion also names no skill. The per-agent cases exercise copies;
+The listing assertions also name no skill: `--list` and `--list --full-depth`
+must both find exactly the shipped skills. Separate tests install with
+`--full-depth` and list a clone with `skills/` removed, which must report
+`No skills found` and exit 1. The per-agent cases exercise copies;
 the combined-agent case exercises a Claude symlink and the shared canonical copy.
 Observed modes are recorded as the JUnit property `installation_mode` in
 `ai_tmp/pytest.xml` and printed in successful-test output in the `just check`
@@ -78,6 +91,53 @@ this for `skills/`, `.claude-plugin/`, `dev-skills/` and the two dev-skill disco
 directories; unrelated documentation edits remain allowed. The live manifest
 validation also checks the working tree. Round trips deliberately do not install
 uncommitted files.
+
+## Check the install channels from a checkout
+
+Use this section, not the README's commands, when you try an install from a
+clone of this repository. The README's commands are for end users: a bare
+`claude` or `npx` runs outside the Justfile's environment, so it writes to your
+real `~/.claude/plugins` and `~/.npm`. These commands run the pinned `claude`
+and `skills` through `just run`, which keeps the Claude Code home and the npm
+cache under `.tools/`. Neither install needs an agent login. Run them from the
+repository root.
+
+Create a throwaway project and install cowsay through the marketplace:
+
+```sh
+just run sh -c 'mkdir -p .tools/tmp/install-check && cd .tools/tmp/install-check && git init -q && ../../../node_modules/.bin/claude plugin marketplace add ../../.. && ../../../node_modules/.bin/claude plugin install cowsay@biscuitbin-skills --scope project'
+```
+
+It reports `Successfully installed plugin: cowsay@biscuitbin-skills (scope: project)`.
+Its `declared in user settings` line refers to the project's Claude Code home,
+`.tools/agent-homes/claude/settings.json`, not your own. The project's `.claude/settings.json` now enables the plugin, and the plugin
+itself is cached in `.tools/agent-homes/claude/plugins/cache/`.
+
+Install it through `skills`, the binary that `npx skills@1.7.4` runs, once per agent:
+
+```sh
+just run sh -c 'cd .tools/tmp/install-check && DO_NOT_TRACK=1 ../../../node_modules/.bin/skills add ../../.. --agent claude-code --yes'
+just run sh -c 'cd .tools/tmp/install-check && DO_NOT_TRACK=1 ../../../node_modules/.bin/skills add ../../.. --agent codex --yes'
+ls .tools/tmp/install-check/.claude/skills/cowsay .tools/tmp/install-check/.agents/skills/cowsay
+```
+
+Each `skills` run reports `Found 1 skill` and `✓ cowsay (copied)`. Under an agent,
+it first prints `Agent detected — installing non-interactively`, and its summary
+may show the shared `.agents/skills/cowsay` path for Claude Code; the final line
+shows where the skill landed. The `ls` lists `SKILL.md`, `agents` and `scripts`
+for each agent.
+
+`../../..` is this checkout, which is the form to use unless you are checking a
+release. To check what is published on GitHub, replace it with `BiscuitBin/skills`
+in the `marketplace add` and `skills add` commands.
+
+When you have checked the results, remove the plugin, the marketplace, the
+plugin's cache and the throwaway project:
+
+```sh
+just run sh -c 'cd .tools/tmp/install-check && ../../../node_modules/.bin/claude plugin uninstall cowsay@biscuitbin-skills --scope project && ../../../node_modules/.bin/claude plugin marketplace remove biscuitbin-skills'
+rm -rf .tools/tmp/install-check .tools/agent-homes/claude/plugins/cache/biscuitbin-skills
+```
 
 ## Upstream references
 

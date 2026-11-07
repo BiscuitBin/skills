@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from skills_tooling.distribution import MARKETPLACE
-from skills_tooling.evals import history
+from skills_tooling.evals import history, workspace
 from skills_tooling.evals import report as reporting
 from skills_tooling.evals.adapter import AGENTS, CredentialError
 from skills_tooling.evals.cases import CaseError, load_suite, validate_all
@@ -192,7 +192,8 @@ def run(args: argparse.Namespace) -> int:
         grading_skipped=args.no_grader,
     )
     print(describe(args, cases))
-    return run_suite(settings)
+    with workspace.end_on_termination():
+        return run_suite(settings)
 
 
 def record(args: argparse.Namespace) -> int:

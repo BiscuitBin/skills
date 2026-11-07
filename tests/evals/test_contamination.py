@@ -203,7 +203,7 @@ def test_never_appear_lists_dev_skills_other_skills_user_skills_and_instructions
 ) -> None:
     repo, home = tmp_path / "repo", tmp_path / "home"
     for path in (
-        repo / "dev-skills/cross-model-review",
+        repo / "dev-skills/build/cross-model-review",
         repo / "skills/cowsay",
         repo / "skills/other-skill",
         home / ".claude/skills/my-claude-skill",

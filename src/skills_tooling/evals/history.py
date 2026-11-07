@@ -23,6 +23,17 @@ UNRECORDED = "unrecorded"
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 # The runs of one iteration measured one version of the skill against one set of cases.
 SHARED = ("skill_sha256", "evals_sha256")
+# What the report reads from each recorded run. Only their presence is checked, not their values.
+RUN_KEYS = (
+    "run_id",
+    "agent",
+    "started_at",
+    "trials_per_case",
+    "baseline",
+    "provenance",
+    "cases",
+    "benchmark",
+)
 
 
 class HistoryError(Exception):
@@ -109,7 +120,10 @@ def assemble(
 def record(root: Path, name: str, run_ids: Sequence[str], *, now: datetime | None = None) -> Path:
     """Write the runs as iteration `name` of their skill; never overwrites one."""
     if not NAME.fullmatch(name) or name == UNRECORDED:
-        msg = f"iteration name {name!r}: use letters, digits, '.', '_' and '-'"
+        msg = (
+            f"iteration name {name!r}: start with a letter or digit, then use letters, digits, "
+            f"'.', '_' and '-'; {UNRECORDED!r} is reserved"
+        )
         raise HistoryError(msg)
     iteration = assemble(root, name, run_ids, now=now)
     path = history_dir(root, iteration["skill"]) / f"{name}.json"
@@ -142,7 +156,10 @@ def _complete(iteration: object, skill: str) -> bool:
         and isinstance(iteration.get("recorded_at"), str)
         and isinstance(iteration.get("runs"), list)
         and bool(iteration["runs"])
-        and all(isinstance(run, dict) for run in iteration["runs"])
+        and all(
+            isinstance(run, dict) and all(key in run for key in RUN_KEYS)
+            for run in iteration["runs"]
+        )
     )
 
 
