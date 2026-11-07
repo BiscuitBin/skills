@@ -324,18 +324,18 @@ def test_a_trial_under_a_locked_parent_is_not_reported_deleted(tmp_path: Path) -
             finished = super().run(
                 prompt, trial, homes, model=model, timeout=timeout, credentials=credentials
             )
-            # The run's directory: restore_access starts at the trial, so it stays locked.
+            # The trial's parent: restore_access starts at the trial, so it stays locked.
             trial.root.parent.chmod(0)
             return finished
 
     root = fake_root(tmp_path, [CASES[0]])
-    run_directory = root / ".eval-workspaces/test-run"
+    case_directory = root / ".eval-workspaces/test-run/trigger-moo"
     try:
         with serve(GOOD) as server:
             adapter = Locks(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
             run_suite(settings(root, server.url, adapter=adapter))
     finally:
-        run_directory.chmod(0o755)
+        case_directory.chmod(0o755)
     [trial] = json.loads((root / "eval-results/test-run/results.json").read_text())["trials"]
     assert trial["status"] == "infra_error"
     assert trial["status_reason"].endswith("the trial directory could not be deleted")
