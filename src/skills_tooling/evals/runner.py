@@ -411,14 +411,14 @@ def run_trial(
             if leaked:
                 record["secret_found"] = {
                     "files": [path.relative_to(trial.root).as_posix() for path in leaked],
-                    "deleted": not trial.root.exists(),
+                    "deleted": results.gone(trial.root),
                 }
             if unreadable:
                 # A token the sweep cannot know of may be in the evidence, so none is kept.
                 if record["transcript"] is not None:
                     (settings.root / record["transcript"]).unlink(missing_ok=True)
                 record.pop("stderr", None)
-                if trial.root.exists():
+                if not results.gone(trial.root):
                     unreadable += "; the trial directory could not be deleted"
                 record |= _not_scored(case, planned.arm, unreadable, [])
                 record["transcript"] = None

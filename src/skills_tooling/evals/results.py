@@ -69,6 +69,17 @@ def files_holding(directory: Path, secrets: Iterable[str]) -> list[Path]:
     return sorted(found)
 
 
+def gone(path: Path) -> bool:
+    """True only if path is really absent: exists() also says False on a denied stat."""
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
 def verify_clean(directory: Path, secrets: Iterable[str]) -> None:
     """Delete, and raise for, every file under directory that holds a secret.
 
@@ -82,7 +93,7 @@ def verify_clean(directory: Path, secrets: Iterable[str]) -> None:
         # The type only: the message could quote a path, which may hold a secret.
         workspace.restore_access(directory)
         shutil.rmtree(directory, ignore_errors=True)
-        state = "some of it could not be deleted" if directory.exists() else "deleted"
+        state = "deleted" if gone(directory) else "some of it could not be deleted"
         msg = f"could not check every results file for secrets ({type(error).__name__}); {state}"
         raise SecretLeakError(msg) from None
     if not leaked:

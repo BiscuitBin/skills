@@ -11,7 +11,7 @@ import pytest
 
 from skills_tooling.evals import workspace
 from skills_tooling.evals.claude_code import ClaudeCode
-from skills_tooling.evals.results import SecretLeakError, files_holding, scrub, verify_clean
+from skills_tooling.evals.results import SecretLeakError, files_holding, gone, scrub, verify_clean
 from skills_tooling.evals.runner import run_suite
 from tests.evals.fake_anthropic import serve, text, tool
 from tests.evals.test_runner import CASES, GOOD, TRIGGER, fake_root, settings
@@ -278,3 +278,64 @@ def test_a_leak_that_cannot_be_deleted_says_so_and_the_rest_still_go(
     assert SECRET not in str(raised.value)
     assert "1 could not be deleted" in str(raised.value)
     assert not (tmp_path / "z.json").exists()
+
+
+def test_gone_is_true_only_for_a_path_that_is_really_absent(tmp_path: Path) -> None:
+    assert gone(tmp_path / "missing")
+    (tmp_path / "dangling").symlink_to(tmp_path / "missing")
+    assert not gone(tmp_path / "dangling")
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    (parent / "kept").mkdir()
+    parent.chmod(0)
+    try:
+        # exists() says False here.
+        assert not gone(parent / "kept")
+    finally:
+        parent.chmod(0o755)
+
+
+def test_results_under_a_locked_parent_are_not_reported_deleted(tmp_path: Path) -> None:
+    parent = tmp_path / "eval-results"
+    run = parent / "run"
+    run.mkdir(parents=True)
+    (run / "results.json").write_text("{}")
+    parent.chmod(0)
+    try:
+        with pytest.raises(SecretLeakError, match="some of it could not be deleted"):
+            verify_clean(run, [SECRET])
+    finally:
+        parent.chmod(0o755)
+    assert (run / "results.json").exists()
+
+
+def test_a_trial_under_a_locked_parent_is_not_reported_deleted(tmp_path: Path) -> None:
+    class Locks(ClaudeCode):
+        def run(  # noqa: PLR0913 -- the Adapter signature
+            self,
+            prompt: str,
+            trial: TrialPaths,
+            homes: Homes,
+            *,
+            model: str,
+            timeout: float,
+            credentials: Mapping[str, str],
+        ) -> RawRun:
+            finished = super().run(
+                prompt, trial, homes, model=model, timeout=timeout, credentials=credentials
+            )
+            # The run's directory: restore_access starts at the trial, so it stays locked.
+            trial.root.parent.chmod(0)
+            return finished
+
+    root = fake_root(tmp_path, [CASES[0]])
+    run_directory = root / ".eval-workspaces/test-run"
+    try:
+        with serve(GOOD) as server:
+            adapter = Locks(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+            run_suite(settings(root, server.url, adapter=adapter))
+    finally:
+        run_directory.chmod(0o755)
+    [trial] = json.loads((root / "eval-results/test-run/results.json").read_text())["trials"]
+    assert trial["status"] == "infra_error"
+    assert trial["status_reason"].endswith("the trial directory could not be deleted")

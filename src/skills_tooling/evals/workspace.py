@@ -39,6 +39,9 @@ GIT_ENV = {
 SYSTEM_PATH = "/usr/bin:/bin"
 RECORD_END = "\x1e"
 FIELD_END = "\x1f"
+# Without this, as on some Linux builds, a file swapped for a link just after _grant's
+# stat can still redirect its chmod; that limit is documented.
+_CHMOD_NO_FOLLOW = {"follow_symlinks": False} if os.chmod in os.supports_follow_symlinks else {}
 
 
 def git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -238,23 +241,30 @@ def _group_alive(group: int) -> bool:
     return True
 
 
-def _grant(path: Path, bits: int) -> None:
+def _grant(path: Path | str, bits: int, *, dir_fd: int | None = None) -> None:
     """Add bits to path's mode, unless it is a link: chmod would follow it out of the trial."""
-    with contextlib.suppress(OSError):
-        mode = path.lstat().st_mode
+    with contextlib.suppress(OSError, NotImplementedError):
+        mode = os.stat(path, dir_fd=dir_fd, follow_symlinks=False).st_mode
         if not stat.S_ISLNK(mode):
-            path.chmod(stat.S_IMODE(mode) | bits)
+            os.chmod(path, stat.S_IMODE(mode) | bits, dir_fd=dir_fd, **_CHMOD_NO_FOLLOW)
 
 
 def restore_access(root: Path) -> None:
-    """Give the owner back whatever the agent locked under root, as far as chmod can."""
+    """Give the owner back whatever the agent locked under root, as far as chmod can.
+
+    A process the agent left behind may be swapping directories for links during
+    this walk, so a link is never followed, not even as root, and each change goes
+    through the open directory rather than a path that could be redirected.
+    """
     _grant(root, stat.S_IRWXU)
-    # Top-down, so each directory opens before the walk descends into it.
-    for directory, dirnames, filenames in os.walk(root):
-        for name in dirnames:
-            _grant(Path(directory, name), stat.S_IRWXU)
-        for name in filenames:
-            _grant(Path(directory, name), stat.S_IRUSR | stat.S_IWUSR)
+    # Unlike os.walk, fwalk raises if it cannot reach root. It skips anything else it cannot open.
+    with contextlib.suppress(OSError):
+        # Top-down, so each directory opens before the walk descends into it.
+        for _path, dirnames, filenames, directory_fd in os.fwalk(root, follow_symlinks=False):
+            for name in dirnames:
+                _grant(name, stat.S_IRWXU, dir_fd=directory_fd)
+            for name in filenames:
+                _grant(name, stat.S_IRUSR | stat.S_IWUSR, dir_fd=directory_fd)
 
 
 def teardown(trial: TrialPaths) -> None:

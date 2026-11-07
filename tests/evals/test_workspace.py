@@ -3,11 +3,12 @@
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -15,6 +16,9 @@ from skills_tooling.evals import workspace
 from skills_tooling.evals.adapter import PythonCall
 from skills_tooling.evals.claude_code import ClaudeCode
 from tests.evals.test_runner import TOKEN, fake_root
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 ROOT = Path(__file__).parents[2]
 # The real command with run_suite replaced by one trial, so nothing but the agent is faked.
@@ -455,3 +459,69 @@ def test_the_python_wrapper_does_not_leak_its_stdin_copy(tmp_path: Path, shell: 
         check=False,
     )
     assert "Bad file descriptor" in done.stderr
+
+
+def _mode(path: Path) -> int:
+    return stat.S_IMODE(path.lstat().st_mode)
+
+
+def test_restore_access_does_not_follow_a_link_as_root_or_below_it(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = outside / "file"
+    target.write_text("x")
+    target.chmod(0o444)
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "to-directory").symlink_to(outside)
+    (root / "to-file").symlink_to(target)
+    (tmp_path / "link-root").symlink_to(outside)
+
+    workspace.restore_access(root)
+    workspace.restore_access(tmp_path / "link-root")
+
+    assert _mode(target) == 0o444
+    assert _mode(outside) == 0o755
+
+
+def test_restore_access_still_opens_a_locked_tree(tmp_path: Path) -> None:
+    deepest = tmp_path / "root/a/b"
+    deepest.mkdir(parents=True)
+    (deepest / "file").write_text("x")
+    (deepest / "file").chmod(0)
+    for path in (deepest, deepest.parent, deepest.parent.parent):
+        path.chmod(0)
+
+    workspace.restore_access(tmp_path / "root")
+
+    assert _mode(deepest / "file") == 0o600
+    assert _mode(deepest) == 0o700
+
+
+def test_restore_access_stays_inside_when_a_directory_is_swapped_for_a_link_mid_walk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "file").write_text("x")
+    (outside / "file").chmod(0o444)
+    root = tmp_path / "root"
+    swapped = root / "swapped"
+    swapped.mkdir(parents=True)
+    (swapped / "file").write_text("x")
+    (swapped / "file").chmod(0o400)
+    real_fwalk = os.fwalk
+
+    def fwalk_then_swap(*args: Any, **kwargs: Any) -> Iterator[Any]:  # noqa: ANN401
+        for entry in real_fwalk(*args, **kwargs):
+            # After the listing, before the grants: the moment a path could be redirected.
+            if Path(entry[0]) == swapped:
+                swapped.rename(root / "moved")
+                swapped.symlink_to(outside)
+            yield entry
+
+    monkeypatch.setattr(os, "fwalk", fwalk_then_swap)
+    workspace.restore_access(root)
+
+    assert _mode(outside / "file") == 0o444
+    assert _mode(root / "moved/file") == 0o600
