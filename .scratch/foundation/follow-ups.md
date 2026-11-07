@@ -37,6 +37,11 @@ Each was confirmed against the code and marked out of scope: real, but nothing i
 | K2 | `skill_sha256` does not follow a symlinked directory that installation copies, so two payloads can share a hash. Also ticket 08's O4. |
 | K3 | Codex's discovery canaries use injected or redirected homes, so a location Codex finds independently of `HOME` would not be caught. |
 
+## From the final reviews
+
+- **S3:** the python wrapper starts Python before installing its traps, so a signal in that instant reaches the shell before the trap and leaves Python to the group teardown. A simple reorder hung under `sh` in a trial, so any fix needs a sweep across bash, dash and zsh. Triage: `ai_tmp/triage-final.md`.
+- Observed by a V2 refuter and not tested end to end: on Linux, `shutil.rmtree` on a very deep tree used memory that grew about quadratically with depth (43 MB at 5500 levels, 925 MB at 30500), and a run at about a million levels was killed. An agent could build such a tree in a trial to stall cleanup.
+
 ## From the branch code review
 
 - A signal-stopped run can discard a trial's `secret_found` record and skips `verify_clean`.
@@ -56,6 +61,7 @@ Each was confirmed against the code and marked out of scope: real, but nothing i
 - **Ticket 06, new in ticket 12:** `sed -n 1p README.md skills/cowsay/SKILL.md` exits 0 and prints only the first file's line, yet still counts as a read of the skill, because output from a multi-file read cannot be attributed.
 - **Ticket 08:** One helper for the skill's file list. `prompt_sha256` does not cover the expectation format. The harness's framing text can be quoted to satisfy the quote rule. Some tests assert on `Verdict.claimed` or CPython's JSON errors. `redact()` handles an old path shape. Two grader models are not noted.
 - **Ticket 08, host `/tmp`:** Claude Code's Bash is not confined, so a literal `/tmp` path in a trial writes to the host. Confine it, for example with Claude Code's sandbox settings. `/tmp` is outside ticket 12's home comparison.
+- **Ticket 12, host `/tmp` leftovers:** the pinned Claude CLI ignores `TMPDIR` and leaves empty `tasks` folders under `/private/tmp/claude-<uid>/<cwd-slug>/`, 16 to 22 per walkthrough round (ticket 12, Agent homes). The user accepted this on 2026-11-06. `CLAUDE_CODE_TMPDIR` moved them in one probe, but the CLI then made `/private/tmp/cc-socks-<uid>`. Check whether that persists, then set it in the Justfile and the eval adapter, and cover each with a test.
 - **Ticket 09:** Compute pooled values once, and share the matrix and history formatting.
 - **Ticket 11:** Claude Code's docs advise against setting `version` in both manifests. The repo does so on purpose (ADR 0010).
 - **Ticket 13:** Unplaced reads pair by printed name and must open with the frontmatter. Codex's denial test is a keyword heuristic. Reads that fail `outcome_is_the_read` no longer trigger through the event.

@@ -76,6 +76,7 @@ Fresh `general-purpose` subagents, one per round, each given only a fresh clone 
 - **What "installed through `npx skills`" means here.** The agents used the pinned `node_modules/.bin/skills` from the checkout, the docs' route for a clone. The literal `npx skills@1.7.4` and the README's end-user commands were not run, to stay out of the real homes. `tests/test_distribution.py` covers the hosted Git-source shorthand. `BiscuitBin/skills` was tried by hand once before round 1.
 - **Round 4's brief differed.** To stop logging choices the docs settle and agents' own extra checks, the brief narrowed what to log, and step 3 asked for a report showing the new runs. "None" therefore reads against that narrower rule.
 - **Round 3 was not strictly clean.** By your decision the final clean round ran after the review fixes rather than before them.
+- **macOS only.** All four rounds ran on macOS, so their live evals ran the python wrapper under bash and never under dash. They also predate the wrapper's stdin fix in eaac319 and the cleanup fixes from the final reviews, which have unit tests on both CI platforms but no live run.
 - **Isolation limits.** Clones sit inside this worktree to keep paths in-project, so a walk-up can load the parent's `AGENTS.md`. Subagents also inherit the injected `CLAUDE.md`. "Docs only" rests on each agent's own log. In round 3 the first hand-off failed before running, probably because I had deleted the clone your shell was in; it was rerun with an absolute path.
 
 ### Agent homes
@@ -95,14 +96,21 @@ Fresh `general-purpose` subagents, one per round, each given only a fresh clone 
 | `~/.claude.json` keys such as `tipsHistory`, `pluginUsage` | all | This live session and others; project entries were `alliumpy`. Hashed by key, so an unknown new key would show. None did. |
 | `~/.local/share/nvim`, `~/.local/state/nvim`, `~/.cache/gh` | all | The user's editor, and `gh`. |
 
-`/tmp` is outside the comparison, as planned. `/private/tmp/cc-socks` and `codex-daemon-501` changed there, from Claude Code's sockets and the Codex app. Ticket 08's unconfined Bash stays a residual.
+`/tmp` was outside the comparison by your approval of the plan (2026-11-05). The plan also said anything recurring there would be carried as a residual, and the final review (S6) found that had not been done. Observed directly since:
+
+- The pinned Claude CLI ignores `TMPDIR` and leaves an empty `tasks` folder per session under `/private/tmp/claude-501/<cwd-slug>/<uuid>/`. Rounds 1 to 3 left 16 each (6 from evals, 10 from pytest), round 4 left 22 (6 and 16). They hold no files.
+- It also makes `claude-<uid>/fswatch-probe-XXXXXX/probe`: 3604 such directories in all, 2291 with a non-empty `probe`, and 68 inside round 4's window. Live sessions share that tree, so these cannot be attributed to this work.
+- Sockets: none of the 124 recorded `/tmp/cc-socks/<pid>.sock` remain; they go when the CLI exits. `codex-daemon-501` is the Codex app.
+- `CLAUDE_CODE_TMPDIR` moved the folders in one probe, but the CLI then created `/private/tmp/cc-socks-501`. Whether that persists, and setting it in the Justfile, are untested.
+
+So the walkthrough left empty folders in the host `/tmp`. The criterion stays ticked by your decision on 2026-11-06, with this as an accepted deviation, and confining them is a follow-up. Ticket 08's unconfined Bash stays a residual too.
 
 ### Carried-over checks
 
 - **Ticket 01 discovery**, rerun from `.scratch/` after the dev skill moved. Codex (0.163.0): named `.agents/skills/cross-model-review/SKILL.md`, no `failed to load skill` (`ai_tmp/discovery-codex-2.jsonl`). Claude Code (2.1.309): `init` lists the skill, and the prompt produced `tool_use Skill {"skill": "cross-model-review"}`, then stopped at the `--max-turns 3` cap I set (`ai_tmp/discovery-claude-2.jsonl`). You ran this with your token.
 - **Ticket 01 placement:** closed by moving the skill. Its listing test had covered only the default listing.
 - **Ticket 02 CI:** the `just check (ubuntu-24.04)` job of run 41983369769 is green, on `bd18420`, which predates this branch.
-- **Ticket 02 rechecks:** agents writing outside their homes, see above. Socket-path length: every eval passed from a clone whose `TMPDIR` was about 115 characters, longer than the macOS Unix-socket limit. Claude Code's recorded socket is in `/tmp/cc-socks`, not `TMPDIR`. Codex's sockets were not inspected, but its runs passed.
+- **Ticket 02 rechecks:** agents writing outside their homes, see above. Socket-path length: every eval passed from a clone whose `TMPDIR` was about 115 characters, longer than the macOS Unix-socket limit. Claude Code's recorded socket is in `/tmp/cc-socks`, not `TMPDIR`, and it leaves empty task folders in the host `/tmp`, see Agent homes. Codex's sockets were not inspected, but its runs passed.
 - **Ticket 06:** `trigger-explicit-invocation` passed on Claude Code in every round.
 - **Ticket 10:** the Codex dispatch is carried, see the open items.
 - **All other recorded gaps** are in `.scratch/foundation/follow-ups.md`.
@@ -153,10 +161,10 @@ The first pass returned 3 findings in 6 minutes, so the plan's by-area passes fo
 | K2 | medium → low | The ticked skill-content-hash criterion does not cover the payload actually installed | out of scope (triager valid, refuted) | follow-up |
 | K3 | medium → low | Codex's required discovery-location canary proof is only partly implemented | out of scope | follow-up |
 | K4 | medium → low | Ticket 09's recorded malformed-history fix still permits report-crashing records | valid | fixed in b4e15c5; values remain, see H7 |
-| K5 | low → low | Ticket 09 doubles the number of trials in its live acceptance evidence | valid | fixed in this commit |
+| K5 | low → low | Ticket 09 doubles the number of trials in its live acceptance evidence | valid | fixed in 605349c |
 | R1 | high → medium | `verify_clean` raised an unscrubbed error on an unreadable path before deleting leaks | valid | fixed in 99c9886 |
 | R2 | medium → low | The scan accepted unreadable paths with no secrets configured | valid | fixed in 99c9886 |
-| R3 | medium → low | A pending signal still launched the next subprocess | valid | fixed in 99c9886 |
+| R3 | medium → low | A pending signal still launched the next subprocess | valid | fixed in 99c9886; the opens before a launch were still open until 5980e79 (S2) |
 
 ### Branch code review
 
@@ -172,11 +180,50 @@ The first pass returned 3 findings in 6 minutes, so the plan's by-area passes fo
 | A signal-stopped run discards `secret_found`; `MemoryError` in the sweep; `restore_access` order; repeated signals swallowed; a directory or FIFO named after a token | follow-ups |
 | History values not validated | follow-ups, H7 |
 
-**Not re-reviewed:** fb7f76e and later came after the one re-review round. Its wrapper change has its own tests and passed live evals in round 4, but no second model has read it.
+**Not re-reviewed until the final reviews:** the re-review round covered b31ffd2...b4e15c5 only. 99c9886, 67f8bd0 and fb7f76e had no review by a different model until the final reviews below. The branch code review above was by the same model family as the implementer.
+
+### Final reviews
+
+You asked for a last adversarial review after sign-off, because `99c9886`, `67f8bd0`, `fb7f76e`, `605349c` and `454cf29` had not been read by a different model. It ran in rounds. Each round's fixes were reviewed again until a round's valid findings changed no runtime code.
+
+- **Implementer:** Claude Code running `claude-opus-5-5`
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no), read-only sandbox, ephemeral. Every run that reached the reviewer exited 0 on its first attempt. One more attempt of round V never reached it: `review.py` refused to start, exit 1, because a new test (fixed in `8825b28`) left an unreadable directory in the worktree.
+- **Triage:** a Workflow with a fresh subagent per finding, and a second fresh subagent per finding that tried to prove the verdict wrong, whichever way it went. Reviewer severity → triage severity in the table.
+
+| Round | Reviewed | Findings | Triage | Prefix |
+| --- | --- | --- | --- | --- |
+| Final | b4e15c5...454cf29 | `ai_tmp/review-20261106T114829Z-codex.md` | `ai_tmp/triage-final.md` | S |
+| Fixes | 454cf29...5980e79 | `ai_tmp/review-20261106T190705Z-codex.md` | `ai_tmp/triage-fixes-*.md`, `ai_tmp/refute-fixes-*.md` | U |
+| Fixes | 5980e79...8825b28 | `ai_tmp/review-20261107T075606Z-codex.md` | `ai_tmp/triage-f862-*.md`, `ai_tmp/refute-f862-*.md` | V |
+| Fixes | 8825b28...8f702a4 | `ai_tmp/review-20261107T084801Z-codex.md` | `ai_tmp/triage-8f70-*.md`, `ai_tmp/refute-8f70-*.md` | W |
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| S1 | high → medium | Deleting a leak could raise an unscrubbed error that named the secret and stopped the other deletions | valid | fixed in 5980e79 |
+| S2 | medium → low | A signal after the stop check still launched the agent | valid | fixed in 5980e79 for the output-file opens; the instant of the launch itself cannot be closed, so it is documented and pinned by a test |
+| S3 | medium → low | The python wrapper starts Python before installing its traps | out of scope | follow-up; the group teardown bounds it |
+| S4 | medium → low | An unreadable results directory was not deleted as documented | valid | fixed in 5980e79 |
+| S5 | medium → none | The Codex canary gap was filed as a follow-up when it is a mandatory criterion | invalid | the criterion's "OS home" is `HOME` as against `CODEX_HOME`; K3 stays a follow-up |
+| S6 | medium → medium | "The walkthrough leaves nothing outside the project" is ticked despite an exception | valid | recorded under Agent homes and accepted by you, see the sign-off |
+| S7 | low → none | The new stdin test passes without its fix | out of scope | true only of the pre-fb7f76e wrapper; the test caught the dash bug below |
+| U1 | high → low | `restore_access` could change modes outside the trial through a link | valid, narrowed | as written, about results directories, it gave an agent nothing; a refuter showed a leftover process swapping a directory for a link mid-walk redirected `chmod` out of a Codex trial in 4 of 10 trials. Fixed in f862cca |
+| U2 | medium → low | Failed cleanup could be reported as deleted, because `exists()` is False on a denied stat | valid | fixed in f862cca, at `verify_clean` and both `run_trial` sites |
+| V1 | high → low | On Linux, an entry swapped for a link after its stat still redirected `chmod`, and the docs limited this to files | valid | fixed in 8f702a4: CPython leaves `chmod` out of `os.supports_follow_symlinks` on Linux, but `fchmodat` honours no-follow |
+| V2 | medium → low | `os.fwalk` holds a descriptor per level, so a tree past the open-file limit is only partly restored, silently | valid | documented and pinned in 8f702a4; `fwalk` kept, because the link defence rests on it, and the trial fails closed |
+| V3 | medium → medium | No test pinned the `secret_found.deleted` site | valid | test added in 8f702a4 |
+| W1 | medium → none | The descriptor-limit test never checks that the trial fails closed | invalid | the mutation it names is caught by three existing trial-level tests |
+| W2 | medium → low | The docs promised "could not be deleted" whenever restoring falls short, but a locked file is still deleted with its directory | valid | fixed in c2fec97 |
+| W3 | medium → low | Two tests unlock their locked directories only through `restore_access`, so a host without no-follow `chmod` would keep unreadable paths | valid | fixed in c2fec97 |
+
+**Not re-reviewed:** c2fec97, which changes one docs sentence and test cleanup only. No runtime code changed after round W.
+
+**Found by CI, not by review:** Ubuntu CI failed on 454cf29. `/bin/sh` is dash there, which gives a background job `/dev/null` as stdin, so the python wrapper lost the agent's stdin. macOS runs bash as `/bin/sh`, so local `just check` passed. Fixed in eaac319 through fd 9, with tests under each available shell, and reviewed in round U. All four walkthrough rounds ran on macOS before eaac319, so their live evals never ran the wrapper under dash.
+
+**Probes outside the project during triage:** a refuter's Claude CLI runs left `/private/tmp/claude-501/<slug>` folders and `/private/tmp/cc-socks-501`, both removed; a baseline probe may have left one `fswatch-probe` directory. The S5 probe ran the pinned Codex with `HOME` redirected and wrote nothing to the real `~/.agents/skills`, which `find -newer` confirmed. Round U and V triagers ran Linux probes in Docker containers. Every image listed afterwards predates this work, so none was pulled for it, and no probe container remained.
 
 ### Checks
 
-`just check` in this worktree, on this commit's tree: 869 passed, 2 skipped in 205.01s (0:03:25). Only ticket text changed since. Round 4 also ran it in a clean clone at fb7f76e: 869 passed, 2 skipped. Round 4 was before this commit's ticket-only changes.
+`just check` in this worktree on c2fec97, the last code change: 892 passed, 2 skipped in 207.61s (0:03:27). Only ticket text changed after it. CI's `just check` on macOS-15 and ubuntu-24.04 passed on 8f702a4, where ubuntu showed the no-follow `chmod` opening locked trees on Linux. Round 4 also ran `just check` in a clean clone at fb7f76e: 869 passed, 2 skipped.
 
 ### Open items and sign-off
 
@@ -187,3 +234,7 @@ The first pass returned 3 findings in 6 minutes, so the plan's by-area passes fo
 - The hand-off meets "a fresh-context subagent completes these steps". It stays recorded as a deviation under Walkthrough.
 - `setup-token` through `just run` and `read -rs` both work as `docs/how-to/run-evals.md` says.
 - The foundation is done with ticket 10's open item still open.
+
+**Ticket 12, confirmed by you on 2026-11-06:**
+
+- The walkthrough's empty folders in the host `/tmp` are accepted as a deviation from "leaves nothing outside the project directory", which stays ticked. Confining them is in the follow-ups.
