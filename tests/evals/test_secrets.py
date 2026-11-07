@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from skills_tooling.evals import workspace
+from skills_tooling.evals import runner, workspace
 from skills_tooling.evals.claude_code import ClaudeCode
 from skills_tooling.evals.results import SecretLeakError, files_holding, gone, scrub, verify_clean
 from skills_tooling.evals.runner import run_suite
@@ -339,3 +339,57 @@ def test_a_trial_under_a_locked_parent_is_not_reported_deleted(tmp_path: Path) -
     [trial] = json.loads((root / "eval-results/test-run/results.json").read_text())["trials"]
     assert trial["status"] == "infra_error"
     assert trial["status_reason"].endswith("the trial directory could not be deleted")
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores a locked directory")
+def test_a_leak_in_a_trial_that_cannot_be_confirmed_gone_is_not_reported_deleted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class Spills(ClaudeCode):
+        def run(  # noqa: PLR0913 -- the Adapter signature
+            self,
+            prompt: str,
+            trial: TrialPaths,
+            homes: Homes,
+            *,
+            model: str,
+            timeout: float,
+            credentials: Mapping[str, str],
+        ) -> RawRun:
+            (trial.root / "token.txt").write_text(credentials["CLAUDE_CODE_OAUTH_TOKEN"])
+            return super().run(
+                prompt, trial, homes, model=model, timeout=timeout, credentials=credentials
+            )
+
+    sweep = runner._sweep
+
+    def sweep_then_lock_the_parent(
+        trial: TrialPaths, secrets: list[str]
+    ) -> tuple[list[Path], str]:
+        # What a process that left the group could do: the sweep succeeds, then
+        # rmtree cannot enter, and exists() would say False on the denied stat.
+        found = sweep(trial, secrets)
+        trial.root.parent.chmod(0)
+        return found
+
+    monkeypatch.setattr(runner, "_sweep", sweep_then_lock_the_parent)
+    root = fake_root(tmp_path, [CASES[0]])
+    case_directory = root / ".eval-workspaces/test-run/trigger-moo"
+    try:
+        with serve(GOOD) as server:
+            adapter = Spills(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+            exit_code = run_suite(
+                settings(
+                    root,
+                    server.url,
+                    adapter=adapter,
+                    credentials={"CLAUDE_CODE_OAUTH_TOKEN": SECRET},
+                )
+            )
+    finally:
+        case_directory.chmod(0o755)
+    assert exit_code == 1
+    [trial] = json.loads((root / "eval-results/test-run/results.json").read_text())["trials"]
+    assert trial["secret_found"] == {"files": ["token.txt"], "deleted": False}
+    assert (case_directory / "skill-1/token.txt").exists()
+    assert "(token.txt), NOT deleted" in capsys.readouterr().out

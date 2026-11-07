@@ -1,6 +1,7 @@
 """Per-trial isolation: the workspace, the homes, the constructed PATH and teardown."""
 
 import os
+import resource
 import shutil
 import signal
 import stat
@@ -12,13 +13,13 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from skills_tooling.evals import workspace
+from skills_tooling.evals import results, workspace
 from skills_tooling.evals.adapter import PythonCall
 from skills_tooling.evals.claude_code import ClaudeCode
 from tests.evals.test_runner import TOKEN, fake_root
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 ROOT = Path(__file__).parents[2]
 # The real command with run_suite replaced by one trial, so nothing but the agent is faked.
@@ -525,3 +526,69 @@ def test_restore_access_stays_inside_when_a_directory_is_swapped_for_a_link_mid_
 
     assert _mode(outside / "file") == 0o444
     assert _mode(root / "moved/file") == 0o600
+
+
+@pytest.mark.parametrize("kind", ["file", "directory"])
+def test_restore_access_stays_inside_when_an_entry_becomes_a_link_after_its_stat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    def make(path: Path) -> None:
+        if kind == "file":
+            path.write_text("x")
+            path.chmod(0o400)
+        else:
+            path.mkdir()
+            path.chmod(0o500)
+
+    target = tmp_path / "outside"
+    make(target)
+    locked_mode = _mode(target)
+    root = tmp_path / "root"
+    root.mkdir()
+    make(root / "entry")
+    real_stat = os.stat
+    swapped = False
+
+    def stat_then_swap(path: Any, *args: Any, **kwargs: Any) -> os.stat_result:  # noqa: ANN401
+        nonlocal swapped
+        found = real_stat(path, *args, **kwargs)
+        if path == "entry" and not swapped:
+            swapped = True
+            (root / "entry").rename(root / "moved")
+            (root / "entry").symlink_to(target)
+        return found
+
+    monkeypatch.setattr(os, "stat", stat_then_swap)
+    workspace.restore_access(root)
+
+    assert swapped
+    assert _mode(target) == locked_mode
+
+
+def test_a_tree_deeper_than_the_descriptor_limit_fails_closed(tmp_path: Path) -> None:
+    limit = len(list(Path("/dev/fd").iterdir())) + 8
+    depth = limit * 2
+    root = tmp_path / "root"
+    root.joinpath(*["a"] * depth).mkdir(parents=True)
+    locked = root.joinpath(*["a"] * (depth - 3))
+    (locked / "file").write_text("x")
+    locked.chmod(0)
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+
+    def under_the_limit(call: Callable[[], None]) -> None:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))
+        try:
+            call()
+        finally:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
+
+    try:
+        under_the_limit(lambda: workspace.restore_access(root))
+        with pytest.raises(OSError):
+            results.files_holding(root, ["secret"])
+        under_the_limit(lambda: shutil.rmtree(root, ignore_errors=True))
+        assert not results.gone(root)
+    finally:
+        workspace.restore_access(root)
+        shutil.rmtree(root, ignore_errors=True)
+    assert results.gone(root)
