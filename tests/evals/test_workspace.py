@@ -1,5 +1,6 @@
 """Per-trial isolation: the workspace, the homes, the constructed PATH and teardown."""
 
+import contextlib
 import os
 import resource
 import shutil
@@ -493,10 +494,15 @@ def test_restore_access_still_opens_a_locked_tree(tmp_path: Path) -> None:
     for path in (deepest, deepest.parent, deepest.parent.parent):
         path.chmod(0)
 
-    workspace.restore_access(tmp_path / "root")
+    try:
+        workspace.restore_access(tmp_path / "root")
 
-    assert _mode(deepest / "file") == 0o600
-    assert _mode(deepest) == 0o700
+        assert _mode(deepest / "file") == 0o600
+        assert _mode(deepest) == 0o700
+    finally:
+        for path in (deepest.parent.parent, deepest.parent, deepest):
+            path.chmod(0o755)
+        (deepest / "file").chmod(0o644)
 
 
 def test_restore_access_stays_inside_when_a_directory_is_swapped_for_a_link_mid_walk(
@@ -589,6 +595,7 @@ def test_a_tree_deeper_than_the_descriptor_limit_fails_closed(tmp_path: Path) ->
         under_the_limit(lambda: shutil.rmtree(root, ignore_errors=True))
         assert not results.gone(root)
     finally:
-        workspace.restore_access(root)
+        with contextlib.suppress(OSError):
+            locked.chmod(0o755)
         shutil.rmtree(root, ignore_errors=True)
     assert results.gone(root)
