@@ -1,0 +1,74 @@
+# 07: Pi adapter
+
+Deferred past the MVP by [ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md). The ticket keeps its foundation number. It also carries the Pi parts removed from foundation tickets 01, 09, 10 and 12.
+
+**What to build:** Pi is pinned again, and `just eval cowsay --agent pi` runs the same cowsay eval cases against the project-pinned Pi, headless, through the adapter interface from ticket 05. They get the same isolation guarantees and the same results format. Pi facts are in the research notes (`.scratch/foundation/research.md`). In particular, project skills load in JSON mode only when the run is explicitly approved, and a trigger shows up as a read of the skill's `SKILL.md`.
+
+**Blocked by:** foundation 05 (Eval harness tracer bullet: cowsay on Claude Code). Picked up only after the MVP.
+
+**Status:** deferred (post-MVP, see ADR 0013)
+
+**Agent requirements:** Any implementing agent (Claude Code, Codex or Pi). Access to the pinned Pi CLI with authenticated access to its selected provider and model is required to capture transcripts, verify dev skill discovery and pass the live eval; the implementer need not be Pi. Cross-model review is also required.
+
+## Acceptance criteria
+
+- [ ] Pi is pinned to an exact version in `package.json` again, with `just lock` run and the lockfile committed alongside it. `just agents-version` prints its version again, and the docs that list the pinned agent CLIs name Pi.
+- [ ] The Pi adapter implements the ticket 05 interface without changing the case schema. If the interface has to change, every existing adapter and its tests are updated in the same change.
+- [ ] Pi runs in JSON mode with its agent directory pointed at an isolated location.
+  - Project skills are approved for the run.
+  - Credentials and the provider/model choice reach the isolated run without user skills or config coming with them.
+  - The run never writes to the user's real Pi agent directory.
+- [ ] The Pi provider and model are set explicitly. Both are recorded in the results file along with the Pi CLI version.
+- [ ] Trigger detection:
+  - A read-tool call on the skill-under-test's `SKILL.md` counts as a trigger, but only if the read completed successfully. A failed read, or a command that merely mentions the path, does not count.
+  - A run with no such read counts as not triggered, and a test asserts this.
+  - Explicit invocation is detected separately. Pi expands the skill command itself and puts the skill body into the user message, so no read-tool call happens. The adapter recognises that expansion in the event stream, and a recorded transcript of an explicit invocation tests it. Check this against the pinned Pi.
+- [ ] One extra case uses Pi's explicit skill invocation and asserts the skill triggered.
+- [ ] The contamination check works for Pi. It is shown to fail on a deliberately contaminated run, with a canary in each discovery location the research notes list for Pi, including the user-level shared skills folder in the OS home and a parent directory's shared skills folder.
+- [ ] Recorded Pi transcripts drive unit tests of the parser and trigger detection. These tests run in `just check` without credentials.
+- [ ] A live run of `just eval cowsay --agent pi` passes every case. The results are summarised in the completion notes. Any case that cannot pass on Pi for a documented reason is marked as an agent-specific expectation, not deleted.
+- [ ] The ticket 01 dev skill's discovery under Pi is verified now that Pi is runnable, or the reason it can't be is recorded. This is the gap foundation ticket 01 recorded.
+- [ ] The benchmark report from foundation ticket 09 gains a Pi column. A real report from live cowsay runs on all three agents is produced and summarised in the completion notes.
+- [ ] The manual live-eval CI job from foundation ticket 10 accepts Pi as an agent input. Its secrets are skipped cleanly when missing, as for the other agents.
+- [ ] The foundation acceptance walkthrough from ticket 12 is repeated for Pi: a fresh-context agent runs `just eval cowsay --agent pi` from the docs alone, and it passes.
+
+## Review checkpoints
+
+Use the repo's cross-model adversarial review skill from ticket 01, or the protocol written out there:
+
+- Pick the reviewer by the cross-model rule.
+- A reviewer subagent saves its findings to the scratch folder.
+- A separate triage subagent checks each finding against the code.
+- Apply the valid fixes, rerun `just check`, and record every finding and how it was handled under **Completion notes**.
+
+- **Implementation checkpoint:** before marking done, review the full diff against these acceptance criteria. Pay particular attention to the project-trust approval scope, trigger detection accuracy, and isolation leaks.
+
+## Completion notes
+
+These notes record the review of the change that deferred this ticket ([ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md)), not work on the ticket itself. That change had no ticket of its own.
+
+### Cross-model review of the Pi deferral
+
+- **Implementer:** Claude Code running Opus 5.5 (`claude-opus-5-5`)
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `3802631...1d29d1b`
+- **Findings:** `ai_tmp/review-20261104T023947Z-codex.md` · **Triage:** `ai_tmp/triage-pi-defer-20261104T024040Z.md`
+- The first run exited 4 and was discarded unread: Codex initialised its project home (`.tools/agent-homes/codex/`) during its first run in a fresh worktree. The rerun passed.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | Ticket 01 still sends Pi discovery to ticket 12 | valid for the Agent requirements line; the done criterion and completion notes are history | Requirements line points at this ticket; an additive *Moved* note follows the done criterion |
+| 2 | medium | `skill-validator.md` presents Pi as a current pinned target | valid for the prose; the Pi allowlist column stays | Paragraph names Claude Code and Codex as targets and dates the Pi column to Pi 1.4.0 |
+
+**Follow-ups:** none.
+
+### PR #11 review
+
+- **Reviewers:** GitHub Copilot (inline comment), plus the implementer's own sweep for leftover "three agent CLIs" wording
+
+| # | Source | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | Copilot | Ticket 02's Agent requirements line still requires all three pinned agent CLIs | valid: ticket 02 has an open CI criterion, so the line is still in force | Requirements line names Claude Code and Codex and cites ADR 0013; an additive *Narrowed* note follows the done pin criterion |
+| 2 | self-review | ADR 0003 says the gate pins "the three agent CLIs", but ADR 0013 only superseded ADR 0002 | valid | ADR 0013's supersedes sentence now names ADR 0003 too; ADR 0003 itself is unchanged |
+
+**Follow-ups:** none.

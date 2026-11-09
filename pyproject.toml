@@ -22,7 +22,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["uv_build==0.13.4"]
+requires = ["uv_build==0.13.6"]
 build-backend = "uv_build"
 
 [tool.uv]
@@ -31,7 +31,7 @@ build-backend = "uv_build"
 # host is never used, so two machines cannot resolve different interpreters.
 python-preference = "only-managed"
 python-downloads = "automatic"
-required-version = "==0.13.4"
+required-version = "==0.13.6"
 # `uv add` writes an exact pin, as every other dependency here is.
 add-bounds = "exact"
 
@@ -61,12 +61,13 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
 # Tests assert and compare against literals. The cross-model review tests run
-# the script as a subprocess and call its private helpers.
+# the script as a subprocess and call its private helpers. The eval tests use
+# fake tokens to prove secrets never reach results.
 # Shipped scripts run standalone, outside the tooling package.
 "skills/**/scripts/*.py" = ["INP001"]
-"tests/**" = ["INP001", "PLR2004", "S101", "S603", "SLF001"]
+"tests/**" = ["INP001", "PLR2004", "S101", "S105", "S603", "SLF001"]
 # The review script exists to run git and the reviewer CLIs.
-"dev-skills/cross-model-review/scripts/review.py" = ["S603", "S607"]
+"dev-skills/build/cross-model-review/scripts/review.py" = ["S603", "S607"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -108,6 +108,7 @@ run +command:
 
 [doc('Apply ruff, markdownlint and Prettier fixes. The only recipe that rewrites sources.')]
 format:
+    uv run --frozen python -m skills_tooling.distribution --write
     uv run --frozen ruff check --fix-only .
     uv run --frozen ruff format .
     ./node_modules/.bin/markdownlint-cli2 --fix '**/*.md' '!.scratch/**'
@@ -139,11 +140,56 @@ typecheck:
 
 [doc('Run pytest.')]
 test:
-    uv run --frozen pytest
+    uv run --frozen pytest --junitxml=ai_tmp/pytest.xml -o junit_family=xunit1 -rP
 
 [doc('Validate every shipped skill and dev skill.')]
 validate-skills:
     uv run --frozen python -m skills_tooling.validator
+
+# `--` keeps a name such as `-x` from reading as an option, so the scaffolder
+# rejects it with the name rule rather than a usage error.
+[doc('Scaffold a skill, its placeholder evals and its marketplace entry: `just new-skill <name>`.')]
+new-skill name:
+    uv run --frozen python -m skills_tooling.scaffold -- "$1"
+
+[doc('Validate every evals/*/evals.json against the case schema. Calls no agent.')]
+validate-evals:
+    uv run --frozen python -m skills_tooling.evals validate
+
+# Live: it calls a paid model, needs CLAUDE_CODE_OAUTH_TOKEN (claude) or a Codex
+# login in the project's CODEX_HOME (codex), plus CLAUDE_CODE_OAUTH_TOKEN for the
+# grader when the cases carry expectations, and is never part of check or PR CI
+# (docs/adr/0004-eval-tiers-and-ci.md).
+[doc("Run a skill's eval cases against a pinned agent: `just eval cowsay --agent claude|codex [--case ID] [--trials N] [--baseline] [--dry-run]`.")]
+eval +args:
+    uv run --frozen python -m skills_tooling.evals run "$@"
+
+[doc('Record finished runs, one per agent, as a named benchmark iteration: `just eval-record <name> <run-id>...`.')]
+eval-record +args:
+    uv run --frozen python -m skills_tooling.evals record "$@"
+
+# Offline: reads benchmarks/ (and any --run under eval-results/), calls no agent
+# and no network, and writes eval-results/report.html.
+[doc('Build the offline benchmark report: `just eval-report [skill] [--run ID] [--threshold X] [--fail-on-regression] [--out PATH]`.')]
+eval-report *args:
+    uv run --frozen python -m skills_tooling.evals report "$@"
+
+# Offline: reads git and evals/, calls no agent.
+[doc('List the skills with evals changed since the merge base with main: `just eval-changed [--base REF]`.')]
+eval-changed *args:
+    uv run --frozen python -m skills_tooling.evals.dispatch changed "$@"
+
+# What .github/workflows/live-evals.yml runs around `just eval` and
+# `just eval-report`. See docs/how-to/live-evals-in-ci.md.
+[doc('Live-eval CI helpers: `just eval-ci plan|runs|scan ...`.')]
+eval-ci +args:
+    uv run --frozen python -m skills_tooling.evals.dispatch "$@"
+
+[doc('Check distribution versions and validate the marketplace and shipped plugins strictly.')]
+validate-distribution:
+    uv run --frozen python -m skills_tooling.distribution --committed
+    ./node_modules/.bin/claude plugin validate . --strict
+    @for skill in skills/*; do ./node_modules/.bin/claude plugin validate "$skill" --strict; done
 
 # Run from node_modules/.bin and never from PATH, so a global install cannot
 # stand in for a broken local one.
@@ -151,15 +197,14 @@ validate-skills:
 agents-version:
     ./node_modules/.bin/claude --version
     ./node_modules/.bin/codex --version
-    ./node_modules/.bin/pi --version
 
 # uv and Node check their own versions (`required-version` in pyproject.toml,
 # `engine-strict` in .npmrc). Nothing checks just's, so this does. CI installs
 # the same version.
 [doc('Fail unless this is the pinned just.')]
 just-version:
-    @required='just 1.51.0'; found="$("{{ just_executable() }}" --version)"; \
+    @required='just 1.59.0'; found="$("{{ just_executable() }}" --version)"; \
     [ "$found" = "$required" ] || { printf '%s\n' "$required is required; found $found." >&2; exit 1; }
 
 [doc('The full gate, as CI runs it. Stops at the first recipe that fails.')]
-check: just-version lock-check lint typecheck test validate-skills agents-version
+check: just-version lock-check lint typecheck validate-distribution test validate-skills validate-evals agents-version

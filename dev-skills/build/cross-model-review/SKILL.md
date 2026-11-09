@@ -11,14 +11,14 @@ metadata:
 
 A repo-internal **dev skill**. It is never shipped and never visible in eval workspaces.
 
-The protocol below follows ticket `.scratch/foundation/issues/01-cross-model-review-dev-skill.md`, which is its source of truth. Run every command from the repo root. `REVIEW` means `just run uv run --frozen python dev-skills/cross-model-review/scripts/review.py`. Prepend the project `node_modules/.bin` to `PATH` when invoking it so reviewer selection uses the pinned CLIs.
+The protocol below follows ticket `.scratch/foundation/issues/01-cross-model-review-dev-skill.md`, which is its source of truth. Run every command from the repo root. `REVIEW` means `just run uv run --frozen python dev-skills/build/cross-model-review/scripts/review.py`. The script runs the pinned CLIs from `node_modules/.bin` under `--root` (default: the git toplevel) and never from `PATH`, so a global install cannot stand in for them.
 
 ## 1. Pick the reviewer by the cross-model rule
 
 ```sh
 REVIEW select --implementer claude-code            # you are Claude Code
 REVIEW select --implementer codex                  # you are Codex
-REVIEW select --implementer other --model <id>     # Pi or any other agent: the model you are actually running
+REVIEW select --implementer other --model <id>     # any other agent: the model you are actually running
 ```
 
 - Claude Code implementer → Codex, `gpt-6-astra`, read-only sandbox, ephemeral session.
@@ -26,17 +26,17 @@ REVIEW select --implementer other --model <id>     # Pi or any other agent: the 
 - Any other agent → by the family of the model it is running: Codex for a Claude model, Claude Code for an OpenAI model, Codex otherwise. Record that model in the completion notes.
 - Preferred reviewer unavailable (CLI missing, not authenticated, model refused): the script falls back to the other reviewer only when its model family differs from yours, and reports it under `fallback_used` and `notes`. An `other` implementer whose `--model` is not a recognised family gets no fallback, because a different family cannot be confirmed: pass the underlying model ID.
 - Exit code 3 means no reviewer from a different model family is available. **Stop and report it.** Reviewing your own work, or using a same-family reviewer, does not count as a cross-model review. If a reviewer "failed at runtime" and you are in a sandboxed shell, rerun with network access first.
-- Exit code 2 is a usage error: fix the command and rerun. Exit code 1 means the run could not start (unreadable brief, not in a git repo, or worktree paths it cannot read, which it lists).
+- Exit code 2 is a usage error: fix the command and rerun. Exit code 1 means `select` or `run` could not start (not in a git repo without `--root`, unreadable brief, or worktree paths it cannot read, which it lists).
 
 ## 2. Reviewer subagent runs the external review
 
 Dispatch a subagent with the brief below. It writes the review brief to `ai_tmp/brief-<topic>.md` and runs:
 
 ```sh
-just run env PATH="$PWD/node_modules/.bin:$PATH" uv run --frozen python dev-skills/cross-model-review/scripts/review.py run --implementer <you> [--model <id>] --brief ai_tmp/brief-<topic>.md
+just run uv run --frozen python dev-skills/build/cross-model-review/scripts/review.py run --implementer <you> [--model <id>] --brief ai_tmp/brief-<topic>.md
 ```
 
-`run` repeats the selection, runs the reviewer with read-only CLI flags (enforced by the flags, not the prompt), saves the reviewer's final output to `ai_tmp/review-<timestamp>-<reviewer>.md` (with a `-<n>` suffix if that name is taken) and prints JSON with `findings_path` and `selection`. It snapshots the worktree by content and permission bits before and after, and exits 4 with the changed paths if anything outside `ai_tmp/`, `.git/` and known Claude runtime paths changed, whether the reviewer or a concurrent process changed it. Only known Claude auth, cache, debug and backup paths are excluded (the `_runtime_state` allowlist in the runner); persistent settings (including `.claude.json`), project memory, instructions, skills and agent-home symlinks remain monitored. Treat any other change as a failed review: the output it keeps as `ai_tmp/rejected-*.md` is for inspection only and is never triaged. Leave the worktree alone while `run` is going, check the listed paths, and rerun. If the preferred reviewer fails at runtime, `run` tries the allowed fallback itself.
+`run` repeats the selection, runs the reviewer with read-only CLI flags (enforced by the flags, not the prompt), saves the reviewer's final output to `ai_tmp/review-<timestamp>-<reviewer>.md` (with a `-<n>` suffix if that name is taken) and prints JSON with `findings_path` and `selection`. It snapshots the worktree by content and permission bits before and after, and exits 4 with the changed paths if anything outside `ai_tmp/`, `.git/` and known Claude runtime paths changed, whether the reviewer or a concurrent process changed it. Only known runtime paths are excluded (the `_runtime_state` allowlist in the runner): Claude's auth, cache, debug and backup paths, and Codex's caches, logs, temporary files and state databases. Persistent settings (including `.claude.json` and Codex's `config.toml` and `auth.json`), project memory and Codex memories, instructions, skills and agent-home symlinks remain monitored. Treat any other change as a failed review: the output it keeps as `ai_tmp/rejected-*.md` is for inspection only and is never triaged. Leave the worktree alone while `run` is going, check the listed paths, and rerun. If the preferred reviewer fails at runtime, `run` tries the allowed fallback itself.
 
 A run takes up to `--timeout` seconds (default 1800) per reviewer, twice that with a fallback. Run it in the background or detached rather than under a short shell-tool timeout, and wait for it to exit. The reviewer CLIs need network access and write to their own home folders, so a sandboxed shell (Codex) must run it with escalated permissions.
 
@@ -44,8 +44,8 @@ A run takes up to `--timeout` seconds (default 1800) per reviewer, twice that wi
 
 > You run an external review. You are not the reviewer: do not review the code yourself and do not start a review of your own.
 >
-> 1. Write `ai_tmp/brief-<topic>.md` from the review brief template in `dev-skills/cross-model-review/SKILL.md`, filling in the acceptance criteria and the work under review: `git diff <base>...HEAD` for commits, `git diff HEAD` for staged and unstaged work, and the full contents of each file listed by `git ls-files --others --exclude-standard`, each headed by its path. For a design review, paste the proposal instead.
-> 2. Run `just run env PATH="$PWD/node_modules/.bin:$PATH" uv run --frozen python dev-skills/cross-model-review/scripts/review.py run --implementer <implementer> [--model <id>] --brief ai_tmp/brief-<topic>.md` in the background (it can take 30+ minutes; in a sandboxed shell, with network access) and wait until it exits.
+> 1. Write `ai_tmp/brief-<topic>.md` from the review brief template in `dev-skills/build/cross-model-review/SKILL.md`, filling in the acceptance criteria and the work under review: `git diff <base>...HEAD` for commits, `git diff HEAD` for staged and unstaged work, and the full contents of each file listed by `git ls-files --others --exclude-standard`, each headed by its path. For a design review, paste the proposal instead.
+> 2. Run `just run uv run --frozen python dev-skills/build/cross-model-review/scripts/review.py run --implementer <implementer> [--model <id>] --brief ai_tmp/brief-<topic>.md` in the background (it can take 30+ minutes; in a sandboxed shell, with network access) and wait until it exits.
 > 3. Return only the `findings_path` and the `selection` JSON it prints, or its stderr and exit code if it failed. Do not paste the findings.
 
 **Review brief template** (the text the external reviewer receives):

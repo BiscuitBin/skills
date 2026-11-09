@@ -1,0 +1,12 @@
+{
+  "expectations": [
+    {
+      "id": "e1",
+      "passed": true,
+      "evidence": "A cow with a bubble is shown.",
+      "quote": "(oo)\\_______"
+    },
+    { "id": "e2", "passed": false, "evidence": "The bubble says something else.", "quote": null }
+  ],
+  "notes": "nothing odd"
+}

@@ -1,0 +1,43 @@
+{
+  "expectations": [
+    {
+      "text": "The response shows an ASCII-art cow together with a speech bubble.",
+      "passed": null,
+      "evidence": "grader error: grader CLI timed out after 300s",
+      "blinded": true
+    },
+    {
+      "text": "The speech bubble contains the text 'Ship it, team!' exactly, with the same capitalisation and punctuation.",
+      "passed": null,
+      "evidence": "grader error: grader CLI timed out after 300s",
+      "blinded": true
+    },
+    {
+      "text": "The cow and its speech bubble are shown in a code block or other monospaced formatting, so the art stays aligned.",
+      "passed": null,
+      "evidence": "grader error: grader CLI timed out after 300s",
+      "blinded": true
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": null
+  },
+  "arm_disclosed": true,
+  "disclosure_matches": ["skill"],
+  "grader": {
+    "model_requested": "claude-opus-5-5",
+    "model": "",
+    "cli_version": "",
+    "status": "grader_error",
+    "status_reason": "grader CLI timed out after 300s",
+    "canary_passed": null,
+    "notes": "",
+    "calls": 1
+  },
+  "timing": {
+    "grader_duration_seconds": 300.0
+  }
+}

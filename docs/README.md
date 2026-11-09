@@ -7,4 +7,6 @@ The documentation follows [Diátaxis](https://diataxis.fr/): each page is either
 - [Reference](reference/README.md): facts to look up, such as commands, file formats and configuration.
 - [Explanation](explanation/README.md): background and reasoning, such as why the toolchain is shaped the way it is.
 
+To add a skill, start with the [first skill tutorial](tutorials/first-skill.md), then follow the [contributing guide](../CONTRIBUTING.md).
+
 The [architecture decision records](adr/README.md) record each decision that shaped the repo, and the [glossary](../GLOSSARY.md) defines its vocabulary.

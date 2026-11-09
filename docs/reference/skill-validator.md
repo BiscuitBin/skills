@@ -5,7 +5,7 @@ source skill; `just check` and CI include this recipe. For a single skill, run
 `just run uv run --frozen python -m skills_tooling.validator <directory>`.
 Add `--dev` for a dev skill. The public boundaries are a
 `validate_skill(path, shipped=...)` function returning diagnostics and a CLI
-that discovers shipped skills in `skills/` and dev skills in `dev-skills/`.
+that discovers shipped skills in `skills/` and dev skills in `dev-skills/build/`.
 Diagnostics include a file, stable rule ID, severity, explanation and fix hint.
 The CLI exits nonzero if any error occurs; warnings alone pass.
 
@@ -32,13 +32,17 @@ The CLI exits nonzero if any error occurs; warnings alone pass.
 | openai-shape | error | Optional agents/openai.yaml is a mapping: interface string fields, policy.allow_implicit_invocation boolean and products string-list, dependencies.tools list of mappings with type/value strings and optional description/transport/url/command strings plus oauth_callback_port integer 0–65535. Interface keys: display_name, short_description, icon_small, icon_large, brand_color, default_prompt. Reject wrong types and unknown keys (repo policy to catch typos); interface and all sections are optional. Icon values are checked as strings, not as bundled resource references. |
 | claude-description | warning | description plus when_to_use above 1536 characters is truncated by Claude Code. |
 | openai-description | warning | If provided, short_description should be 25–64 characters (UI guidance). |
+| placeholder | warning | A file in the skill still holds `TODO(new-skill)`, the marker `just new-skill` writes wherever the author has to write something. A fresh scaffold passes the validator with one warning per file it wrote; see [CONTRIBUTING.md](../../CONTRIBUTING.md). Symlinks and files that are not UTF-8 are skipped. |
 
 ## Agent extension allowlist
 
-Supported means documented consumption; ignored means the pinned loader tolerates
-an unknown key, not that the feature works. Shipped skills target Claude Code,
-Codex and Pi. Dev skills may use documented extensions. No current evidence
-establishes a hard loader rejection in these three CLI targets; Claude's upload/packaging validators are separate from Claude Code's loader.
+Supported means documented consumption; ignored means the agent's loader
+tolerates an unknown key, not that the feature works. Shipped skills target
+Claude Code and Codex. Pi can install them but is not evaluated
+([ADR 0013](../adr/0013-pi-deferred-past-mvp.md)), and its column comes from
+Pi 1.4.0, checked while Pi was pinned. Dev skills may use documented extensions.
+No current evidence establishes a hard loader rejection in Claude Code, Codex or
+Pi 1.4.0; Claude's upload/packaging validators are separate from Claude Code's loader.
 
 | Fields | Type | Claude Code | Codex | Pi |
 | --- | --- | --- | --- | --- |
@@ -73,8 +77,9 @@ does not cover budgets, file references or openai.yaml.
 - [Agent Skills specification](https://agentskills.io/specification)
 - [skills-ref validator](https://github.com/agentskills/agentskills/blob/main/skills-ref/src/skills_ref/validator.py)
 - [Claude Code frontmatter](https://code.claude.com/docs/en/skills#frontmatter-reference)
-- Pi 1.4.0: node_modules/@earendil-works/pi-coding-agent/dist/core/skills.js;
-  unknown keys ignored and disable-model-invocation read as a boolean.
+- Pi 1.4.0 source (`dist/core/skills.js` in `@earendil-works/pi-coding-agent`),
+  checked 2026-10-23 while Pi was pinned: unknown keys ignored and
+  disable-model-invocation read as a boolean.
 - Pinned Codex [parser.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/parser.rs) ignores unknown fields.
 - Pinned Codex [model.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/model.rs) and [interface.rs](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/skills/src/interface.rs) define UI metadata.
 

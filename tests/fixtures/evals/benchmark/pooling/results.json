@@ -1,0 +1,407 @@
+{
+  "run_id": "20261030T120000Z-0003",
+  "skill": "cowsay",
+  "agent": "claude",
+  "requested_model": "claude-sonnet-5-5",
+  "credential_env": ["CLAUDE_CODE_OAUTH_TOKEN"],
+  "started_at": "2026-10-30T12:00:00.000+00:00",
+  "finished_at": "2026-10-30T12:30:00.000+00:00",
+  "passed": false,
+  "trials_per_case": 2,
+  "baseline": true,
+  "grader_model_requested": null,
+  "cases": [
+    {
+      "id": "case-a",
+      "kind": "behaviour",
+      "should_trigger": true,
+      "expectations": [],
+      "in_baseline": true
+    },
+    {
+      "id": "case-b",
+      "kind": "behaviour",
+      "should_trigger": true,
+      "expectations": [],
+      "in_baseline": true
+    }
+  ],
+  "skipped_in_baseline": [],
+  "provenance": {
+    "git_commit": "fb1d9ce0000000000000000000000000000000ab",
+    "git_dirty": false,
+    "skill_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "evals_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "grader_prompt_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "trials": [
+    {
+      "case": "case-a",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "skill",
+      "trial": 1,
+      "order": 0,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": "2.1.309",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "status_reason": "",
+      "trigger": {
+        "expected": true,
+        "actual": true,
+        "matched": true,
+        "applicable": true
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "passed",
+          "evidence": ""
+        },
+        {
+          "type": "output_matches",
+          "class": "outcome",
+          "result": "passed",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0003/transcripts/case-a/skill-1.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": null,
+      "graded": null,
+      "passed": true,
+      "valid": true
+    },
+    {
+      "case": "case-a",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "baseline",
+      "trial": 1,
+      "order": 1,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": "2.1.309",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "status_reason": "",
+      "trigger": {
+        "expected": true,
+        "actual": false,
+        "matched": null,
+        "applicable": false
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "failed",
+          "evidence": ""
+        },
+        {
+          "type": "output_matches",
+          "class": "outcome",
+          "result": "failed",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0003/transcripts/case-a/baseline-1.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": null,
+      "graded": null,
+      "passed": null,
+      "valid": true
+    },
+    {
+      "case": "case-b",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "skill",
+      "trial": 1,
+      "order": 2,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": "2.1.309",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "status_reason": "",
+      "trigger": {
+        "expected": true,
+        "actual": true,
+        "matched": true,
+        "applicable": true
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "passed",
+          "evidence": ""
+        },
+        {
+          "type": "output_matches",
+          "class": "outcome",
+          "result": "failed",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0003/transcripts/case-b/skill-1.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": null,
+      "graded": null,
+      "passed": false,
+      "valid": true
+    },
+    {
+      "case": "case-b",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "baseline",
+      "trial": 1,
+      "order": 3,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": "2.1.309",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "status_reason": "",
+      "trigger": {
+        "expected": true,
+        "actual": false,
+        "matched": null,
+        "applicable": false
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "passed",
+          "evidence": ""
+        },
+        {
+          "type": "output_matches",
+          "class": "outcome",
+          "result": "failed",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0003/transcripts/case-b/baseline-1.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": null,
+      "graded": null,
+      "passed": null,
+      "valid": true
+    },
+    {
+      "case": "case-a",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "baseline",
+      "trial": 2,
+      "order": 4,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": "2.1.309",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "status_reason": "",
+      "trigger": {
+        "expected": true,
+        "actual": false,
+        "matched": null,
+        "applicable": false
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "failed",
+          "evidence": ""
+        },
+        {
+          "type": "output_matches",
+          "class": "outcome",
+          "result": "failed",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0003/transcripts/case-a/baseline-2.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": null,
+      "graded": null,
+      "passed": null,
+      "valid": true
+    },
+    {
+      "case": "case-a",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "skill",
+      "trial": 2,
+      "order": 5,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": "2.1.309",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "status_reason": "",
+      "trigger": {
+        "expected": true,
+        "actual": true,
+        "matched": true,
+        "applicable": true
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "passed",
+          "evidence": ""
+        },
+        {
+          "type": "output_matches",
+          "class": "outcome",
+          "result": "passed",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0003/transcripts/case-a/skill-2.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": null,
+      "graded": null,
+      "passed": true,
+      "valid": true
+    },
+    {
+      "case": "case-b",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "baseline",
+      "trial": 2,
+      "order": 6,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": "2.1.309",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "status_reason": "",
+      "trigger": {
+        "expected": true,
+        "actual": false,
+        "matched": null,
+        "applicable": false
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "failed",
+          "evidence": ""
+        },
+        {
+          "type": "output_matches",
+          "class": "outcome",
+          "result": "passed",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0003/transcripts/case-b/baseline-2.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": null,
+      "graded": null,
+      "passed": null,
+      "valid": true
+    },
+    {
+      "case": "case-b",
+      "kind": "behaviour",
+      "agent": "claude",
+      "arm": "skill",
+      "trial": 2,
+      "order": 7,
+      "started_at": "2026-10-30T12:00:00.000+00:00",
+      "finished_at": "2026-10-30T12:01:00.000+00:00",
+      "cli_version": null,
+      "model": null,
+      "status": "infra_error",
+      "status_reason": "agent CLI exited 1",
+      "trigger": {
+        "expected": true,
+        "actual": null,
+        "matched": null,
+        "applicable": true
+      },
+      "contamination": {
+        "passed": true,
+        "problems": [],
+        "notes": []
+      },
+      "assertions": [
+        {
+          "type": "output_contains",
+          "class": "outcome",
+          "result": "not_scored",
+          "evidence": ""
+        },
+        {
+          "type": "output_matches",
+          "class": "outcome",
+          "result": "not_scored",
+          "evidence": ""
+        }
+      ],
+      "transcript": "eval-results/20261030T120000Z-0003/transcripts/case-b/skill-2.jsonl",
+      "stderr": "",
+      "secret_found": null,
+      "grading": null,
+      "graded": null,
+      "passed": false,
+      "valid": false
+    }
+  ]
+}

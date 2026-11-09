@@ -7,3 +7,7 @@ uv.lock
 # Markdown belongs to markdownlint-cli2. Two formatters over the same files
 # disagree eventually.
 *.md
+
+# Benchmark history is written by `just eval-record`, never by hand, so the
+# recorded bytes stay exactly what the tool wrote.
+benchmarks/

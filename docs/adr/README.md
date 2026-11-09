@@ -13,3 +13,9 @@ Each record states one decision that is hard to reverse, would surprise a reader
 | [0007](0007-cross-model-review-routing.md) | Adversarial review always comes from a different model family |
 | [0008](0008-mit-licence.md) | The repository is MIT-licensed |
 | [0009](0009-flat-shipped-skills-layout.md) | Shipped skills use a flat skills directory |
+| [0010](0010-distribution-boundaries.md) | Each shipped skill is its own plugin; dev skills stay behind discovery symlinks |
+| [0011](0011-eval-case-location-and-isolation.md) | Eval cases live in evals/; trials are isolated by redirection and proven by the agent's own reports |
+| [0012](0012-llm-grader-and-benchmark-statistics.md) | The LLM grader runs on the pinned Claude Code, and failures it can be blamed for count against the trial |
+| [0013](0013-pi-deferred-past-mvp.md) | The MVP evaluates Claude Code and Codex; Pi is installable but deferred |
+| [0014](0014-benchmark-history.md) | Benchmark history is committed under benchmarks/, one file per named iteration |
+| [0015](0015-dev-skills-under-build.md) | Real dev skill folders live under dev-skills/build/, where the installer's recursive scan cannot reach them |

@@ -1,0 +1,17 @@
+{
+  "name": "biscuitbin-skills",
+  "owner": {
+    "name": "BiscuitBin"
+  },
+  "metadata": {
+    "description": "Agent skills from BiscuitBin."
+  },
+  "plugins": [
+    {
+      "name": "cowsay",
+      "description": "Render a talking ASCII cow with a bundled Python script.",
+      "source": "./skills/cowsay",
+      "version": "0.1.0"
+    }
+  ]
+}
