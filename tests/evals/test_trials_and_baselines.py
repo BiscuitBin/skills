@@ -1,5 +1,6 @@
 """Several trials per case, a baseline arm with no skill, and the dry-run plan, end to end."""
 
+import contextlib
 import json
 import os
 import sys
@@ -320,7 +321,12 @@ TRIAL_DIR = ".eval-workspaces/test-run/behaviour-moo/skill-1"
 def test_a_token_in_output_the_agent_locked_is_swept_and_deleted(
     tmp_path: Path, command: str, swept: str
 ) -> None:
-    exit_code, trial, fake = agent_runs(tmp_path, command)
+    try:
+        exit_code, trial, fake = agent_runs(tmp_path, command)
+    finally:
+        # Where no no-follow chmod exists, restore_access leaves what the agent locked.
+        with contextlib.suppress(FileNotFoundError):
+            (tmp_path / "repo" / TRIAL_DIR / "workspace" / swept.partition("/")[0]).chmod(0o755)
     assert exit_code == 1
     assert fake.prompts() == []
     assert trial["secret_found"] == {"files": [f"workspace/{swept}"], "deleted": True}
