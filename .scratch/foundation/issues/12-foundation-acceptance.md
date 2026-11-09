@@ -188,7 +188,7 @@ You asked for a last adversarial review after sign-off, because `99c9886`, `67f8
 
 - **Implementer:** Claude Code running `claude-opus-5-5`
 - **Reviewer:** Codex `gpt-6-astra` (fallback: no), read-only sandbox, ephemeral. Every run that reached the reviewer exited 0 on its first attempt. One more attempt of round V never reached it: `review.py` refused to start, exit 1, because a new test (fixed in `8825b28`) left an unreadable directory in the worktree.
-- **Triage:** a Workflow with a fresh subagent per finding, and a second fresh subagent per finding that tried to prove the verdict wrong, whichever way it went. Reviewer severity → triage severity in the table.
+- **Triage:** a Workflow with a fresh subagent per finding. A second fresh subagent tried to prove the verdict wrong for every finding in rounds U, V, W and X, whichever way it went, but in the final round only for the valid ones (S1, S2, S4, S6). The S3, S5 and S7 verdicts rest on the first triage alone. Reviewer severity → triage severity in the table.
 
 | Round | Reviewed | Findings | Triage | Prefix |
 | --- | --- | --- | --- | --- |
@@ -196,6 +196,7 @@ You asked for a last adversarial review after sign-off, because `99c9886`, `67f8
 | Fixes | 454cf29...5980e79 | `ai_tmp/review-20261106T190705Z-codex.md` | `ai_tmp/triage-fixes-*.md`, `ai_tmp/refute-fixes-*.md` | U |
 | Fixes | 5980e79...8825b28 | `ai_tmp/review-20261107T075606Z-codex.md` | `ai_tmp/triage-f862-*.md`, `ai_tmp/refute-f862-*.md` | V |
 | Fixes | 8825b28...8f702a4 | `ai_tmp/review-20261107T084801Z-codex.md` | `ai_tmp/triage-8f70-*.md`, `ai_tmp/refute-8f70-*.md` | W |
+| Fixes and notes | 8f702a4...2f0a4eb | `ai_tmp/review-20261109T192037Z-codex.md` | `ai_tmp/triage-2f0a-*.md`, `ai_tmp/refute-2f0a-*.md` | X |
 
 | # | Severity | Finding | Verdict | Action |
 | --- | --- | --- | --- | --- |
@@ -213,17 +214,21 @@ You asked for a last adversarial review after sign-off, because `99c9886`, `67f8
 | V3 | medium → medium | No test pinned the `secret_found.deleted` site | valid | test added in 8f702a4 |
 | W1 | medium → none | The descriptor-limit test never checks that the trial fails closed | invalid | the mutation it names is caught by three existing trial-level tests |
 | W2 | medium → low | The docs promised "could not be deleted" whenever restoring falls short, but a locked file is still deleted with its directory | valid | fixed in c2fec97 |
-| W3 | medium → low | Two tests unlock their locked directories only through `restore_access`, so a host without no-follow `chmod` would keep unreadable paths | valid | fixed in c2fec97 |
+| W3 | medium → low | Two tests unlock their locked directories only through `restore_access`, so a host without no-follow `chmod` would keep unreadable paths | valid | fixed in c2fec97; a third test with the same defect, X1, in a639ff8 |
+| X1 | medium → low | `test_a_token_in_output_the_agent_locked_is_swept_and_deleted`, from b4e15c5, also relied on `restore_access` alone | valid | fixed in a639ff8 |
+| X2 | low → low | The triage bullet claimed a refuter for every finding, but round S had one only for valid findings | valid | corrected in the Triage bullet above |
 
-**Not re-reviewed:** c2fec97, which changes one docs sentence and test cleanup only. No runtime code changed after round W.
+**Not re-reviewed:** a639ff8 and the commit that records round X, which change one test's cleanup and these notes. No runtime code changed after round W.
 
 **Found by CI, not by review:** Ubuntu CI failed on 454cf29. `/bin/sh` is dash there, which gives a background job `/dev/null` as stdin, so the python wrapper lost the agent's stdin. macOS runs bash as `/bin/sh`, so local `just check` passed. Fixed in eaac319 through fd 9, with tests under each available shell, and reviewed in round U. All four walkthrough rounds ran on macOS before eaac319, so their live evals never ran the wrapper under dash.
+
+**Linux check of the `ValueError` guard,** run on 2026-11-09 after round W: in a `python:3.13-slim` container (Debian 13, glibc 2.41), as a non-root user with no network, the swap-after-stat scenario left the outside target unchanged and locked trees opened. With the guard removed, `restore_access` raised `ValueError: chmod: cannot use dir_fd and follow_symlinks together`, which would abort trial cleanup, so the test, which calls `restore_access`, would fail on Ubuntu; the test itself was not run in the container. The repo's code was run on Python 3.13 with deferred annotations added to a scratch copy, since the image has no 3.14.
 
 **Probes outside the project during triage:** a refuter's Claude CLI runs left `/private/tmp/claude-501/<slug>` folders and `/private/tmp/cc-socks-501`, both removed; a baseline probe may have left one `fswatch-probe` directory. The S5 probe ran the pinned Codex with `HOME` redirected and wrote nothing to the real `~/.agents/skills`, which `find -newer` confirmed. Round U and V triagers ran Linux probes in Docker containers. Every image listed afterwards predates this work, so none was pulled for it, and no probe container remained.
 
 ### Checks
 
-`just check` in this worktree on c2fec97, the last code change: 892 passed, 2 skipped in 207.61s (0:03:27). Only ticket text changed after it. CI's `just check` on macOS-15 and ubuntu-24.04 passed on 8f702a4, where ubuntu showed the no-follow `chmod` opening locked trees on Linux. Round 4 also ran `just check` in a clean clone at fb7f76e: 869 passed, 2 skipped.
+`just check` in this worktree on a639ff8, the last test change: 892 passed, 2 skipped. Only ticket text changed after it. CI's `just check` on macOS-15 and ubuntu-24.04 passed on 2f0a4eb, and on 8f702a4, where ubuntu showed the no-follow `chmod` opening locked trees on Linux. Round 4 also ran `just check` in a clean clone at fb7f76e: 869 passed, 2 skipped.
 
 ### Open items and sign-off
 
