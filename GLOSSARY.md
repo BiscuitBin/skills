@@ -13,7 +13,7 @@ A skill used only by agents working on this repository, such as the cross-model 
 _Avoid_: Internal skill, private skill
 
 **Trigger**:
-An agent loading a skill on its own because the request matched the skill's description, as opposed to the user invoking it by name.
+An agent loading a skill, usually on its own because the request matched the skill's description. In Codex, an explicit `$<name>` mention that loads the skill also counts, because the trace records it as a trigger, so trigger accuracy includes such cases.
 _Avoid_: Activation, firing
 
 ## Evals

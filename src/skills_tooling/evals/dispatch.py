@@ -233,7 +233,13 @@ def scan(directory: Path, environ: dict[str, str]) -> int:
         return USAGE
     secrets = scanned_secrets(environ)
     links = sorted(p for p in directory.rglob("*") if p.is_symlink())
-    leaked = results.files_holding(directory, secrets)
+    try:
+        leaked = results.files_holding(directory, secrets)
+    except OSError as error:
+        # The type only: the message could quote a path, which may hold a secret.
+        print(f"scan: could not read every file: {type(error).__name__}", file=sys.stderr)
+        print(f"scan: do not upload {directory}.")
+        return LEAKED
     for path in links:
         name = results.scrub(path.relative_to(directory).as_posix(), secrets)
         print(f"scan: {name} is a symlink, which the upload would follow", file=sys.stderr)

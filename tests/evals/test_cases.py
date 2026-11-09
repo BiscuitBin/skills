@@ -130,6 +130,10 @@ def test_assertions_are_classed_as_skill_use_or_outcome(tmp_path: Path) -> None:
             {**trigger(), "expectations": ["A cow appears"]},
             "expectations are allowed on behaviour cases only",
         ),
+        (
+            {**trigger(), "assertions": [{"type": "output_contains", "value": "x"}]},
+            "assertions are allowed on behaviour cases only",
+        ),
         (behaviour(kind="vibes"), "kind must be 'trigger' or 'behaviour'"),
         (behaviour(should_trigger=False), "behaviour cases need should_trigger: true"),
         (behaviour(assertions=[]), "behaviour cases need at least one assertion"),

@@ -12,7 +12,7 @@ Work on a branch, then scaffold the skill:
 just new-skill <name>
 ```
 
-The name follows the Agent Skills rule: 1 to 64 lowercase letters, digits and single inner hyphens. The command refuses a name that breaks the rule or that `skills/`, `evals/`, `dev-skills/` or the marketplace already uses, and writes nothing when it refuses. Otherwise it writes:
+The name follows the Agent Skills rule: 1 to 64 lowercase letters, digits and single inner hyphens. The command refuses a name that breaks the rule or that `skills/`, `evals/`, `dev-skills/build/` or the marketplace already uses, and writes nothing when it refuses. Otherwise it writes:
 
 | File | What it is |
 | --- | --- |
@@ -73,7 +73,7 @@ The install tests install from the committed tree, so `just check` fails on unco
 
 ## 5. Get a cross-model review
 
-Before you open the pull request, and at every ticket's review checkpoint, get an adversarial review from a different model family. Follow the [cross-model review dev skill](dev-skills/cross-model-review/SKILL.md), which AGENTS.md makes the rule:
+Before you open the pull request, and at every ticket's review checkpoint, get an adversarial review from a different model family. Follow the [cross-model review dev skill](dev-skills/build/cross-model-review/SKILL.md), which AGENTS.md makes the rule:
 
 1. Pick the reviewer by the cross-model rule: Codex reviews work by Claude models, Claude Code reviews work by OpenAI models. If no reviewer from another family is available, stop and say so; never review your own work instead.
 2. A reviewer subagent runs the read-only review and saves its findings to `ai_tmp/`.

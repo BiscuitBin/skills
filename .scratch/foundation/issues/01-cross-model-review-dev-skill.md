@@ -6,7 +6,7 @@ Read the foundation research notes (`.scratch/foundation/research.md`) first. Th
 
 **Blocked by:** None (can start immediately). Ticket 02 runs in parallel and also writes the agent instructions file. Whichever ticket lands second merges the other's section, and neither overwrites the other. Ticket 03 is blocked by this ticket, so this one is on the critical path.
 
-**Status:** done. One criterion's placement half stays open until ticket 04 runs its listing test (see Completion notes).
+**Status:** done. Ticket 12 closed the placement half by moving the dev skill to `dev-skills/build/` ([ADR 0015](../../../docs/adr/0015-dev-skills-under-build.md)).
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). Claude Code and Codex access is required for the headless discovery checks and live review checks. Pi discovery moved to future ticket 07 ([ADR 0013](../../../docs/adr/0013-pi-deferred-past-mvp.md)). Review requires a reviewer from a different model family, plus separate reviewer and triage subagents.
 
@@ -46,9 +46,10 @@ The skill encodes this protocol, and this text stays its source of truth:
   - *Moved:* the Pi recheck now belongs to future ticket 07 (ADR 0013), not ticket 12.
 - [x] The skill has one source of content. It is made visible to every agent's discovery location without duplicating that content.
 - [x] The skill's frontmatter follows the Agent Skills spec. Its name and description are narrow enough that it triggers for review requests and not for ordinary coding.
-- [ ] The skill is clearly marked repo-internal, and the agent instructions say that dev skills must be excluded from distribution (ticket 04) and from eval workspaces (ticket 05). Choose where the dev skill lives with ticket 04 in mind: `npx skills` scans this repo's agent skill folders (see the research notes), so the placement must let ticket 04 prove the dev skill is not offered.
+- [x] The skill is clearly marked repo-internal, and the agent instructions say that dev skills must be excluded from distribution (ticket 04) and from eval workspaces (ticket 05). Choose where the dev skill lives with ticket 04 in mind: `npx skills` scans this repo's agent skill folders (see the research notes), so the placement must let ticket 04 prove the dev skill is not offered.
   - *Done:* the marker (`metadata.scope: repo-internal`) and the agent instructions.
-  - *Open, for ticket 04:* `npx skills` skips the symlinked folders, but its fallback recursive scan finds `dev-skills/` when no other skills exist or with `--full-depth`. Ticket 04's listing test decides whether this placement holds.
+  - *Was open, for ticket 04:* `npx skills` skips the symlinked folders, but its fallback recursive scan finds `dev-skills/` when no other skills exist or with `--full-depth`. Ticket 04's listing test decides whether this placement holds.
+  - *Closed by ticket 12:* ticket 04's test covered only the default listing, and the scan did list and install the dev skill. It now lives at `dev-skills/build/<name>/`, which the scan skips, and `tests/test_distribution.py` covers the default, `--full-depth` and zero-skill listings and a `--full-depth` install. Paths in this ticket's older notes are the old ones.
 - [x] Reviewer selection follows the rule above. It is shown working when the preferred reviewer is unavailable (for example with the reviewer CLI hidden from `PATH`), and the fallback is reported, and a same-family fallback is refused and reported.
 - [x] The reviewer cannot modify the worktree. Its read-only mode is set by the CLI's flags, not by the prompt. A review run leaves the worktree's contents unchanged apart from the scratch folder, compared by content rather than by `git status` alone.
 - [x] The scratch folder is gitignored.

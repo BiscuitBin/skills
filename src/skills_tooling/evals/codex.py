@@ -80,6 +80,8 @@ SANDBOX_FIELDS = ("tool_name", "call_id", "outcome")
 # such as ls, test or echo, is not a read. awk is not one: whether it opens an
 # operand depends on its program, so an awk read does not count.
 READERS = {"cat", "head", "tail", "sed", "nl", "less", "more", "bat"}
+# `head` and `tail` print this header for each file when given several.
+FILE_HEADER = re.compile(r"==> .* <==")
 # A redirection can make a reader write the path, or send its output elsewhere.
 # Quoting is gone by the time the words are checked, so a quoted < or > counts too.
 REDIRECTION = re.compile(r"[<>]")
@@ -89,8 +91,8 @@ NO_READ_FLAGS = {"--help", "--version", "-h", "-V"}
 SHELLS = {"bash", "zsh", "sh"}
 # Characters the shell expands, so the name in the text is not the directory read.
 UNPLACEABLE = re.compile(r"[*?\[\]{}$~`]")
-# The directory a skill directory sits in: .agents/skills, skills, dev-skills, .system.
-SKILLS_DIR = re.compile(r"skills$|^\.system$")
+# The directory a skill directory sits in: .agents/skills, skills, dev-skills/build, .system.
+SKILLS_DIR = re.compile(r"skills$|(?:^|/)dev-skills/build$|(?:^|/)\.system$")
 # auth.json fields that are not secret. Short strings are not secret either:
 # keys, tokens and account ids are long, and a short label such as a plan name
 # would scrub every occurrence of a common word.
@@ -511,7 +513,7 @@ def skills_read(command: str) -> tuple[list[str], bool]:
 
     `cd <dir> && cat SKILL.md` names <dir>/SKILL.md. A path counts only when
     its grandparent is a skills directory (`.agents/skills`, `skills`,
-    `.system`), so `/tmp/cowsay/SKILL.md` is not a skill, nor unplaceable. A
+    `dev-skills/build`, `.system`), so `/tmp/cowsay/SKILL.md` is not a skill, nor unplaceable. A
     path the text cannot place (`SKILL.md` or `cowsay/SKILL.md` run in another
     `workdir`, `../SKILL.md`, a glob, a variable) names no skill; it can still back
     Codex's own implicit event (see `parse_stream`).
@@ -524,7 +526,7 @@ def skills_read(command: str) -> tuple[list[str], bool]:
         skill = path.parent.name
         if skill in ("", "..") or UNPLACEABLE.search(skill):
             unplaceable = True
-        elif SKILLS_DIR.search(path.parent.parent.name):
+        elif SKILLS_DIR.search(path.parent.parent.as_posix()):
             skills.append(skill)
         elif UNPLACEABLE.search(path.parent.parent.name) or (
             not path.is_absolute() and path.parent.parent.name in ("", "..")
@@ -565,15 +567,20 @@ def outcome_is_the_read(command: str, output: str) -> bool:
 
     Only `cd <dir>` and `pwd` may come before the read, joined by `&&`, and
     the read comes last. `cd` prints nothing and `pwd` one line, so the output
-    must have a line more than the `pwd`s print. After `||`, `;`, `&` or a
-    pipe, or after any other command, a command can exit 0 and print something
-    whatever the read did. A redirection, or a help or version flag, can make a
-    reader not read. Every other shape is not a read the trace can confirm.
+    must have a line more than the `pwd`s print, not counting blank lines or
+    the file headers `head` and `tail` print, which are not the file's content.
+    After `||`, `;`, `&` or a pipe, or after any other command, a command can
+    exit 0 and print something whatever the read did. A redirection, or a help
+    or version flag, can make a reader not read. Every other shape is not a read
+    the trace can confirm.
     """
     parts = command_list(command)
     if not parts or any(operator not in ("&&", "") for _, operator in parts):
         return False
     *before, (read, _) = parts
+    printed = [
+        line for line in output.split("\n") if line.strip() and not FILE_HEADER.fullmatch(line)
+    ]
     return (
         all(
             words == ["pwd"]
@@ -583,8 +590,7 @@ def outcome_is_the_read(command: str, output: str) -> bool:
         )
         and Path(read[0]).name in READERS
         and not any(REDIRECTION.search(word) or word in NO_READ_FLAGS for word in read[1:])
-        and bool(output.strip())
-        and len(output.strip("\n").split("\n")) > _pwds(command)
+        and len(printed) > _pwds(command)
     )
 
 

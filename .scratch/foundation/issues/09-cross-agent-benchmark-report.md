@@ -48,7 +48,7 @@ Use the repo's cross-model adversarial review skill from ticket 01, or the proto
 
 ### Live report
 
-Built with `just eval-report cowsay` from `benchmarks/cowsay/ticket-08.json` (the ticket 08 Claude Code run, 10 trials) and `benchmarks/cowsay/ticket-09.json` (runs `20261104T063552Z-19c7`, Codex, and `20261104T064435Z-d208`, Claude Code; 3 trials per case and arm, with baseline, at c1e6190, clean tree). Both runs share `skill_sha256` b505fdd6… and `evals_sha256` 50a3864a…. All 66 trials of each run were `ok`; no token-shaped string in `eval-results/` or `benchmarks/`.
+Built with `just eval-report cowsay` from `benchmarks/cowsay/ticket-08.json` (the ticket 08 Claude Code run, 10 trials) and `benchmarks/cowsay/ticket-09.json` (runs `20261104T063552Z-19c7`, Codex, and `20261104T064435Z-d208`, Claude Code; 3 trials per case and arm, with baseline, at c1e6190, clean tree). Both runs share `skill_sha256` b505fdd6… and `evals_sha256` 50a3864a…. All 33 trials of each run were `ok`; no token-shaped string in `eval-results/` or `benchmarks/`.
 
 | ticket-09 | Claude Code | Codex |
 | --- | --- | --- |
@@ -68,7 +68,7 @@ No regression beyond 0.10. Claude Code's ticket-08 → ticket-09 comparison is l
 | 1 | "no data" over all cases when every trial was excluded | valid | Fixed in c1e6190: `no scored trials` |
 | 2 | "no data" for a case delta when an arm had no scored trials | valid | Fixed in c1e6190 |
 | 3 | Docs said `eval-record` refuses different cases; it refuses different case files | valid | Docs corrected in c1e6190 |
-| 4 | A damaged iteration file raised a KeyError traceback | valid | Fixed in c1e6190: refused with a message |
+| 4 | A damaged iteration file raised a KeyError traceback | valid | Fixed in c1e6190: refused with a message when a top-level key is missing. Ticket 12 extended this to a run's missing keys; a run's values are still not validated, which `.scratch/foundation/follow-ups.md` carries |
 | 5 | Iterations were ordered by `recorded_at`, so a backfilled run sorted last | valid | Fixed in c1e6190: ordered by the runs' `started_at` |
 | 6 | The CSS muted plain data cells | valid | Fixed in c1e6190 |
 | 7 | Provenance printed a literal `None` | valid | Fixed in c1e6190: `default` or `no grader` |

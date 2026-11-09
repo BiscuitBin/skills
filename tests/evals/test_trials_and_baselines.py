@@ -1,5 +1,6 @@
 """Several trials per case, a baseline arm with no skill, and the dry-run plan, end to end."""
 
+import contextlib
 import json
 import os
 import sys
@@ -8,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from skills_tooling.evals import __main__ as evals_cli
-from skills_tooling.evals import history
+from skills_tooling.evals import history, workspace
 from skills_tooling.evals import report as reporting
 from skills_tooling.evals.cases import Case, Expectation
 from skills_tooling.evals.claude_code import ClaudeCode
@@ -292,6 +293,96 @@ def test_a_token_in_an_output_file_name_never_reaches_the_grader(tmp_path: Path)
     assert not (root / ".eval-workspaces/test-run/behaviour-moo/skill-1").exists()
     written = [p for p in (root / "eval-results").rglob("*") if p.is_file()]
     assert not [p for p in written if TOKEN in p.read_text()]
+
+
+def agent_runs(tmp_path: Path, command: str) -> tuple[int, dict[str, Any], FakeGrader]:
+    """A graded run of one trial whose agent runs command in its workspace."""
+    write = tool("Bash", {"command": command, "description": "Save"}, "toolu_2")
+    script = {MOO: [tool("Skill", {"skill": "cowsay"}, "toolu_1"), write, text(COW)]}
+    fake = fake_grader(tmp_path / "grader", verdicts=PASS_BOTH)
+    with serve(script) as server:
+        exit_code = graded_run(tmp_path, server.url, fake, case_ids=("behaviour-moo",))
+    (trial,) = results(tmp_path / "repo")["trials"]
+    return exit_code, trial, fake
+
+
+TRIAL_DIR = ".eval-workspaces/test-run/behaviour-moo/skill-1"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+@pytest.mark.parametrize(
+    ("command", "swept"),
+    [
+        (f"mkdir locked && echo {TOKEN} > locked/t.txt && chmod 0 locked", "locked/t.txt"),
+        (f"mkdir listed && echo {TOKEN} > listed/t.txt && chmod 600 listed", "listed/t.txt"),
+        (f"echo {TOKEN} > sealed.txt && chmod 0 sealed.txt", "sealed.txt"),
+    ],
+)
+def test_a_token_in_output_the_agent_locked_is_swept_and_deleted(
+    tmp_path: Path, command: str, swept: str
+) -> None:
+    try:
+        exit_code, trial, fake = agent_runs(tmp_path, command)
+    finally:
+        # Where no no-follow chmod exists, restore_access leaves what the agent locked.
+        with contextlib.suppress(FileNotFoundError):
+            (tmp_path / "repo" / TRIAL_DIR / "workspace" / swept.partition("/")[0]).chmod(0o755)
+    assert exit_code == 1
+    assert fake.prompts() == []
+    assert trial["secret_found"] == {"files": [f"workspace/{swept}"], "deleted": True}
+    assert trial["valid"] is False
+    assert not (tmp_path / "repo" / TRIAL_DIR).exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+def test_clean_output_the_agent_locked_stays_scored_and_reaches_the_grader(tmp_path: Path) -> None:
+    exit_code, trial, fake = agent_runs(tmp_path, "echo moo > sealed.txt && chmod 0 sealed.txt")
+    assert exit_code == 0, json.dumps(trial, indent=2)
+    assert trial["secret_found"] is None
+    assert (trial["valid"], trial["passed"]) == (True, True)
+    assert "### sealed.txt\n\nmoo\n" in fake.prompts()[0]
+    assert (tmp_path / "repo/eval-results/test-run/benchmark.json").exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+@pytest.mark.parametrize(
+    ("command", "locked", "reason"),
+    [
+        (
+            "echo moo > sealed.txt && chmod 0 sealed.txt",
+            None,
+            "could not sweep the trial for secrets: PermissionError",
+        ),
+        (
+            "mkdir locked && chmod 0 locked",
+            "locked",
+            (
+                "could not sweep the trial for secrets: PermissionError; "
+                "the trial directory could not be deleted"
+            ),
+        ),
+    ],
+)
+def test_output_that_stays_unreadable_fails_the_trial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    locked: str | None,
+    reason: str,
+) -> None:
+    monkeypatch.setattr(workspace, "restore_access", lambda _root: None)
+    trial_dir = tmp_path / "repo" / TRIAL_DIR
+    try:
+        exit_code, trial, fake = agent_runs(tmp_path, command)
+        assert trial_dir.exists() is (locked is not None)
+    finally:
+        if locked is not None:
+            (trial_dir / "workspace" / locked).chmod(0o755)
+    assert exit_code == 1
+    assert fake.prompts() == []
+    assert (trial["status"], trial["status_reason"]) == ("infra_error", reason)
+    assert (trial["valid"], trial["transcript"], trial["secret_found"]) == (False, None, None)
+    assert "stderr" not in trial
 
 
 def test_a_grader_reply_utf_8_cannot_encode_is_written_with_replacements(tmp_path: Path) -> None:
