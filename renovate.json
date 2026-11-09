@@ -1,6 +1,147 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am on monday"],
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "automerge": false,
+  "labels": ["dependencies"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "customManagers": [
+    {
+      "description": "uv: the version uv itself requires",
+      "customType": "regex",
+      "managerFilePatterns": ["/^pyproject\\.toml$/"],
+      "matchStrings": ["required-version = \"==(?<currentValue>[^\"]+)\""],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "uv"
+    },
+    {
+      "description": "uv: the version setup-uv installs in CI",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "astral-sh/setup-uv@[^\\n]*\\n\\s+with:\\n\\s+version: '(?<currentValue>[^']+)'"
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "uv"
+    },
+    {
+      "description": "uv: the README's prerequisites table",
+      "customType": "regex",
+      "managerFilePatterns": ["/^README\\.md$/"],
+      "matchStrings": ["\\| \\[uv\\]\\([^)]+\\) \\| (?<currentValue>[^ |]+) \\|"],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "uv"
+    },
+    {
+      "description": "just: the version the just-version recipe requires",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Justfile$/"],
+      "matchStrings": ["required='just (?<currentValue>[^']+)'"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "casey/just"
+    },
+    {
+      "description": "just: the version setup-just installs in CI",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": ["just-version: '(?<currentValue>[^']+)'"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "casey/just"
+    },
+    {
+      "description": "just: the README's prerequisites table",
+      "customType": "regex",
+      "managerFilePatterns": ["/^README\\.md$/"],
+      "matchStrings": ["\\| \\[just\\]\\([^)]+\\) \\| (?<currentValue>[^ |]+) \\|"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "casey/just"
+    },
+    {
+      "description": "Node: the README's prerequisites table",
+      "customType": "regex",
+      "managerFilePatterns": ["/^README\\.md$/"],
+      "matchStrings": [
+        "\\| \\[Node\\.js\\]\\([^)]+\\) \\| (?<currentValue>[^ ,|]+), with npm [^ |]+ \\|"
+      ],
+      "datasourceTemplate": "node-version",
+      "depNameTemplate": "node"
+    },
+    {
+      "description": "npm: the README's prerequisites table",
+      "customType": "regex",
+      "managerFilePatterns": ["/^README\\.md$/"],
+      "matchStrings": [
+        "\\| \\[Node\\.js\\]\\([^)]+\\) \\| [^ ,|]+, with npm (?<currentValue>[^ |]+) \\|"
+      ],
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "npm"
+    },
+    {
+      "description": "Claude Code: the allowScripts key, which strict-allow-scripts requires to name the installed version",
+      "customType": "regex",
+      "managerFilePatterns": ["/^package\\.json$/"],
+      "matchStrings": ["\"@anthropic-ai/claude-code@(?<currentValue>[^\"]+)\": true"],
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "@anthropic-ai/claude-code"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "uv and its build backend move together",
+      "matchPackageNames": ["uv", "uv_build"],
+      "groupName": "uv"
+    },
+    {
+      "description": "Node in .node-version, engines and the README moves together",
+      "matchPackageNames": ["node"],
+      "groupName": "Node"
+    },
+    {
+      "description": "npm in packageManager, engines and the README moves together",
+      "matchPackageNames": ["npm"],
+      "groupName": "npm"
+    },
+    {
+      "description": "just in the Justfile, the workflows and the README moves together",
+      "matchPackageNames": ["casey/just"],
+      "groupName": "just"
+    },
+    {
+      "description": "Each agent CLI gets its own PR and a review checklist",
+      "matchPackageNames": ["@anthropic-ai/claude-code", "@openai/codex"],
+      "addLabels": ["agent-cli"],
+      "prBodyNotes": [
+        "**Agent CLI bump checklist** (see `CONTRIBUTING.md`, Dependency updates):\n\n- [ ] Claude Code only: read the new version's postinstall script before approving; `allowScripts` lets it run.\n- [ ] Re-check eval isolation against `docs/explanation/eval-isolation.md`. For Codex, compare the skill locations it scans with its release notes.\n- [ ] The report labels a comparison across this bump not like-for-like (ADR 0014), so a regression flag on the next benchmark may be the CLI, not the skill."
+      ]
+    },
+    {
+      "description": "Python minor and major upgrades move requires-python, ruff target-version and mypy python_version by hand",
+      "matchPackageNames": ["python"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    },
+    {
+      "description": "GitHub Actions minor, patch and digest updates in one PR",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": "Python dev tools, minor and patch, in one PR",
+      "matchPackageNames": ["ruff", "mypy", "pytest", "prek", "skills-ref", "types-pyyaml"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Python dev tools"
+    },
+    {
+      "description": "Node dev tools, minor and patch, in one PR",
+      "matchPackageNames": ["prettier", "markdownlint-cli2", "skills"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Node dev tools"
+    }
   ]
 }

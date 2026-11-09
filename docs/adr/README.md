@@ -19,3 +19,4 @@ Each record states one decision that is hard to reverse, would surprise a reader
 | [0013](0013-pi-deferred-past-mvp.md) | The MVP evaluates Claude Code and Codex; Pi is installable but deferred |
 | [0014](0014-benchmark-history.md) | Benchmark history is committed under benchmarks/, one file per named iteration |
 | [0015](0015-dev-skills-under-build.md) | Real dev skill folders live under dev-skills/build/, where the installer's recursive scan cannot reach them |
+| [0016](0016-dependency-updates-via-renovate.md) | Renovate proposes every pin bump weekly, after 7 days; a person merges each one |
