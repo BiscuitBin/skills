@@ -108,6 +108,27 @@ def test_the_allow_scripts_key_names_the_installed_claude_code(
     assert list(package["allowScripts"]) == [f"@anthropic-ai/claude-code@{pinned}"]
 
 
+def rules_for(**match: list[str]) -> list[dict[str, Any]]:
+    rules: list[dict[str, Any]] = CONFIG["packageRules"]
+    return [r for r in rules if all(r.get(k) == v for k, v in match.items())]
+
+
+def test_uv_groups_with_its_build_backend_by_normalized_name() -> None:
+    # Renovate matches matchPackageNames against the PEP 503-normalized name, so
+    # `uv_build` would match nothing and the backend would get a PR of its own.
+    [rule] = [r for r in CONFIG["packageRules"] if r.get("groupName") == "uv"]
+    assert rule["matchPackageNames"] == ["uv", "uv-build"]
+
+
+def test_the_actions_manager_leaves_the_workflow_tool_versions_to_the_regex_managers() -> None:
+    # The github-actions manager also reads setup-uv's `version` and setup-just's
+    # `just-version` (dep type uses-with). Left on, it would bump the CI copies alone.
+    [rule] = rules_for(matchManagers=["github-actions"], matchDepTypes=["uses-with"])
+    assert rule["enabled"] is False
+    [group] = [r for r in CONFIG["packageRules"] if r.get("groupName") == "GitHub Actions"]
+    assert group["matchDepTypes"] == ["action"]
+
+
 def walk(node: object) -> list[tuple[str, object]]:
     if isinstance(node, dict):
         return [pair for k, v in node.items() for pair in [(k, v), *walk(v)]]

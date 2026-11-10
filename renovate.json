@@ -92,8 +92,8 @@
   ],
   "packageRules": [
     {
-      "description": "uv and its build backend move together",
-      "matchPackageNames": ["uv", "uv_build"],
+      "description": "uv and its build backend move together; Renovate matches the backend by its normalized name, uv-build",
+      "matchPackageNames": ["uv", "uv-build"],
       "groupName": "uv"
     },
     {
@@ -126,8 +126,15 @@
       "enabled": false
     },
     {
+      "description": "The workflows' tool-version inputs (setup-uv version, setup-just just-version) belong to the uv and just regex managers, so the github-actions manager must not bump them on its own",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["uses-with"],
+      "enabled": false
+    },
+    {
       "description": "GitHub Actions minor, patch and digest updates in one PR",
       "matchManagers": ["github-actions"],
+      "matchDepTypes": ["action"],
       "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
       "groupName": "GitHub Actions"
     },
