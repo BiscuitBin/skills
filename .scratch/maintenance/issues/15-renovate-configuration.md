@@ -1,10 +1,10 @@
 # 15: Renovate configuration
 
-**What to build:** finish Renovate's onboarding branch (`renovate/configure`), which held only a bare `config:recommended` `renovate.json`. That config missed most of the repo's pins, including every copy Renovate's built-in managers cannot read, and failed `just check` on Prettier formatting. The decision is recorded in [ADR 0016](../../../docs/adr/0016-dependency-updates-via-renovate.md).
+**What to build:** finish Renovate's onboarding branch (`renovate/configure`), which held only a bare `config:recommended` `renovate.json`. That config missed most of the repo's pins, including every copy Renovate's built-in managers cannot read or read under another name, and failed `just check` on Prettier formatting. The decision is recorded in [ADR 0016](../../../docs/adr/0016-dependency-updates-via-renovate.md).
 
 **Blocked by:** none.
 
-**Status:** in review
+**Status:** done, except the post-push check of the onboarding PR (the last acceptance criterion), which waits for the user's OK to push
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). Pushing to `renovate/configure` updates Renovate's onboarding PR and needs the user's OK. Cross-model review is also required.
 
@@ -43,4 +43,4 @@ Use the `cross-model-review` dev skill. Pay particular attention to regexes that
 ### Residual risk
 
 - Renovate's own validator has not run; `renovate.json` passes Renovate's published JSON schema (checked with a one-off `jsonschema`).
-- To confirm on the onboarding PR: every expected dependency is detected; `engines` and `required-version` are not also proposed natively; Renovate relocks `uv.lock` when the uv group bumps `required-version`; on the Claude Code PR the `allowScripts` key changes before npm relocks under `strict-allow-scripts`; and updates whose datasource has no release timestamp do not wait forever under `minimumReleaseAge`.
+- To confirm on the onboarding PR: every expected dependency is detected; `engines` and `required-version` are not also proposed natively; Renovate relocks `uv.lock` when the uv group bumps `required-version`; on the Claude Code PR the `allowScripts` key changes before npm relocks under `strict-allow-scripts`; updates whose datasource has no release timestamp do not wait forever under `minimumReleaseAge`; `uv-build` lands in the uv group PR; and no `astral-sh/uv` or `casey/just` update appears in the "GitHub Actions" group. Both review fixes rest on Renovate's `main` source, and the hosted app may run an older release.

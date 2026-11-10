@@ -1,10 +1,10 @@
 """Renovate's custom managers still find every coupled pin, and the copies agree.
 
-Renovate's built-in managers do not read the README, the Justfile, the workflows'
-tool versions or package.json's allowScripts key, so renovate.json tracks them with
-regex managers. A reworded line would drop a pin from Renovate's view without any
-error, and a bump would then miss that copy. See
-docs/adr/0016-dependency-updates-via-renovate.md.
+Renovate's built-in managers do not read the README, the Justfile or package.json's
+allowScripts key, and read the workflows' tool versions under other dependency
+names, so renovate.json tracks all of them with regex managers. A reworded line
+would drop a pin from Renovate's view without any error, and a bump would then
+miss that copy. See docs/adr/0016-dependency-updates-via-renovate.md.
 """
 
 import json
