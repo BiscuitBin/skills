@@ -40,7 +40,21 @@ Use the `cross-model-review` dev skill. Pay particular attention to regexes that
 
 **Follow-ups:** none from the review. The post-push checks are the open acceptance criterion above.
 
+### Cross-model review, round 2
+
+- **Implementer:** Claude Code running Opus 5.5 (`claude-opus-5-5`)
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `dd3b696...d78667a` (the whole branch, including the round 1 fixes)
+- **Findings:** `ai_tmp/review-20261110T021642Z-codex.md` · **Triage:** `ai_tmp/triage-20261110-renovate-r2.md`
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | Lockfile maintenance's `uv lock --upgrade` takes transitive releases younger than 7 days: Renovate passes `minimumReleaseAge` to npm (`--before`) but has no uv integration | valid | `pyproject.toml` sets `[tool.uv] exclude-newer = "7 days"` (relocked: `uv.lock` records `exclude-newer-span = "P7D"`); ADR 0016 and `CONTRIBUTING.md` say so; regression test `test_uv_resolves_only_releases_as_old_as_renovate_proposes` |
+
+**Follow-ups:** none.
+
 ### Residual risk
 
 - Renovate's own validator has not run; `renovate.json` passes Renovate's published JSON schema (checked with a one-off `jsonschema`).
 - To confirm on the onboarding PR: every expected dependency is detected; `engines` and `required-version` are not also proposed natively; Renovate relocks `uv.lock` when the uv group bumps `required-version`; on the Claude Code PR the `allowScripts` key changes before npm relocks under `strict-allow-scripts`; updates whose datasource has no release timestamp do not wait forever under `minimumReleaseAge`; `uv-build` lands in the uv group PR; and no `astral-sh/uv` or `casey/just` update appears in the "GitHub Actions" group. Both review fixes rest on Renovate's `main` source, and the hosted app may run an older release.
+- On the first lockfile-maintenance PR: the hosted Renovate's uv honours `exclude-newer` and no package uploaded within 7 days appears. uv compares each file's upload time while Renovate compares the release date, so a uv PR may lag a day behind.

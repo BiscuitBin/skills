@@ -104,7 +104,7 @@ Renovate opens a pull request for each pin bump on Monday mornings, once the rel
 2. Read the release notes the PR links, then merge or close it.
 3. For a PR labelled `agent-cli`, work through the checklist in its body before you approve it.
 
-Renovate relocks `uv.lock` and `package-lock.json` itself. When you change a pin by hand, run `just lock` and commit the manifest and its lockfile together. If you reword a README row, workflow step or Justfile line that holds a pin, keep `renovate.json`'s regex managers matching it; `tests/test_renovate.py` fails until they do.
+Renovate relocks `uv.lock` and `package-lock.json` itself. uv resolves only releases at least 7 days old (`exclude-newer` in `pyproject.toml`), so `uv add` cannot pick a newer one either. When you change a pin by hand, run `just lock` and commit the manifest and its lockfile together. If you reword a README row, workflow step or Justfile line that holds a pin, keep `renovate.json`'s regex managers matching it; `tests/test_renovate.py` fails until they do.
 
 ## Releases
 

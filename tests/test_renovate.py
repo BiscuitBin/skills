@@ -129,6 +129,13 @@ def test_the_actions_manager_leaves_the_workflow_tool_versions_to_the_regex_mana
     assert group["matchDepTypes"] == ["action"]
 
 
+def test_uv_resolves_only_releases_as_old_as_renovate_proposes() -> None:
+    # Renovate passes no age limit to uv, so lockfile maintenance's `uv lock
+    # --upgrade` would take a transitive release published that morning.
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    assert pyproject["tool"]["uv"]["exclude-newer"] == CONFIG["minimumReleaseAge"]
+
+
 def walk(node: object) -> list[tuple[str, object]]:
     if isinstance(node, dict):
         return [pair for k, v in node.items() for pair in [(k, v), *walk(v)]]
