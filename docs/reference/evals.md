@@ -159,7 +159,7 @@ The harness's own tests use two fixtures from `tests/fixtures/evals/git/`. `smal
 | `worktree` | The tree the working directory holds. Without it, the working directory is the index. |
 | `executable` | Paths that are mode `100755` in every tree that has them, each a file in at least one tree. Default `[]`. Every other file is `100644`, and modes on disk are ignored. |
 
-Each `tree`, `staged` and `worktree` names a directory under `trees/`, and one tree can serve several. A message is one nonempty paragraph, with no blank line and no leading or trailing whitespace, because Git stores it byte for byte. Unknown keys are rejected, in a commit too.
+Each `tree`, `staged` and `worktree` names a directory under `trees/` that holds at least one file, and one tree can serve several. Git keeps no empty directory, so a checkout would have no empty tree. A message is one nonempty paragraph, with no blank line and no leading or trailing whitespace, because Git stores it byte for byte. Unknown keys are rejected, in a commit too.
 
 The edits are the differences between the trees. Staged edits, deletions and renames are the index against the branch's last commit; unstaged ones are the working directory against the index; untracked files are files in the working directory that the index lacks. A branch with nothing ahead and a clean tree is `"commits": []` with neither `staged` nor `worktree`, and uncommitted edits only is `"commits": []` with `staged` or `worktree`.
 

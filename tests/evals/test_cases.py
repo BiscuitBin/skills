@@ -570,6 +570,22 @@ def test_an_invalid_fixture_json_is_rejected_with_a_reason(
     assert any(expected in problem for problem in problems), problems
 
 
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        ({"worktree": "empty"}, "fixture.json: worktree 'empty' is not a directory under trees/"),
+        ({"main": [commit("empty")]}, "main[0]: tree 'empty' is not a directory under trees/"),
+    ],
+    ids=["worktree", "commit"],
+)
+def test_an_empty_tree_is_rejected_as_a_checkout_would_be(
+    tmp_path: Path, spec: dict[str, object], expected: str
+) -> None:
+    # Git keeps no empty directory, so a checkout has no trees/empty/ at all.
+    problems = fixture_problems(tmp_path, lambda d: (d / "trees/empty").mkdir(), spec=spec)
+    assert any(expected in p and "Git keeps no empty directory" in p for p in problems), problems
+
+
 def test_a_two_line_commit_message_is_one_paragraph(tmp_path: Path) -> None:
     add_fixture(tmp_path, "f", "clean-branch")
     path = tmp_path / "evals/cowsay/fixtures/f/fixture.json"

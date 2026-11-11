@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 FIXTURE_KEYS = {"branch", "main", "commits", "staged", "worktree", "executable"}
 COMMIT_KEYS = {"tree", "message"}
+# For a tree name that no checkout would have.
+NOT_A_TREE = "is not a directory under trees/ that holds a file (Git keeps no empty directory)"
 # Git's and the agent CLIs' own names, by their lowercase form: on a file system
 # that folds case, a fixture's .Claude/ is the directory the skill is installed
 # in, and its claude.md is the CLI's CLAUDE.md. A .gitattributes would outrank
@@ -141,13 +143,6 @@ def _unknown(data: dict[str, object], allowed: set[str], where: str) -> list[str
     return [f"{where}: unknown key {key!r}" for key in sorted(set(data) - allowed)]
 
 
-def _tree_names(directory: Path) -> set[str]:
-    trees = directory / "trees"
-    if not trees.is_dir():
-        return set()
-    return {path.name for path in trees.iterdir() if path.is_dir()}
-
-
 def _message(message: object) -> bool:
     """One nonempty paragraph, stored as written: git commit-tree keeps every byte."""
     return (
@@ -175,7 +170,7 @@ def _commits(
         problems += _unknown(item, COMMIT_KEYS, at)
         tree, message = item.get("tree"), item.get("message")
         if not isinstance(tree, str) or tree not in trees:
-            problems.append(f"{at}: tree {tree!r} is not a directory under trees/")
+            problems.append(f"{at}: tree {tree!r} {NOT_A_TREE}")
         if not _message(message):
             problems.append(
                 f"{at}: message must be a nonempty string of one paragraph, "
@@ -356,14 +351,15 @@ def _spec(
         return None
     before = len(problems)
     problems += _unknown(data, FIXTURE_KEYS, where)
-    names = _tree_names(directory)
+    # Only the trees a checkout has: Git keeps no directory without a file.
+    names = set(trees)
     branch = data.get("branch")
     problems += _branch(branch, root, where)
     main = _commits(data, "main", names, where, problems)
     commits = _commits(data, "commits", names, where, problems)
     for key in ("staged", "worktree"):
         if key in data and (not isinstance(data[key], str) or data[key] not in names):
-            problems.append(f"{where}: {key} {data[key]!r} is not a directory under trees/")
+            problems.append(f"{where}: {key} {data[key]!r} {NOT_A_TREE}")
     executable = data.get("executable", [])
     if not isinstance(executable, list) or not all(isinstance(p, str) for p in executable):
         problems.append(f"{where}: executable must be a list of paths")
