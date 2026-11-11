@@ -19,8 +19,12 @@ _Avoid_: Activation, firing
 ## Evals
 
 **Eval case**:
-One scenario a skill is tested against: a prompt, any input files, and the assertions or rubric that decide whether the outcome is right.
+One scenario a skill is tested against: a prompt, the fixture its trials start in if it has one, and the assertions or rubric that decide whether the outcome is right.
 _Avoid_: Test case, scenario, example
+
+**Fixture**:
+A small project with Git history, a branch checked out and any uncommitted edits, that an eval case's trials start in, the same in both arms.
+_Avoid_: Input files, seed repo, test repo
 
 **Placeholder case**:
 A starter eval case that a new skill begins with, standing in for a real case the author has not written yet. It is never run, so it can never pass.

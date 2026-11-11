@@ -1,12 +1,12 @@
 # Evals
 
-The eval harness runs a skill's eval cases against a pinned agent CLI, headless, in several trials and optionally against a baseline, grades rubric expectations with an LLM, and writes a results file and a benchmark. This page covers the case schema, the adapter interface, isolation, credentials, the contamination check, the grader, the benchmark and the results format. [Eval isolation](../explanation/eval-isolation.md) explains why isolation is built this way and what it does not cover.
+The eval harness runs a skill's eval cases against a pinned agent CLI, headless, in several trials and optionally against a baseline, grades rubric expectations with an LLM, and writes a results file and a benchmark. This page covers the case schema and its git fixtures, the adapter interface, isolation, credentials, the contamination check, the grader, the benchmark and the results format. [Eval isolation](../explanation/eval-isolation.md) explains why isolation is built this way and what it does not cover.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `just validate-evals` | Validates every `evals/*/evals.json` against the schema below. It calls no agent and is part of `just check`. |
+| `just validate-evals` | Validates every `evals/*/evals.json` against the schema below, and every [fixture](#fixtures) in `evals/*/fixtures/`. It calls no agent and is part of `just check`. |
 | `just eval <skill> --agent claude` | Runs every case of `evals/<skill>/evals.json` against the pinned Claude Code. |
 | `just eval <skill> --agent codex` | Runs the same cases against the pinned Codex. |
 | `… --case <id>` | Runs only that case. Repeat it to run several. An unknown id is a usage error. |
@@ -67,7 +67,8 @@ Cases live at `evals/<skill>/evals.json`, outside the shipped skill's directory,
 | `prompt` | The nonempty prompt, passed to the agent as an argument. It is never written into the workspace. |
 | `should_trigger` | Required on every case. The trial's trigger outcome must match it. A `behaviour` case needs `true`. |
 | `expected_output` | Optional human description, kept from skill-creator. It is not graded. |
-| `files` | Input files are not staged yet: anything but an empty list is rejected with a note that staging is deferred. |
+| `files` | Accepted only as an empty list. Input files are staged with a fixture, so anything else is rejected with a message that points to `fixture`. |
+| `fixture` | Optional, on either kind: the name of a [fixture](#fixtures), a lowercase slug, which the case's trials start in, in both arms. It must name a directory `evals/<skill>/fixtures/<name>/`. It may sit beside `files: []`. |
 | `assertions` | Deterministic assertions, below. A `behaviour` case needs at least one; a `trigger` case must have none. |
 | `placeholder` | `true` marks a starter case written by `just new-skill`, which is not written yet. `just eval` refuses to run it (see [placeholder cases](#placeholder-cases)). Delete the key once the case is written; `false` is rejected. |
 | `expectations` | Optional rubric for the [grader](#grader), on `behaviour` cases only (skill-creator's field). Each item is a string, judged blinded, or `{"text": …, "needs_transcript": true}`, judged from the commands and the final message instead (no output files) and marked unblinded. Text must be nonempty and unique within the case; `needs_transcript: false` is rejected (use the string form). |
@@ -96,6 +97,74 @@ Each type is a **skill-use** assertion (`skill_triggered`, `script_ran`), which 
 | `output_matches` | `pattern` | Python `re.search(pattern, final_message)` matches. The schema rejects a pattern that does not compile. |
 
 `script` must be a file inside the skill directory.
+
+### Fixtures
+
+A fixture is a small project with Git history that a case's trials start in, instead of an empty `git init`: a `main` branch, a second branch checked out, usually ahead of `main`, and optional staged, unstaged and untracked edits. It lives beside the cases, so distribution never ships it ([ADR 0011](../adr/0011-eval-case-location-and-isolation.md)), as a `fixture.json` and one full snapshot of the project per tree:
+
+```text
+evals/<skill>/fixtures/<name>/
+  fixture.json
+  trees/<tree>/...
+```
+
+The harness's own tests use two fixtures from `tests/fixtures/evals/git/`. `small-tally` has every state:
+
+```json
+{
+  "branch": "add-average",
+  "main": [
+    { "tree": "start", "message": "Add the tally command" },
+    { "tree": "tested", "message": "Test the totals" }
+  ],
+  "commits": [{ "tree": "average", "message": "Print the average after the total" }],
+  "staged": "average-staged",
+  "worktree": "average-wip",
+  "executable": ["tally.py"]
+}
+```
+
+| Key | Rule |
+| --- | --- |
+| `branch` | Required: the branch checked out. It must pass both `git check-ref-format --branch <branch>` and `git check-ref-format refs/heads/<branch>`, and, ignoring case, be neither `main` nor start with `main/`, which cannot sit beside `main`. |
+| `main` | Required: the commits on `main`, oldest first, at least one. Each is `{"tree": <tree>, "message": <message>}`. |
+| `commits` | The commits on the branch, on top of `main`'s last, in the same form. Default `[]`, which leaves the branch level with `main`. |
+| `staged` | The tree the index holds. Without it, the index is the branch's last commit. |
+| `worktree` | The tree the working directory holds. Without it, the working directory is the index. |
+| `executable` | Paths that are mode `100755` in every tree that has them, each a file in at least one tree. Default `[]`. Every other file is `100644`, and modes on disk are ignored. |
+
+Each `tree`, `staged` and `worktree` names a directory under `trees/`, and one tree can serve several. A message is one nonempty paragraph, with no blank line and no leading or trailing whitespace, because Git stores it byte for byte. Unknown keys are rejected, in a commit too.
+
+The edits are the differences between the trees. Staged edits, deletions and renames are the index against the branch's last commit; unstaged ones are the working directory against the index; untracked files are files in the working directory that the index lacks. A branch with nothing ahead and a clean tree is `"commits": []` with neither `staged` nor `worktree`, and uncommitted edits only is `"commits": []` with `staged` or `worktree`.
+
+**The build.** Each trial builds its fixture into the fresh workspace first, before the agent's homes are prepared or the skill installed, the same way in both arms, with Git plumbing run from the harness's Python:
+
+1. The repository must use `sha1` object names.
+2. Each tree's files are stored as blobs from their bytes on disk (`git hash-object -w --no-filters`) and written as a tree through a temporary index.
+3. Each commit is made with `git commit-tree`, with `Robin Hale <robin@example.com>` as author and committer, dated 2026-01-01 00:00 UTC plus one hour per commit, counted across `main` and then the branch.
+4. `main` and the branch are created with no reflog, and the branch is checked out.
+5. The index is read from its tree, and the working files are written from the fixture's bytes, each with its mode and the first commit's date as its mtime. `git update-index -q --refresh` then records their stat data, so a later `git status` has nothing to write.
+6. `.git/info/exclude` gets exactly `/.claude/` and `/.agents/`, which hide either agent's installed skill from Git ([isolation](#isolation)).
+
+So a fixture's commits hash the same in every trial, run and machine. A fixture has no remote, so no `origin` and no `origin/main`: a skill finds a branch's base from local `main`. Nothing but the fixture's files and `.git/` is written to the workspace; `fixture.json`, the case and its expected output never reach it. A build that fails is the trial's infrastructure error.
+
+**Rules.** `load_suite` validates every directory in `evals/<skill>/fixtures/`, named by a case or not, so `just validate-evals` and `just eval` both refuse a suite whose fixture breaks one of these. They keep the installed skill hidden, the fixture neutral between the arms, and its bytes the same on every machine.
+
+- **No `.gitattributes`.** None, ignoring case, anywhere under the fixture's directory, in a tree or beside `fixture.json`: a fixture cannot carry Git attributes. The repository's root `.gitattributes` unsets `text` for every fixture tree, so Git stores their bytes as written, line endings included, and a nearer attributes file would outrank it.
+- **No negation in a root `.gitignore`.** A tree's root `.gitignore`, its name compared ignoring case, may hold no line that starts with `!` once a byte-order mark and leading whitespace are dropped, which is wider than Git's own rule. A `.gitignore` outranks `.git/info/exclude`, so `!/.claude/` would show the installed skill to Git in the skill arm only. A negation can sit in a subdirectory's `.gitignore`, and an escaped `\!` is allowed.
+- **Reserved names, ignoring case.** No path component may equal `.claude`, `.agents`, `.codex`, `.git`, `.gitattributes`, `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md` or `SKILL.md`, and no directory's name may end in `skills`. On a file system that folds case, as macOS's does, a fixture's `.Claude/` is the directory the skill is installed in, and its `claude.md` is the CLI's `CLAUDE.md`.
+- **Paths.** ASCII, and unique within a tree ignoring case, directories included. No symlink anywhere, and the fixture's directory may not be one.
+- **Neutral text.** No `skill` or `skills` wording, which the grader's [disclosure check](#grader) looks for, in a path, a file (binary files included), the branch or a message. None of Codex's sandbox denial keywords ([run status](#codex)), ignoring case, in a path or a file, because a failing command mostly prints the project's own text. Both checks read every file as UTF-8, so keep text files UTF-8: a word in a UTF-16 file is missed.
+- **Committed files only.** No file this repository ignores, such as `.DS_Store`, `.env` or `__pycache__/`, which would be on the author's disk but in no checkout. `git check-ignore --no-index` checks it when the suite's root is its repository's top level, as it is for `just validate-evals`; a copy of `evals/` outside any repository skips the check.
+
+**Limits.**
+
+- **One mode per path.** `executable` applies to every tree, so a fixture cannot change a file's mode between two commits.
+- **Repository hooks.** Fixture trees are data, so ruff, mypy, pytest, markdownlint, Prettier and the `check-executables-have-shebangs`, `check-shebang-scripts-are-executable` and `check-merge-conflict` hooks skip them. `just lint`'s other hooks still check them: a tree's `.json`, `.toml` and `.yaml` files must parse (`check-json`, `check-toml`, `check-yaml`), so a fixture cannot ship a malformed one, and no file may be over 768 KB, hold a private key, or differ from another only in case.
+- **Git writes on Codex.** Codex's sandbox does not let the agent write to `.git/`: a `git add` is reported as denied, and the trial is an infrastructure error ([run status](#codex)), so a flow that stages or commits cannot be scored on Codex. `git status` and `git diff` work. Observed on macOS only.
+- **Deleted files and the grader.** The grader is not told about a fixture file the agent deleted ([grader](#grader)).
+
+A change to anything in `evals/<skill>/fixtures/` changes the suite's `evals_sha256` ([provenance](#benchmark)), and `just eval-changed` selects the skill.
 
 ## Adapter interface
 
@@ -126,7 +195,7 @@ An adapter drives one agent CLI. The interface is `skills_tooling.evals.adapter.
 ### Claude Code
 
 - **Command:** `node_modules/.bin/claude -p <prompt> --output-format stream-json --verbose --model <model> --no-session-persistence --strict-mcp-config --permission-mode dontAsk --max-budget-usd 1.00 --debug-file <trial>/tmp/debug.log --allowedTools Skill Read Bash`. Stdin is `/dev/null`. `--bare` is not used because it accepts only an API key, and `--safe-mode` is not used because it disables skills.
-- **Environment:** built from scratch. `HOME`, `CLAUDE_CONFIG_DIR` (`<home>/.claude`), the four `XDG_*` directories and `TMPDIR` point inside the trial. `PATH` is `<trial>/bin:/usr/bin:/bin`. `CLAUDE_CODE_DISABLE_CLAUDE_MDS`, `CLAUDE_CODE_DISABLE_POLICY_SKILLS`, `DISABLE_AUTOUPDATER`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and `DISABLE_TELEMETRY` are all `1`. The Justfile's shared `CLAUDE_CONFIG_DIR` never reaches the child. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is not set: on Linux it requires `bubblewrap` and the CLI refuses to start without it. The CLI keeps the token out of its Bash tool's environment without it, which `test_secrets.py` checks on every platform.
+- **Environment:** built from scratch. `HOME`, `CLAUDE_CONFIG_DIR` (`<home>/.claude`), the four `XDG_*` directories and `TMPDIR` point inside the trial. `PATH` is `<trial>/bin:/usr/bin:/bin`. `CLAUDE_CODE_DISABLE_CLAUDE_MDS`, `CLAUDE_CODE_DISABLE_POLICY_SKILLS`, `DISABLE_AUTOUPDATER`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and `DISABLE_TELEMETRY` are all `1`. The Justfile's shared `CLAUDE_CONFIG_DIR` never reaches the child. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is not set: on Linux it requires `bubblewrap` and the CLI refuses to start without it. The CLI keeps the token out of its Bash tool's environment without it, which `test_secrets.py` checks on every platform. A [fixture](#fixtures) trial adds four Git variables ([isolation](#isolation)).
 - **Trigger rule:** an assistant `tool_use` named `Skill` whose `input.skill` is `<name>` or `<plugin>:<name>`, and whose matching `tool_result` is not `is_error`.
 - **Run status:** `infra_error` when the run timed out, a process survived teardown, the last event is not a `result` or a line did not parse, the `result` has `is_error: true`, or the exit code is nonzero. A failed login reports `subtype: "success"` with `is_error: true`, so `subtype` is never used. `apiKeySource` is `none` under OAuth too, so it is never used either.
 - **Built-in allowlist (2.1.309):** `batch claude-api code-review dataviz debug deep-research doctor fewer-permission-prompts loop plugin-authoring run run-skill-generator schedule simplify update-config verify workflow-authoring`. The plugins are `cc-plugin-agents-md@builtin` and `cc-plugin-plugin-authoring@builtin`. `schedule` is listed only when an OAuth token is set. A new CLI version fails the check with a hint to re-record the allowlist from the canary sweep.
@@ -134,7 +203,7 @@ An adapter drives one agent CLI. The interface is `skills_tooling.evals.adapter.
 ### Codex
 
 - **Command:** the pinned native binary that `node_modules/.bin/codex` would start (`node_modules/@openai/codex-<platform>/vendor/<triple>/bin/codex`), run directly so no Node is needed on the trial's `PATH`: `codex exec --json --ephemeral --ignore-user-config --ignore-rules --sandbox workspace-write --model <model> --cd <workspace> -c allow_login_shell=false -c project_doc_max_bytes=0 -c analytics.enabled=false --disable plugins --disable remote_plugin --disable apps -- <prompt>`. Stdin is `/dev/null`. The sandbox confines the agent's writes to the workspace and the trial's `TMPDIR`. On Ubuntu 23.10 and later, AppArmor blocks the unprivileged user namespaces the Linux sandbox needs, and Codex denies every command (`bwrap: loopback: Failed RTM_NEWADDR`), so every trial is an `infra_error` (see **Run status**). The fix is an AppArmor profile for the Codex binary, or `sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, which CI sets. `allow_login_shell=false` matters: a login shell runs the system profile, whose `path_helper` puts `/usr/bin/python3` ahead of the trial's `python3` wrapper. Plugins and apps are disabled because Codex otherwise syncs the account's remote plugins, with their skills, into its home mid-run.
-- **Environment:** built from scratch, like Claude Code's. `HOME`, `CODEX_HOME` (`<home>/.codex`), the four `XDG_*` directories and `TMPDIR` point inside the trial. `PATH` is `<trial>/bin:/usr/bin:/bin` and `SHELL` is `/bin/bash`, though Codex runs commands in the account's login shell from the password database (`/bin/zsh` on macOS), with `-c` rather than `-lc`. `RUST_LOG=warn,codex_otel.log_only=info` makes Codex log its telemetry events to stderr. `--ephemeral` keeps session files off disk, but Codex still writes its SQLite state and a `config.toml` that trusts the workspace into the trial's `CODEX_HOME`.
+- **Environment:** built from scratch, like Claude Code's. `HOME`, `CODEX_HOME` (`<home>/.codex`), the four `XDG_*` directories and `TMPDIR` point inside the trial. `PATH` is `<trial>/bin:/usr/bin:/bin` and `SHELL` is `/bin/bash`, though Codex runs commands in the account's login shell from the password database (`/bin/zsh` on macOS), with `-c` rather than `-lc`. `RUST_LOG=warn,codex_otel.log_only=info` makes Codex log its telemetry events to stderr. `--ephemeral` keeps session files off disk, but Codex still writes its SQLite state and a `config.toml` that trusts the workspace into the trial's `CODEX_HOME`. A [fixture](#fixtures) trial adds four Git variables ([isolation](#isolation)), and Codex sets `GIT_PAGER=cat` for the agent's commands.
 - **Event stream:** `--json` writes JSONL: `thread.started`, `turn.started`, `item.started` and `item.completed` (items `command_execution`, `agent_message`, `error`), then `turn.completed` or `turn.failed`. A `command_execution` carries the command as `<shell> -c '<command>'`; the adapter removes the wrapper, so `script_ran` sees the agent's command. Its `aggregated_output` and `exit_code` are the tool result. The stream carries neither the CLI version nor the model.
 - **Kept stderr lines:** four kinds, reduced to the fields named here, because telemetry lines can name the account. `codex.conversation_starts` gives `app.version` and `model`. `codex.skill_invocation` gives `skill.name`, `skill.scope` and `skill.invocation_type`. `codex.sandbox_outcome` gives `outcome`, plus `tool_name` and `call_id` for diagnosis; Codex logs it when a sandboxed command fails as denied, timed out or killed by a signal (`core/src/tools/orchestrator.rs` at `rust-v0.163.0`), and a working sandbox logged none in the recorded runs. `failed to load skill <path>: <reason>` is logged for a `SKILL.md` Codex cannot parse. The rest of the telemetry, including any continuation lines of a record, is dropped from the stored stderr, and a `failed to load skill` inside a telemetry record (tool output, say) does not count. Codex copies a tool's output into its `codex.tool_result` record raw and unquoted, with the record's remaining fields on the line after it, so a tool can print a line that looks like a record of Codex's. A stderr line that matches a line in the JSONL event stream, or is the start of one, or starts with one, is therefore never a record's first line: it continues the record above. Both are split only on `\n`, so a `\r` a tool printed starts no line.
 - **Trigger rule:** Codex has no skill tool, so a trigger is a read of the skill's `SKILL.md`. Any of these counts:
@@ -143,7 +212,7 @@ An adapter drives one agent CLI. The interface is `skills_tooling.evals.adapter.
   - A `codex.skill_invocation` event with `invocation_type="explicit"`. An explicit `$<name>` mention makes Codex inject the skill's `SKILL.md` into the request as a `<skill>` message, so no command reads it and nothing appears in the JSONL. The event is the only local evidence, which is why the adapter keeps it.
 
   The skill name may carry a plugin prefix: the shipped cowsay is named `cowsay:cowsay`, because Codex reads its `.claude-plugin/plugin.json` as a plugin manifest, so the explicit mention is `$cowsay:cowsay`. A bare `$cowsay` loads nothing explicitly. The adapter strips the prefix, as it does for Claude Code. A read and Codex's event for it are one trigger.
-- **Run status:** `infra_error` when the run timed out, a process survived teardown, Codex failed to load a skill, Codex reported a command as denied by its sandbox (any `codex.sandbox_outcome` with `outcome=denied`), the last event is `turn.failed` (a failed login ends this way, after retries) or not `turn.completed`, a line did not parse, or the exit code is nonzero. `error` events alone do not fail the run: Codex reports each reconnect as one. A denied command leaves no `command_execution` item in the JSONL; its text is only in the `codex.tool_result` record, which the adapter drops whole because it carries raw tool output and account fields. A trace missing commands cannot be scored, as with a truncated stream, and recording the denial as a failed command would still let a `should_trigger: false` case pass on a run whose read the sandbox blocked. Any denial counts, including a legitimate one in a working sandbox, such as a write outside the workspace. Codex's test is a heuristic (`is_likely_sandbox_denied` in `sandboxing/src/denial.rs` at `rust-v0.163.0`): a sandboxed command that exits nonzero and whose output contains `operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock` or `failed to write file` is reported as denied, so an ordinary failure that prints `Permission denied` marks the trial too. A skill whose normal flow does that cannot be scored under Codex.
+- **Run status:** `infra_error` when the run timed out, a process survived teardown, Codex failed to load a skill, Codex reported a command as denied by its sandbox (any `codex.sandbox_outcome` with `outcome=denied`), the last event is `turn.failed` (a failed login ends this way, after retries) or not `turn.completed`, a line did not parse, or the exit code is nonzero. `error` events alone do not fail the run: Codex reports each reconnect as one. A denied command leaves no `command_execution` item in the JSONL; its text is only in the `codex.tool_result` record, which the adapter drops whole because it carries raw tool output and account fields. A trace missing commands cannot be scored, as with a truncated stream, and recording the denial as a failed command would still let a `should_trigger: false` case pass on a run whose read the sandbox blocked. Any denial counts, including a legitimate one in a working sandbox, such as a write outside the workspace. Codex's test is a heuristic (`is_likely_sandbox_denied` in `sandboxing/src/denial.rs` at `rust-v0.163.0`): a sandboxed command that exits nonzero and whose output contains `operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock` or `failed to write file` is reported as denied, so an ordinary failure that prints `Permission denied` marks the trial too. A skill whose normal flow does that cannot be scored under Codex, and neither can one that writes to Git in a [fixture](#fixtures) trial: the sandbox denies a `git add` (observed on macOS).
 - **Built-in allowlist (0.163.0):** the bundled skills Codex writes to `$CODEX_HOME/skills/.system` on startup: `imagegen openai-docs review-agent skill-creator skill-installer`. `review-agent` is written but not listed to the model. No plugins are allowed.
 
 ## Credentials
@@ -159,12 +228,34 @@ The harness refuses to start without the token. Every file it writes under `eval
 
 Each trial gets `.eval-workspaces/<run-id>/<case-id>/<arm>-<n>/` (for example `behaviour-ship-it/skill-1/`) with:
 
-- `workspace/`, a fresh `git init` (no global or system Git config) that is its own git root, gitignored, and outside `skills/` and `dev-skills/`. It holds `.git/` and the installed skill, nothing else.
+- `workspace/`, a fresh `git init --initial-branch=main` that is its own git root, gitignored, and outside `skills/` and `dev-skills/`. It holds `.git/`, the installed skill and, in a [fixture](#fixtures) trial, the fixture's working files, nothing else.
 - `home/`, the user home and the agent home.
 - `tmp/`, the agent's temporary directory, transcript and debug log.
 - `bin/`, holding `python3` and `python`, wrappers that run the harness's pinned interpreter, pass on a signal they receive as SIGTERM, and then log each call with its exit status, and `git`.
 
-The preflight checks all of this before the agent starts, and fails closed. A baseline trial installs nothing, so its workspace may hold only `.git/`.
+The preflight checks all of this before the agent starts, and fails closed. A baseline trial installs nothing, so its workspace may hold only `.git/` and its fixture's files.
+
+**Git.** The harness's own Git calls, from the `git init` to a fixture's build, run with `HOME=/dev/null`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` and `GIT_ATTR_NOSYSTEM=1`, so they read no global or system config and no system attributes. The agent's Git runs in the trial's environment instead. Its global config would be in the trial home, which is empty, but without a fixture it reads the system config (Apple Git's sets `credential.helper=osxkeychain`, for one) and the system attributes. A fixture trial adds four variables to the agent's environment once the homes are prepared, in both arms and for both agents:
+
+| Variable | Why |
+| --- | --- |
+| `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null` | No machine's config changes what the agent's Git prints. |
+| `GIT_ATTR_NOSYSTEM=1` | Git reads the system attributes even with `GIT_CONFIG_NOSYSTEM` set. Apple Git's, for one, change `git diff`'s hunk headers for `.m` files. |
+| `GIT_OPTIONAL_LOCKS=0` | `git status` takes no optional lock, so it never tries to write the index, which Codex's sandbox does not allow. The build's refresh leaves it nothing to write anyway. |
+
+The CLI is started with all four and passes them to the agent's commands (seen in Codex's, which also get `GIT_PAGER=cat`). A trial without a fixture keeps the environment it had.
+
+**The preflight in a fixture trial.** The inventory compares the workspace with what the build wrote, each working file's SHA-256 and mode, and the workspace must be exactly that, plus `.git/` and the installed skill. The walk enters only directories that hold a fixture file, and never follows a link. Then `git status --porcelain -z --untracked-files=all`, run with `GIT_OPTIONAL_LOCKS=0` so that it leaves the index as the build left it, must name nothing under `.claude/` or `.agents/`, a rename's source included. The problems it reports:
+
+| Problem | When |
+| --- | --- |
+| `unexpected in workspace: <path>` | A file or directory that is not the fixture's, `.git/` or the installed skill. Reported in every trial. |
+| `changed in workspace: <path>` | A fixture file whose bytes or mode differ, or that is now a link, a directory or anything else but a regular file. |
+| `missing from workspace: <path>` | A fixture file that is gone. |
+| `git status lists paths under .claude/ or .agents/, which must be hidden: <entry>` | The installed skill shows in `git status`. `and <n> more` follows the first entry when there are several. |
+| `git status failed in the workspace: <stderr>` | `git status` exited nonzero. |
+
+A trial without a fixture runs neither the comparison nor the status check, so its skill arm's `git status` lists `?? .claude/` or `?? .agents/` ([known limits](../explanation/eval-isolation.md#known-limits)).
 
 Trials run in rounds. In round n every case's trials run back to back, the skill arm first when n is odd and the baseline first when n is even, so order effects balance over an even trial count. Each trial records its `order` in the run.
 
@@ -204,6 +295,7 @@ Rubric expectations are graded by Claude through the pinned Claude Code CLI, wha
 - **Command:** `node_modules/.bin/claude -p <prompt> --system-prompt <grader prompt> --tools "" --disable-slash-commands --output-format stream-json --verbose --model <grader model> --no-session-persistence --strict-mcp-config --max-budget-usd 1.00`, in `.eval-workspaces/<run-id>/_grader/<random>/`, with the environment `prepare_homes` builds for an agent trial. The directory is deleted after each call. Its name is random because the CLI tells the model its working directory, and the trial key names the arm. No tools means everything it judges is in the prompt.
 - **Credential:** `CLAUDE_CODE_OAUTH_TOKEN`, the same token a Claude Code run uses. A Codex run whose selected cases carry expectations needs it too, and is a usage error without it. It joins the run's secrets, so the scrub and the sweep cover the grading files. A trial the sweep flags is never graded, and each finished material is scrubbed of every secret once more before it is sent, since removing a path can join the text on either side of it.
 - **Blinded material:** the final message (capped at 20 KB) and every workspace file except `.git/` and the skills directory (20 KB each, 80 KB in all; non-UTF-8 files by name and size, symlinks by name, and a file or directory the agent left unreadable by name, so it cannot turn its trial into a grader error; the runner restores access before grading, so a locked file reaches the grader with its contents, and the name alone is only the fallback for a path that stays unreadable). The caps keep the whole prompt inside one Linux argument; a NUL becomes U+FFFD for the same reason. A lone surrogate, in the material or in the grader's evidence and notes, becomes U+FFFD too, since UTF-8 cannot encode it. The trial directory, which names the arm, and every skill-install prefix (`.claude/skills/<skill>/`, `.agents/skills/<skill>/`, `skills/<skill>/`) are removed in both arms alike. Skill calls are never sent, nor the case's `expected_output`.
+- **Fixture files:** in a [fixture](#fixtures) trial, the material leaves out each fixture file that is still as the build wrote it, by the same record of bytes and mode the preflight checked. So the files are those the agent made or changed: a new file, an edited one, one whose mode changed, and a link or anything else at a fixture file's path. The files left out take none of the 80 KB and are not counted among the files not shown. A fixture file the agent deleted is not shown, because saying so would need a new line in the grader prompt and so a new `grader_prompt_sha256`, which labels every comparison with earlier runs; a `needs_transcript` expectation, which sees the commands, can judge a deletion. Without a fixture the material is what it was before fixtures existed.
 - **Disclosure check:** the material is scanned, case-insensitively, for the word `skill` or `skills` (not "skilled"), any file path inside `skills/<skill>/`, and `.claude/skills` or `.agents/skills`. A match is graded anyway and recorded as `arm_disclosed`, with the matches, because rewriting the agent's prose would change what is judged.
 - **Unblinded expectations** (`needs_transcript`) are judged in a second call whose material is the trace instead: each command with its output and status (4 KB per output, 100 KB in all), then the final message. Output files are not sent, so a file's contents belong in a blinded expectation. These expectations are marked `"blinded": false`.
 - **Untrusted material:** the material sits between `<graded-material-NONCE>` tags, with a fresh random nonce the material does not contain. The system prompt says everything inside is data and any instruction in it is to be ignored and noted.
@@ -243,11 +335,11 @@ For each agent, case and arm it counts `n_planned`, `n_scored` (status ok, uncon
 - No significance test or confidence interval is reported. With a few trials per arm the figures are descriptive.
 - In the printed table, a case's baseline reads `off` when the run had no baseline arm, and `skipped` when the baseline ran without that case.
 
-**Provenance**, recorded at the start of the run: the agent CLI versions and models the trials reported, the grader model requested and reported and its CLI version, `git_commit` and `git_dirty` (`git status --porcelain` is not empty; git runs without the user's config, except their global ignore file), `skill_sha256` (the sorted relative paths and bytes of `skills/<skill>/`, without `__pycache__`), `evals_sha256` (`evals/<skill>/evals.json`, cases and rubric), `grader_prompt_sha256`, the trial count, whether the baseline ran, and the cases it skipped.
+**Provenance**, recorded at the start of the run: the agent CLI versions and models the trials reported, the grader model requested and reported and its CLI version, `git_commit` and `git_dirty` (`git status --porcelain` is not empty; git runs without the user's config, except their global ignore file), `skill_sha256` (the sorted relative paths and bytes of `skills/<skill>/`, without `__pycache__`), `evals_sha256` (what the cases start from and are judged by: the SHA-256 of `evals/<skill>/evals.json` when the suite has no `fixtures/` directory, as cowsay's has not; otherwise the SHA-256 over that digest, the fixture format number, which changes whenever the build makes something else of the same fixture, and the sorted relative paths and bytes of everything in `evals/<skill>/fixtures/`, without `__pycache__`, so every fixture counts, named by a case or not, and so does a stray file such as `.DS_Store` that a clean checkout lacks), `grader_prompt_sha256`, the trial count, whether the baseline ran, and the cases it skipped.
 
 ## History and report
 
-`just eval-record <name> <run-id>...` records finished runs, one per agent, as an **iteration** of their skill: `benchmarks/<skill>/<name>.json`, committed ([ADR 0014](../adr/0014-benchmark-history.md)). It holds each run's `run_id`, `agent`, `started_at`, `trials_per_case`, `baseline`, `provenance`, the `cases` from `results.json`, and the agent's block of `benchmark.json`. It refuses a name that is already recorded, a run already recorded in another iteration of the skill, a name that does not start with a letter or digit, that has characters other than letters, digits, `.`, `_` and `-`, or that is `unrecorded`, which the report reserves for runs shown with `--run`, a run without a `benchmark.json`, two runs of one agent, and runs that differ in skill, `skill_sha256` or `evals_sha256`. Runs of one case file that selected different cases with `--case` are allowed; a case one agent did not run shows as `case not run`. Iterations are ordered by their latest run's `started_at`, then `recorded_at`, then name, so a backfilled run takes its true place.
+`just eval-record <name> <run-id>...` records finished runs, one per agent, as an **iteration** of their skill: `benchmarks/<skill>/<name>.json`, committed ([ADR 0014](../adr/0014-benchmark-history.md)). It holds each run's `run_id`, `agent`, `started_at`, `trials_per_case`, `baseline`, `provenance`, the `cases` from `results.json`, and the agent's block of `benchmark.json`. It refuses a name that is already recorded, a run already recorded in another iteration of the skill, a name that does not start with a letter or digit, that has characters other than letters, digits, `.`, `_` and `-`, or that is `unrecorded`, which the report reserves for runs shown with `--run`, a run without a `benchmark.json`, two runs of one agent, and runs that differ in skill, `skill_sha256` or `evals_sha256`, so two runs whose fixtures differ are two iterations. Runs of one case file that selected different cases with `--case` are allowed; a case one agent did not run shows as `case not run`. Iterations are ordered by their latest run's `started_at`, then `recorded_at`, then name, so a backfilled run takes its true place.
 
 `just eval-report [skill]` reads `benchmarks/`, every skill or the one named, and writes one self-contained page, `eval-results/report.html` (or `--out <path>`): inline CSS, no script, nothing fetched. It calls no agent and no network. For each skill it shows:
 
@@ -262,7 +354,7 @@ Missing data is shown by its reason, never as 0, never averaged and never compar
 
 | Label | When | On |
 | --- | --- | --- |
-| `cases or rubric changed` | `evals_sha256` differs | every metric |
+| `cases or rubric changed` | `evals_sha256` differs: the cases, the rubric, a fixture or the fixture format | every metric |
 | `agent model changed` | the requested model or the reported models differ | every metric |
 | `agent CLI version changed` | the reported CLI versions differ | every metric |
 | `grader prompt changed`, `grader model changed`, `grader CLI version changed` | the grader's prompt hash, requested or reported model, or CLI version differs | graded and outcome metrics and their deltas |
