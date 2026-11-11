@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeIs
 
-from skills_tooling.evals import workspace
+from skills_tooling.evals import fixture, workspace
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -552,10 +552,28 @@ def _global_excludes() -> Path | None:
     return path if path.is_file() else None
 
 
+def evals_sha256(root: Path, skill: str) -> str:
+    """The suite's cases and rubric, and the fixtures its trials start in.
+
+    A suite with no fixtures/ hashes its evals.json alone, as before fixtures
+    existed, so the hashes recorded for it still match. Otherwise the hash also
+    covers every fixture, named by a case or not, and the format build() makes
+    of them, since the same files built another way give the agent another start.
+    """
+    evals = root / "evals" / skill
+    digest = file_sha256(evals / "evals.json")
+    fixtures = evals / "fixtures"
+    if not fixtures.is_dir():
+        return digest
+    # Two fixed-length digests and a number, one per line: no two inputs join alike.
+    parts = (digest, str(fixture.FIXTURE_FORMAT), tree_sha256(fixtures))
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
+
+
 def provenance(root: Path, skill: str) -> dict[str, Any]:
     """What the run measured: the commit, the skill's files and its cases and rubric."""
     return {
         **git_state(root),
         "skill_sha256": tree_sha256(root / "skills" / skill),
-        "evals_sha256": file_sha256(root / "evals" / skill / "evals.json"),
+        "evals_sha256": evals_sha256(root, skill),
     }

@@ -1,14 +1,16 @@
 """The benchmark: per-case, per-arm statistics, deltas, notes and provenance."""
 
 import json
+import shutil
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from skills_tooling.evals import workspace
+from skills_tooling.evals import fixture, workspace
 from skills_tooling.evals.benchmark import (
     aggregate,
+    evals_sha256,
     file_sha256,
     git_state,
     provenance,
@@ -20,6 +22,7 @@ from skills_tooling.evals.benchmark import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+ROOT = Path(__file__).parents[2]
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/benchmark"
 SHIP = "behaviour-ship-it"
 
@@ -740,6 +743,74 @@ def test_provenance_hashes_the_skill_tree_and_its_evals_file(tmp_path: Path) -> 
     )
     assert recorded["git_dirty"] is True
     assert set(recorded) == {"git_commit", "git_dirty", "skill_sha256", "evals_sha256"}
+
+
+def test_cowsays_evals_sha256_still_matches_every_recorded_benchmark() -> None:
+    # Cowsay has no fixtures/, so its hash is still that of evals.json alone.
+    recorded = {
+        run["provenance"]["evals_sha256"]
+        for path in (ROOT / "benchmarks/cowsay").glob("*.json")
+        for run in json.loads(path.read_text())["runs"]
+    }
+    assert recorded == {"50a3864a8ac1f37a6ca34c7aa51ad0ca2ad3f40ce5b53493f964560ef376903c"}
+    assert evals_sha256(ROOT, "cowsay") in recorded
+
+
+def suite_with_a_fixture(tmp_path: Path) -> Path:
+    """A root whose cowsay suite has evals.json and the small-tally fixture."""
+    evals = tmp_path / "repo/evals/cowsay"
+    evals.mkdir(parents=True)
+    (evals / "evals.json").write_bytes(b"hello\n")
+    shutil.copytree(ROOT / "tests/fixtures/evals/git/small-tally", evals / "fixtures/small-tally")
+    return tmp_path / "repo"
+
+
+def test_a_suite_with_fixtures_hashes_more_than_its_evals_file(tmp_path: Path) -> None:
+    root = suite_with_a_fixture(tmp_path)
+    assert len(evals_sha256(root, "cowsay")) == 64
+    assert evals_sha256(root, "cowsay") != file_sha256(root / "evals/cowsay/evals.json")
+    assert evals_sha256(root, "cowsay") == evals_sha256(root, "cowsay")
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["trees/start/tally.py", "trees/average-wip/notes.txt", "fixture.json"],
+)
+def test_a_change_to_a_fixtures_bytes_or_its_spec_changes_the_hash(
+    tmp_path: Path, path: str
+) -> None:
+    root = suite_with_a_fixture(tmp_path)
+    before = evals_sha256(root, "cowsay")
+    changed = root / "evals/cowsay/fixtures/small-tally" / path
+    changed.write_bytes(changed.read_bytes() + b"\n")
+    assert evals_sha256(root, "cowsay") != before
+
+
+def test_a_new_fixture_changes_the_hash_even_if_no_case_names_it(tmp_path: Path) -> None:
+    root = suite_with_a_fixture(tmp_path)
+    before = evals_sha256(root, "cowsay")
+    shutil.copytree(
+        ROOT / "tests/fixtures/evals/git/clean-branch", root / "evals/cowsay/fixtures/clean-branch"
+    )
+    assert evals_sha256(root, "cowsay") != before
+
+
+def test_a_new_fixture_format_changes_the_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = suite_with_a_fixture(tmp_path)
+    before = evals_sha256(root, "cowsay")
+    monkeypatch.setattr(fixture, "FIXTURE_FORMAT", fixture.FIXTURE_FORMAT + 1)
+    assert evals_sha256(root, "cowsay") != before
+
+
+def test_provenance_records_the_hash_that_covers_the_fixtures(tmp_path: Path) -> None:
+    root = suite_with_a_fixture(tmp_path)
+    (root / "skills/cowsay").mkdir(parents=True)
+    (root / "skills/cowsay/SKILL.md").write_text("---\nname: cowsay\n---\n")
+    recorded = provenance(root, "cowsay")["evals_sha256"]
+    assert recorded != file_sha256(root / "evals/cowsay/evals.json")
+    assert recorded == evals_sha256(root, "cowsay")
 
 
 def test_provenance_of_a_misspelt_skill_fails_loudly(tmp_path: Path) -> None:
