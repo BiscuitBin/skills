@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from skills_tooling.evals import fixture, workspace
 from skills_tooling.evals import grader as grader_module
-from skills_tooling.evals import workspace
 from skills_tooling.evals.adapter import Command, Trace
 from skills_tooling.evals.cases import Case, Expectation
 from skills_tooling.evals.grader import (
@@ -32,9 +32,11 @@ from skills_tooling.evals.grader import (
     transcript_material,
 )
 from tests.evals.fake_anthropic import serve, text
+from tests.evals.test_fixture import load
 
 if TYPE_CHECKING:
     from skills_tooling.evals.adapter import TrialPaths
+    from skills_tooling.evals.workspace import FixtureFiles
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/grading"
 MATERIAL = (FIXTURES / "material.txt").read_text()
@@ -290,7 +292,15 @@ def agent_trial(tmp_path: Path, key: str = "behaviour-ship-it/skill-1") -> Trial
     return trial
 
 
-def test_blinded_material_is_the_final_message_and_the_files_written(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "fixture_files",
+    [{}, {"fixture_files": {}}],
+    ids=["as-before-fixtures", "no-fixture"],
+)
+def test_blinded_material_is_the_final_message_and_the_files_written(
+    tmp_path: Path, fixture_files: dict[str, Any]
+) -> None:
+    # A trial with no fixture is graded on exactly the material it was before fixtures.
     trial = agent_trial(tmp_path)
     ws = trial.workspace
     (ws / ".claude/skills/cowsay/scripts").mkdir(parents=True)
@@ -310,6 +320,7 @@ def test_blinded_material_is_the_final_message_and_the_files_written(tmp_path: P
         trial_root=trial.root,
         skills_dir=".claude/skills",
         skill="cowsay",
+        **fixture_files,
     )
     assert material == (
         "## Final message\n\n"
@@ -322,6 +333,63 @@ def test_blinded_material_is_the_final_message_and_the_files_written(tmp_path: P
         "### linked-dir (symlink, not followed)\n\n"
         "### sub/notes.md\n\n# Notes\n"
     )
+
+
+def fixture_trial(
+    tmp_path: Path, key: str = "behaviour-ship-it/skill-1"
+) -> tuple[TrialPaths, FixtureFiles]:
+    """An agent's trial that started in small-tally, and the working directory the build wrote."""
+    trial = workspace.create_trial(tmp_path / ".eval-workspaces", "run-1", key)
+    built = fixture.build(load(tmp_path, "small-tally"), trial)
+    workspace.teardown(trial)
+    return trial, built
+
+
+def headings(material: str) -> list[str]:
+    return [line for line in material.splitlines() if line.startswith("### ")]
+
+
+def test_only_files_the_agent_made_or_changed_reach_the_material(tmp_path: Path) -> None:
+    trial, built = fixture_trial(tmp_path)
+    ws = trial.workspace
+    (ws / "tally.py").write_text("print('the average')\n")
+    (ws / "README.md").chmod(0o755)
+    (ws / "average.txt").write_text("2.5\n")
+    (ws / "numbers.txt").unlink()
+    (ws / "test_tally.py").rename(trial.root / "test_tally.py")
+    (ws / "test_tally.py").symlink_to(trial.root / "test_tally.py")
+    try:
+        material = blinded_material(
+            "Done.",
+            ws,
+            trial_root=trial.root,
+            skills_dir=".claude/skills",
+            skill="cowsay",
+            fixture_files=built,
+        )
+    finally:
+        (ws / "README.md").chmod(0o644)
+    # notes.txt is left alone, and a deleted file is not shown (a stated limit).
+    assert headings(material) == [
+        "### README.md",
+        "### average.txt",
+        "### tally.py",
+        "### test_tally.py (symlink, not followed)",
+    ]
+    assert "### tally.py\n\nprint('the average')\n" in material
+
+
+def test_a_fixture_left_alone_leaves_no_files_in_the_material(tmp_path: Path) -> None:
+    trial, built = fixture_trial(tmp_path)
+    material = blinded_material(
+        "Moo.",
+        trial.workspace,
+        trial_root=trial.root,
+        skills_dir=".claude/skills",
+        skill="cowsay",
+        fixture_files=built,
+    )
+    assert material == "## Final message\n\nMoo.\n\n## Output files\n\nNo files were written."
 
 
 def test_blinded_material_says_when_no_files_were_written(tmp_path: Path) -> None:
@@ -560,6 +628,7 @@ def run_grade(  # noqa: PLR0913 -- the test's knobs, each with a default
     timeout: float = 30.0,
     rng: random.Random | None = None,
     run_secrets: tuple[str, ...] = (),
+    fixture_files: FixtureFiles | None = None,
 ) -> dict[str, Any]:
     trial = trial or agent_trial(tmp_path, key)
     settings = GraderSettings(
@@ -580,6 +649,7 @@ def run_grade(  # noqa: PLR0913 -- the test's knobs, each with a default
         skill_dir=ROOT / "skills/cowsay",
         rng=rng,
         run_secrets=run_secrets,
+        **({} if fixture_files is None else {"fixture_files": fixture_files}),
     )
 
 
@@ -615,6 +685,15 @@ def test_an_honest_reply_is_graded_ok(tmp_path: Path) -> None:
     }
     assert timing["grader_duration_seconds"] >= 0
     assert not (tmp_path / ".eval-workspaces/run-1/_grader").exists()
+
+
+def test_the_grader_is_sent_only_the_files_the_agent_made_or_changed(tmp_path: Path) -> None:
+    trial, built = fixture_trial(tmp_path)
+    (trial.workspace / "average.txt").write_text("2.5\n")
+    fake = fake_grader(tmp_path / "grader")
+    run_grade(tmp_path, fake, trial=trial, fixture_files=built)
+    [prompt] = fake.prompts()
+    assert headings(prompt) == ["### average.txt"]
 
 
 def assert_grader_gone(tmp_path: Path) -> None:

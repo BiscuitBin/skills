@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from skills_tooling.evals import results, workspace
 from skills_tooling.evals.adapter import RawRun
 from skills_tooling.evals.claude_code import BUDGET_USD, ClaudeCode, parse_stream
+from skills_tooling.evals.workspace import unchanged
 
 if TYPE_CHECKING:
     import random
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
 
     from skills_tooling.evals.adapter import Trace, TrialPaths
     from skills_tooling.evals.cases import Case, Expectation
+    from skills_tooling.evals.workspace import FixtureFiles
 
 REPLY_KEYS = {"expectations", "notes"}
 ITEM_KEYS = {"id", "passed", "evidence", "quote"}
@@ -195,20 +197,33 @@ def _scrubbed(text: str, *, trial_root: Path, skills_dir: str, skill: str) -> st
     return redact(text, trial_root=trial_root, skills_dir=skills_dir, skill=skill)
 
 
-def blinded_material(
-    final_message: str, workspace: Path, *, trial_root: Path, skills_dir: str, skill: str
+def blinded_material(  # noqa: PLR0913 -- the trial's paths and what it started with, by keyword
+    final_message: str,
+    workspace: Path,
+    *,
+    trial_root: Path,
+    skills_dir: str,
+    skill: str,
+    fixture_files: FixtureFiles | None = None,
 ) -> str:
     """The final message and every file written, redacted the same way in both arms.
 
-    .git and the skills_dir tree (only the skill arm has one) are left out.
-    Symlinks are listed, never followed, and so is anything the agent left unreadable.
+    .git and the skills_dir tree (only the skill arm has one) are left out, and
+    so is each fixture file still as the build wrote it, so the material is what
+    the agent made or changed. Symlinks are listed, never followed, and so is
+    anything the agent left unreadable.
     """
 
     def scrub(text: str) -> str:
         return _scrubbed(text, trial_root=trial_root, skills_dir=skills_dir, skill=skill)
 
     excluded = {workspace / ".git", workspace / skills_dir}
-    paths = _written(workspace, excluded)
+    built = fixture_files or {}
+    paths = [
+        path
+        for path in _written(workspace, excluded)
+        if not unchanged(path, built.get(path.relative_to(workspace).as_posix()))
+    ]
     entries: list[str] = []
     remaining = FILES_CAP
     for index, path in enumerate(paths):
@@ -510,6 +525,7 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
     skill_dir: Path,
     rng: random.Random | None = None,
     run_secrets: Sequence[str] = (),
+    fixture_files: FixtureFiles | None = None,
 ) -> dict[str, Any]:
     """Grade one trial's expectations: the grading.json content. Never raises for grader failures.
 
@@ -517,6 +533,7 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
     needs_transcript ones from the normalised trace, in a second call. Each
     material is scrubbed of run_secrets once it is built: redaction joins the
     text on either side of a path it removes, which can rebuild a split secret.
+    fixture_files is what the trial's fixture build wrote, if it had one.
     """
     started = time.monotonic()
     draw = rng or secrets.SystemRandom()
@@ -534,6 +551,7 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
                         trial_root=trial.root,
                         skills_dir=skills_dir,
                         skill=skill,
+                        fixture_files=fixture_files,
                     )
                     if blinded
                     else transcript_material(
