@@ -80,6 +80,17 @@ COMMIT_STEP = 3600
 EXCLUDE = "/.claude/\n/.agents/\n"
 # Git ignores reflogs for these calls, so .git/logs never exists.
 NO_REFLOG = ("-c", "core.logAllRefUpdates=false")
+# Added to the agent's environment in a fixture trial, in both arms. The agent's
+# git reads no system or global config and no system attributes, which differ
+# from machine to machine (Apple's git has a gitattributes that changes diff
+# hunk headers), and takes no optional lock, which Codex's sandbox denies on
+# .git. A trial with no fixture keeps the environment it had.
+AGENT_GIT_ENV = {
+    "GIT_OPTIONAL_LOCKS": "0",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_ATTR_NOSYSTEM": "1",
+}
 
 
 @dataclass(frozen=True)

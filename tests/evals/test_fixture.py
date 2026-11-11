@@ -25,11 +25,13 @@ ROBIN = "Robin Hale <robin@example.com>"
 # 2026-01-01T00:00:00Z, then an hour per commit across main and then the branch.
 FIRST = 1767225600
 # What a fixture trial adds to the agent's environment (design-16 §6), so the
-# agent's git reads no system or global config and takes no optional lock.
+# agent's git reads no system or global config or system attributes, and takes
+# no optional lock.
 AGENT_GIT_ENV = {
     "GIT_OPTIONAL_LOCKS": "0",
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_ATTR_NOSYSTEM": "1",
 }
 
 

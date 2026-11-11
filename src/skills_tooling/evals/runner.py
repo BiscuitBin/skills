@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from skills_tooling.evals import benchmark, grader, results, workspace
+from skills_tooling.evals import benchmark, fixture, grader, results, workspace
 from skills_tooling.evals.assertions import evaluate
 from skills_tooling.evals.cases import load_suite
 from skills_tooling.evals.claude_code import BUDGET_USD
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from skills_tooling.evals.cases import Assertion, Case
     from skills_tooling.evals.contamination import NeverAppear
     from skills_tooling.evals.grader import GraderSettings
+    from skills_tooling.evals.workspace import FixtureFiles
 
 Arm = Literal["skill", "baseline"]
 # The grader runs on Claude Code, with its --max-budget-usd per call.
@@ -261,23 +262,29 @@ def _attempt(
     trial: TrialPaths,
     secrets: list[str],
     credentials: Mapping[str, str],
-) -> tuple[dict[str, Any], Trace | None]:
-    """Preflight, run, check and score one trial. Adds the run's new secrets to `secrets`.
+) -> tuple[dict[str, Any], Trace | None, FixtureFiles | None]:
+    """Build, preflight, run, check and score one trial. Adds the run's new secrets to `secrets`.
 
     Returns the record and the trace, which grading reads after teardown; no
-    trace when the preflight stopped the trial.
+    trace when the preflight stopped the trial. Then the working directory the
+    fixture build wrote, which grading compares the workspace with; None
+    without a fixture.
     """
     adapter, case = settings.adapter, planned.case
     baseline = planned.arm == "baseline"
     skill = None if baseline else settings.skill
+    # First, and alike in both arms: the arms differ only in the skill installed below.
+    built = fixture.build(case.fixture, trial) if case.fixture is not None else None
     homes = adapter.prepare_homes(trial)
+    if case.fixture is not None:
+        homes = replace(homes, env={**homes.env, **fixture.AGENT_GIT_ENV})
     adapter.install_skill(
         None if baseline else settings.root / "skills" / settings.skill, trial.workspace
     )
-    problems = preflight(adapter, trial, homes, settings.root, skill)
+    problems = preflight(adapter, trial, homes, settings.root, skill, expected=built)
     if problems:
         reason = "preflight failed: " + "; ".join(problems)
-        return _not_scored(case, planned.arm, reason, problems), None
+        return _not_scored(case, planned.arm, reason, problems), None, built
     raw = adapter.run(
         case.prompt,
         trial,
@@ -318,7 +325,7 @@ def _attempt(
         "transcript": transcript.relative_to(settings.root).as_posix(),
         "stderr": results.scrub(raw.stderr[-2000:], secrets),
     }
-    return record, trace
+    return record, trace, built
 
 
 def _add_trial_secrets(adapter: Adapter, trial: TrialPaths, secrets: list[str]) -> None:
@@ -387,9 +394,10 @@ def run_trial(
     }
     trial: TrialPaths | None = None
     trace: Trace | None = None
+    built: FixtureFiles | None = None
     try:
         trial = workspace.create_trial(settings.workspaces_dir, settings.run_id, planned.key)
-        scored, trace = _attempt(settings, planned, trial, secrets, credentials)
+        scored, trace, built = _attempt(settings, planned, trial, secrets, credentials)
         record |= scored
     except Exception as error:  # noqa: BLE001 -- one trial's failure must not lose the run
         if trial is not None:
@@ -428,7 +436,7 @@ def run_trial(
     # Skipped grading leaves graded null, so the trial rests on its assertions.
     graded_now = bool(case.expectations) and not settings.grading_skipped
     if trial is not None and trace is not None and graded_now and _scorable(record):
-        record |= _grade(settings, planned, _scrubbed(trace, secrets), trial, secrets)
+        record |= _grade(settings, planned, _scrubbed(trace, secrets), trial, secrets, built=built)
     graded = record["graded"]
     record["valid"] = _scorable(record) and (graded is None or graded["status"] != "grader_error")
     record["passed"] = (
@@ -458,14 +466,20 @@ def _scrubbed(trace: Trace, secrets: list[str]) -> Trace:
     )
 
 
-def _grade(
+def _grade(  # noqa: PLR0913 -- the trial, and what it started from
     settings: RunSettings,
     planned: Planned,
     trace: Trace,
     trial: TrialPaths,
     secrets: list[str],
+    *,
+    built: FixtureFiles | None,
 ) -> dict[str, Any]:
-    """Grade the trial's expectations and write its grading file. Never raises."""
+    """Grade the trial's expectations and write its grading file. Never raises.
+
+    built is the working directory the fixture build wrote, the same map the
+    preflight checked, so the grader sees only what the agent made or changed.
+    """
     total = len(planned.case.expectations)
     no_grading = {
         "status": "grader_error",
@@ -489,6 +503,7 @@ def _grade(
             skills_dir=settings.adapter.skills_dir,
             skill_dir=settings.root / "skills" / settings.skill,
             run_secrets=secrets,
+            fixture_files=built,
         )
     except Exception:  # noqa: BLE001 -- a harness bug in grading must not lose the run
         # No grading file: the benchmark counts the trial as a grader error.
