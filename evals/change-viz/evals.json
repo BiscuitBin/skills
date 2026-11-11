@@ -27,7 +27,7 @@
       ],
       "expectations": [
         "The first paragraph under the 'Why the change' heading is a single sentence.",
-        "The first paragraph under the 'Why the change' heading says what the branch makes possible for someone running wordstat: listing the most common words in a text, counting a word once whatever its case or surrounding punctuation, or both.",
+        "The first paragraph under the 'Why the change' heading says what the branch makes possible for someone running wordstat: listing the most common words in a text, treating words that differ only in case or surrounding punctuation as the same word, or both.",
         "Under the 'Change outline' heading, every diagram or code block is directly preceded by its own lead-in: one line of prose that says what the block shows.",
         "At least one diagram or code block in the description shows the --top listing or the new handling of case and punctuation as part of how wordstat works: its steps, its functions, or its output before and after.",
         "The description says the branch adds a --top option that lists the most common words in the file with how many times each occurs.",
