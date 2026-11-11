@@ -105,7 +105,7 @@ Use the `cross-model-review` dev skill.
 
 ### Design checkpoint
 
-Applied up to RED on branch `change-viz`, in commits `9b6e09e`, `34b0aad` and `9f10e71`, then the review fix `216a3c7`. Nothing is pushed, and no live eval has run.
+Applied up to RED on branch `change-viz`, in commits `9b6e09e`, `34b0aad` and `9f10e71`, then the review fix `216a3c7`. P4 was added with the maintainer's decisions of 2026-11-11 (**Questions for the maintainer**). Nothing is pushed, and no live eval has run.
 
 No acceptance box is ticked yet. The commits already meet the scaffold criterion, the by-name criterion and the prose criterion (with the round trips installing two skills), but each box waits for the implementation checkpoint. Everything else waits for RED, GREEN, the credit and glossary records, or the maintainer's read of a real branch.
 
@@ -122,7 +122,7 @@ No acceptance box is ticked yet. The commits already meet the scaffold criterion
   - No `staged` and no `worktree`, so `git status` is clean. There is no remote and no `origin/main`, so the base is local `main`.
   - The branch changes `wordstat.py`, `test_wordstat.py` and `README.md`. The last commit alone shows only the README's `--top` text, so describing the new word handling needs commit 1 or the diff against `main`.
   - It is neutral: no skill wording and none of Codex's denial keywords, which `validate-evals` checks.
-- **Cases (`34b0aad`; E2 reworded at `216a3c7`).** `evals/change-viz/evals.json` has two cases on `wordstat-top`, both with the prompt "Describe what this branch changes.":
+- **Cases (`34b0aad`; E2 reworded at `216a3c7`; P4 added on 2026-11-11).** `evals/change-viz/evals.json` has two cases on `wordstat-top`, both with the prompt "Describe what this branch changes.":
   - `behaviour-describe-branch`, marked `by_name: true`;
   - `no-trigger-unnamed-request`, an unmarked trigger case with `should_trigger: false`, which the baseline arm skips.
 - **Assertions (frozen):**
@@ -131,6 +131,7 @@ No acceptance box is ticked yet. The commits already meet the scaffold criterion
   - P1: the three `##` headings in order, with no fence opening before `## Why the change`.
   - P2: between `## Special things to note` and `## Change outline`, only one to three bullets at column 0 (indented continuation lines and blank lines allowed) and an optional thematic break. `- None.` passes.
   - P3: a fenced block, backtick or tilde, opens and closes after `## Change outline`, with no `#` or `##` heading in between.
+  - P4: under `## Why the change`, one paragraph of non-blank lines, none starting with whitespace or `#`; then optionally a block starting `**Risk:` or one thematic break; then `## Special things to note`. The maintainer added it on 2026-11-11 (question 2).
 - **Expectations (frozen).** E1 to E7 are graded blind. E8 is graded from the transcript.
   - E1: the first paragraph under 'Why the change' is a single sentence.
   - E2: that paragraph says what the branch makes possible: listing the most common words, treating words that differ only in case or surrounding punctuation as the same word, or both.
@@ -149,16 +150,22 @@ No acceptance box is ticked yet. The commits already meet the scaffold criterion
 - `just check` passed at `9f10e71` (`ai_tmp/gate-18.log`) and again at `216a3c7` (`ai_tmp/gate-18b.log`), exit 0. pytest: 1202 passed, 4 skipped (two case-folding tests on macOS, two CI-only canaries). `validate-evals`: "2 eval suites valid." Claude Code 2.1.309, Codex 0.163.0. The install round trips installed two skills on every `skills` channel; the marketplace round trip still installs only cowsay.
 - `just validate-skills`: 0 errors. The one warning is the expected `[extension-portability]` on `disable-model-invocation`. No `[placeholder]`.
 - `just validate-distribution`: the pinned `claude plugin validate --strict` accepts `disable-model-invocation`. Its only remark is the `ICON_MISSING` warning that cowsay also gets.
-- **Patterns under Python `re`** (`ai_tmp/apply-18/patterns.py`): no difference from the PCRE2 results over the four liked pull requests and their copies, HumanLayer's template, `visual-pr`'s and `pr`'s `SKILL.md`, 13 synthetic messages and nine inline controls. A message with `\r\n` endings fails all three, as expected.
+- **P1 to P3 under Python `re`, before P4** (`ai_tmp/apply-18/patterns.py`): no difference from the PCRE2 results over the four liked pull requests and their copies, HumanLayer's template, `visual-pr`'s and `pr`'s `SKILL.md`, 13 synthetic messages and nine inline controls. A message with `\r\n` endings fails all three, as expected.
 - **Fixture,** built with `fixture.build` and run with `python -B`: the facts listed under **Design as approved**, all as predicted. Tests: 2 OK at `main`, 4 after `folded`, 5 at the tip. `git status` is clean, both scripts are `100755`, `HEAD` is `refs/heads/add-top-words`, `git diff --stat main...HEAD` names three files, and `git show --stat HEAD` names only `README.md`. No `__pycache__/` was left.
 - **Installer:** `skills add` of this checkout, for `claude-code` and for `codex`, printed `Found 2 skills`, `✓ change-viz (copied)` and `✓ cowsay (copied)`. Nothing was written to `~/.agents`.
+- **After P4 (2026-11-11):**
+  - `just format`, then `just validate-evals`: "2 eval suites valid."
+  - `ai_tmp/apply-18/patterns.py` now runs all four patterns and asserts that P4 equals the block under question 2. It gives 0 differences on 30 inputs. Its unbolded `Risk: Low.` control now expects P4 to fail, and a copy with `**Risk: Low.**` passes all four.
+  - `ai_tmp/apply-18/p4_probe.py` now also asserts that P4 equals the fourth `output_matches` in `evals.json`. It gives 0 differences on 31 inputs.
+  - Some P4 expected values were read from the pattern by hand: HumanLayer's template, Matt Pocock's `SKILL.md` and the inline controls. `rg -U --pcre2` gave each of them.
+  - `just check` was not rerun.
 - **Not run:** `just eval … --dry-run` and the live runs (the apply brief barred `just eval`), Ubuntu CI (nothing is pushed), and the marketplace install of `change-viz` (`claude plugin install change-viz@biscuitbin-skills`, `/change-viz:change-viz`), because the marketplace round trip installs cowsay only.
 
 #### Implementer decisions (2026-11-11)
 
 **Name.** `change-viz`, confirmed by the maintainer on 2026-11-10, before scaffolding, in the stage plan's "Decided with the maintainer". That plan is not in this repository, so the confirmation is recorded as the implementer's brief relayed it.
 
-The implementer made the rest at apply time, on the design's open questions. The maintainer may override any of them at Hand-off 1.
+The implementer made the rest at apply time, on the design's open questions. On 2026-11-11 the maintainer kept the three departures among them: the neutral RED text, and the two notice timings under **Notices**. The answer named no override (question 6).
 
 - **Neutral RED text, a departure from the plan.** The plan said to set the description at scaffold and keep the scaffold's stub. RED instead ships the neutral description and the one-line stub above, and the full description lands at GREEN. Two reasons:
   - Codex injects the whole `SKILL.md`, frontmatter included (ticket 17's spike), so a full description would show Codex's RED skill arm the outline the case tests.
@@ -203,22 +210,24 @@ metadata:
 
 | # | Severity | Finding | Verdict | Action |
 | --- | --- | --- | --- | --- |
-| 1 | medium | E4 accepts a visual of wordstat's output without checking its values. A description showing `--top 3` as `the 6`, `river 3`, `mill 2` passes every pattern, and the blinded grader never sees the fixture. | valid (narrow, and already disclosed; low is closer) | Nothing frozen changes. The limit is stated here: each skill-arm message gets a hand read against the fixture facts under **Design as approved**, and a contradiction is recorded here as wrong about the fixture, whatever its grade. A values clause on E4 is open question 1, not recommended. |
+| 1 | medium | E4 accepts a visual of wordstat's output without checking its values. A description showing `--top 3` as `the 6`, `river 3`, `mill 2` passes every pattern, and the blinded grader never sees the fixture. | valid (narrow, and already disclosed; low is closer) | Nothing frozen changes. The limit is stated here: each skill-arm message gets a hand read against the fixture facts under **Design as approved**, and a contradiction is recorded here as wrong about the fixture, whatever its grade. A values clause on E4 was question 1, not recommended, and the maintainer declined it on 2026-11-11. |
 | 2 | medium | E2's "counting a word once whatever its case or surrounding punctuation" can be read as counting repeats once, but the branch keeps every occurrence | valid (low is closer) | Fixed in `216a3c7`: E2 now reads "treating words that differ only in case or surrounding punctuation as the same word". It changes `evals_sha256`, before RED. The reviewer's "while retaining their occurrence counts" is not adopted: it adds a requirement a correct one-sentence why need not meet. E2's first-paragraph scope and its "or both" do not change. |
-| 3 | medium | E1 and E2 read only the first paragraph, so further paragraphs under "Why the change" pass, against the ticket's one-sentence why | valid | The limit is stated here, with a hand read of each skill-arm message (the "does not" table under **Design as approved**). A fourth `output_matches`, P4, is open question 2, recommended. |
+| 3 | medium | E1 and E2 read only the first paragraph, so further paragraphs under "Why the change" pass, against the ticket's one-sentence why | valid | The limit is stated here, with a hand read of each skill-arm message (the "does not" table under **Design as approved**). A fourth `output_matches`, P4, was question 2, recommended. The maintainer took it on 2026-11-11, and it is in `evals.json` after P3. The hand read stays for what P4 leaves open. |
 
 **The checkpoint's two questions.** Could the behaviour case pass on a description that is wrong about the fixture? In part, yes: E4 checks no values, and an extra false claim elsewhere can pass (finding 1), so the hand read covers it. Does any expectation need the grader to know which arm it is reading? No. Each is about text in the material, and E1 to E3 fail in the baseline because its message has no such headings.
 
-No second round: the only frozen change rewords one clause of E2 and keeps its scope. The other two fixes are design text: a hand-read row and a list of facts. If the maintainer takes P4, it is a new frozen assertion and gets a focused review before RED.
+No second round: the only frozen change rewords one clause of E2 and keeps its scope. The other two fixes are design text: a hand-read row and a list of facts. The maintainer took P4, a new frozen assertion, so it gets a focused review before RED.
 
-#### Open questions for the maintainer
+#### Questions for the maintainer
 
-1. **A values clause on E4** (finding 1). Changes frozen text, so settle before RED. The clause would append "If it shows wordstat's output for sample.txt, that output is …". **Recommendation: no.**
+The maintainer answered questions 1, 2, 3 and 6 on 2026-11-11, as the brief relays the answers. Questions 4 and 5 are still open.
+
+1. **A values clause on E4** (finding 1). **Decided: no clause.** The hand read against the fixture facts covers the gap (the "does not" table under **Design as approved**), and E4's text does not change. The clause would have appended "If it shows wordstat's output for sample.txt, that output is …". The recommendation was no, for these reasons:
    - A pass needs a verbatim quote, and the burden of proof is on passing, so a correct visual made only of a diagram risks failing it.
    - The negative form ("shows no wrong counts") is barred for a blinded expectation.
    - Requiring the numbers would push the agent to run the fixture's code, which ticket 21 owns.
    - It would still miss wrong output for a made-up example text, and the hand read covers the gap.
-2. **P4, one paragraph under 'Why the change'** (finding 3). A new frozen assertion, so settle before RED. **Recommendation: yes.** The decided outline and the criteria say "One sentence", and ticket 19's `**Risk: …**` line is a shape the maintainer decided on 2026-11-10. It would go after P3:
+2. **P4, one paragraph under 'Why the change'** (finding 3). **Decided: added**, after P3, exactly as below. The recommendation was yes: the decided outline and the criteria say "One sentence", and ticket 19's `**Risk: …**` line is a shape the maintainer decided on 2026-11-10.
 
    ```json
    {
@@ -231,21 +240,30 @@ No second round: the only frozen change rewords one clause of E2 and keeps its s
    - **Probed:** Python `re` gives the triage's PCRE2 results on 31 inputs (`ai_tmp/apply-18/p4_probe.py`). It matches the four liked pull requests, ticket 19's shape, and a label inline on the sentence or on the next line. It fails the reviewer's probe, a fence or bullet after a blank line, and a label as its own paragraph.
    - **Costs:** it is lenient when a bullet or fence sits directly under the sentence, and after `**Risk:`. A one-space indent fails, and so do `\r\n` endings. Ticket 21's label would fail if set as its own paragraph.
    - **RED:** no expected effect (unobserved): neither arm writes the heading, so P4 fails in both, as P1 does.
-   - **If adopted:** add it to `evals.json`; update `ai_tmp/apply-18/patterns.py` (its `assert len(patterns) == 3`, its expected columns, and its unbolded `Risk: Low.` control, which P4 rejects); run `just format` and `just validate-evals`; commit; then a focused review of P4.
-3. **"One-line lead-in" in E3.** E3 reads "one line of prose" as one physical line of one to three sentences, as the four liked pull requests write their lead-ins, not as one sentence. Confirm. If the answer is "one sentence", E3's text changes, so settle before RED.
-4. **`__pycache__/` as a write.** The design counts it, through the hand read, and reports it on its own line as "ran the fixture's code". If GREEN trials leave one, is that a ticket 18 failure, which needs a "read the branch, do not run its code" line in the skill now, or a limit recorded for ticket 21, which owns running code? No frozen text changes; settle before GREEN.
-5. **ADR 0008.** It says everything in the repository is under `LICENSE`. With an upstream notice beside a skill, does it need a sentence? The decision left this to the design review, which did not raise it. Not blocking; settle before `NOTICE.md` lands at GREEN.
-6. **Overrides.** Any implementer decision above. Two rest on a reading of this ticket: Matt Pocock's notice ships with ticket 19, though "each upstream's" notice can be read as all three at 18; and this repository's own notice stays out of `NOTICE.md`.
+   - **Done:**
+     - P4 is in `evals.json`.
+     - `ai_tmp/apply-18/patterns.py` has its count assert, its expected columns, and a bolded `**Risk:` copy of its unbolded `Risk: Low.` control, which P4 rejects.
+     - `just format` and `just validate-evals` ran, and the change is committed (**Checks run**).
+   - **Still to do:** a focused review of P4, before RED.
+3. **"One-line lead-in" in E3.** **Decided: one physical line of one to three sentences**, as the four liked pull requests write their lead-ins, not one sentence. E3's text does not change.
+4. **`__pycache__/` as a write.** **Open.** The design counts it, through the hand read, and reports it on its own line as "ran the fixture's code". If GREEN trials leave one, is that a ticket 18 failure, which needs a "read the branch, do not run its code" line in the skill now, or a limit recorded for ticket 21, which owns running code? No frozen text changes; settle before GREEN.
+5. **ADR 0008.** **Open.** It says everything in the repository is under `LICENSE`. With an upstream notice beside a skill, does it need a sentence? The decision left this to the design review, which did not raise it. Not blocking; settle before `NOTICE.md` lands at GREEN.
+6. **Overrides.** **Decided: the maintainer kept all three implementer departures:**
+   - the neutral RED description and stub body;
+   - `NOTICE.md` and `metadata.credits` landing with the first upstream text, with no `SKILL.md` link before then;
+   - Matt Pocock's notice shipping with ticket 19, though "each upstream's" notice can be read as all three at 18.
+
+   The answer did not address the other implementer decisions, so they stand as the implementer made them. Among them, this repository's own notice stays out of `NOTICE.md`, so D3 stays open for it.
 
 #### Design as approved
 
-**Design as approved:** `ai_tmp/design-18.md` (gitignored), as reviewed at this checkpoint, with the fixes above. The implementer decisions in it still await the maintainer at Hand-off 1. These bullets carry what exists only in that file:
+**Design as approved:** `ai_tmp/design-18.md` (gitignored), as reviewed at this checkpoint, with the fixes above and the maintainer's decisions of 2026-11-11 (its **Maintainer decisions (2026-11-11)** section). These bullets carry what exists only in that file:
 
-- **Freeze.** `evals_sha256` covers `evals.json` and the fixture directory. The rubric does not change from the RED run to GREEN, so any change (P4, an E4 clause, E3's wording) lands before RED, after `just format` and `just validate-evals`. RED runs from `216a3c7` or later.
+- **Freeze.** `evals_sha256` covers `evals.json` and the fixture directory. The rubric does not change from the RED run to GREEN. Of the three possible changes before RED, the maintainer took only P4, which landed after `just format` and `just validate-evals`. E4 and E3 keep their text. RED runs from the commit that adds P4, or later, once P4's focused review is done.
 - **Grader material.** The blinded call sees the bare prompt, never the invocation, the final message up to 20 KB, and any file the agent created or changed. Fixture files left as built are not sent, so each expectation carries its own facts. E8 is judged in a second call from the commands and their output. No expectation refers to another, so the canary's random place changes nothing.
-- **Pattern limits.** P2 reads bullet markers at column 0 only: an indented marker, or an unindented wrapped line, fails on purpose, since allowing one would let four bullets pass as one. So the GREEN text writes note bullets at column 0 with indented continuations. P2 also reads an indented `- b` after `- a` as a continuation, though GitHub renders two bullets, and passes nested bullets. `\r\n` endings fail all three patterns.
-- **Room for tickets 19 to 24.** P1 allows prose before the first heading (ticket 22's scope line) but no fence, and anything between the headings (ticket 19's risk line). E1 and E2 read only the first paragraph. P3 needs a fence under the outline, so a table-only outline (ticket 20) fails this case; a table can sit beside a fence. Ticket 19 asserts only its line's shape on this case and brings its own fixtures. Ticket 22 needs its own fixture, or a copy of these trees with `staged` and `worktree`. Ticket 23 can reuse this one (no remote). Ticket 24 can reuse it for Mermaid labels with parentheses.
-- **GREEN gain,** recorded three ways: shape (P1 to P3, E1, E3); substance measured in both arms (E4 to E7); and E2, substance that passes only once the heading exists. E5, E8, and maybe E4 and E6, will show as non-discriminating. They stay as guards that make a wrong description fail. E6 may pass at RED on Claude Code if its startup context lists the commit subjects; the RED transcripts confirm it.
+- **Pattern limits.** P2 reads bullet markers at column 0 only: an indented marker, or an unindented wrapped line, fails on purpose, since allowing one would let four bullets pass as one. So the GREEN text writes note bullets at column 0 with indented continuations. P2 also reads an indented `- b` after `- a` as a continuation, though GitHub renders two bullets, and passes nested bullets. P4 is lenient when a bullet or fence sits directly under the sentence with no blank line, and after a `**Risk:` line. A why line indented one space fails it. `\r\n` endings fail all four patterns.
+- **Room for tickets 19 to 24.** P1 allows prose before the first heading (ticket 22's scope line) but no fence, and anything between the headings. P4 narrows the room under the why: one paragraph, then only a block starting `**Risk:` (ticket 19's line) or one thematic break. Ticket 21's label passes inline on the sentence or on the next line, and fails as its own paragraph. E1 and E2 read only the first paragraph. P3 needs a fence under the outline, so a table-only outline (ticket 20) fails this case; a table can sit beside a fence. Ticket 19 asserts only its line's shape on this case and brings its own fixtures. Ticket 22 needs its own fixture, or a copy of these trees with `staged` and `worktree`. Ticket 23 can reuse this one (no remote). Ticket 24 can reuse it for Mermaid labels with parentheses.
+- **GREEN gain,** recorded three ways: shape (P1 to P4, E1, E3); substance measured in both arms (E4 to E7); and E2, substance that passes only once the heading exists. E5, E8, and maybe E4 and E6, will show as non-discriminating. They stay as guards that make a wrong description fail. E6 may pass at RED on Claude Code if its startup context lists the commit subjects; the RED transcripts confirm it.
 - **Disclosure reads.** In the skill arm the CLI's own text says "skill", so an echo marks the trial `arm_disclosed`, and it is still graded. E8's transcript material widens the check: on Codex at GREEN, a `cat` of the skill's files likely sets the flag. So read `disclosure_matches` in each grading file and look for each match in the final message; only those reached the blinded call. A bare `change-viz` or `Change Viz` is not flagged, so run `rg -i 'change[- ]?viz'` over each skill-arm final message and report hits beside `arm_disclosed`.
 - **Records.** `GLOSSARY.md` gains **Change source** at GREEN: a branch is the only one this ticket handles. The run ids of RED and GREEN, both arms, both agents, go here; the RED ids also go to ticket 17, which closes its live-trial criterion.
 - **Codex and `metadata.credits`.** To see a load failure before the GREEN live run, load the GREEN `SKILL.md` in the pinned Codex against the fake API, as `tests/evals/test_codex_adapter.py` does, and look for `failed to load skill`.
@@ -255,10 +273,10 @@ No second round: the only frozen change rewords one clause of E2 and keeps its s
 | Outcome | Check |
 | --- | --- |
 | No more than three notes | P2 |
-| No prose under 'Why the change' beyond its one sentence | A hand read of each skill-arm message. Limit: E1 and E2 read only the first paragraph, to leave room for ticket 19's risk line, and nothing else checks further paragraphs unless P4 is adopted. |
+| No prose under 'Why the change' beyond its one sentence | P4: one paragraph, then only a `**Risk:` block or one thematic break. Plus a hand read of each skill-arm message for what P4 leaves open: a bullet or fence directly under the sentence with no blank line, and anything after a `**Risk:` line. E1 and E2 read only the first paragraph. |
 | Loads only when named | The quiet case, a lower bound (it sees only a confirmed load), plus a hand read of its transcripts |
 | Not a file-by-file changelog | E4's positive form, plus a hand read of the skill-arm messages |
-| Not wrong about the fixture | `--top`, E2 and E5 to E7 carry the facts. Limit: E4 checks no values, and an extra false claim can pass. So each skill-arm message gets a hand read against the facts below, and a contradiction is recorded here whatever its grade. |
+| Not wrong about the fixture | `--top`, E2 and E5 to E7 carry the facts. Limit: E4 checks no values (the maintainer declined a values clause, question 1), and an extra false claim can pass. So each skill-arm message gets a hand read against the facts below, and a contradiction is recorded here whatever its grade. |
 | Writes no file | By hand, in each kept trial workspace: `git status --porcelain --untracked-files=all` is empty (the installed skill is excluded), and `find . -name __pycache__ -not -path './.git/*'` finds nothing. A `__pycache__/` is reported on its own line (open question 4). |
 | Changes nothing else in the repository | By hand: `main`, `add-top-words` and the symbolic `HEAD` (`refs/heads/add-top-words`) match a baseline trial's. A `git checkout`, `switch`, `stash` or `worktree add` is an `infra_error` on Codex, whose sandbox denies writes to `.git/`, and any such trial is listed here under the Codex limits. On Claude Code it succeeds, and this check catches it. |
 
@@ -272,9 +290,9 @@ Fixture facts for the hand read. The first four were observed at apply time; the
 
 #### Next
 
-**Next:** Hand-off 1, the RED run.
+**Next:** a focused review of P4, then Hand-off 1, the RED run.
 
-Settle open questions 1 to 3 first. If any of them changes `evals.json`, commit that change after `just format` and `just validate-evals`, and review it (P4 needs a focused review) before the run.
+Questions 1, 2, 3 and 6 are settled. P4 is the only change they make to `evals.json`, and it is committed after `just format` and `just validate-evals`. As a new frozen assertion, P4 gets a focused cross-model review before the run. If that review changes P4, the fix also lands before RED. Questions 4 and 5 stay open: 4 before GREEN, and 5 before `NOTICE.md` lands.
 
 Then, in the maintainer's terminal with `CLAUDE_CODE_OAUTH_TOKEN` exported (the grader needs it on both agents; Codex also uses its login in the project's Codex home):
 
@@ -286,7 +304,7 @@ just eval change-viz --agent codex --baseline
 
 What RED is expected to show (unobserved):
 
-- **Skill arm:** the behaviour case fails, because the stub body names no heading. P1 to P3 and E1 to E3 fail. `skill_triggered` passes, because the CLI records the by-name load whatever the body says.
+- **Skill arm:** the behaviour case fails, because the stub body names no heading. P1 to P4 and E1 to E3 fail. `skill_triggered` passes, because the CLI records the by-name load whatever the body says.
 - **Baseline arm:** the behaviour case fails too, on the same items: no agent writes the three headings unasked. If it passes, the case changes until it measures a real gap (`CONTRIBUTING.md` §2).
 - **Quiet case:** passes in the skill arm, with no confirmed load, and is skipped in the baseline.
 - `--top`, E5 and E8 likely pass in both arms, and so does E6 on Claude Code. E4, E7 and Codex's E6 can go either way.
