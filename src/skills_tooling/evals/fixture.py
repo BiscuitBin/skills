@@ -18,6 +18,8 @@ from skills_tooling.evals.grader import SKILL_WORD
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
+    from skills_tooling.evals.adapter import TrialPaths
+
 FIXTURE_KEYS = {"branch", "main", "commits", "staged", "worktree", "executable"}
 COMMIT_KEYS = {"tree", "message"}
 # Git's and the agent CLIs' own names, by their lowercase form: on a file system
@@ -56,6 +58,28 @@ DENIAL_KEYWORDS = (
 # Git's own rule: a byte-order mark or leading whitespace does not hide the `!`.
 NEGATION = re.compile(rb"^(?:\xef\xbb\xbf|[ \t\r\v\f])*!")
 
+# Bumped whenever build() gives other objects, refs or files for the same
+# fixture: identity, dates, plumbing. It goes into evals_sha256.
+FIXTURE_FORMAT = 1
+# A neutral author and committer: "Eval Harness" would tell the agent it is
+# being evaluated. These override workspace.GIT_ENV's.
+IDENTITY = {
+    "GIT_AUTHOR_NAME": "Robin Hale",
+    "GIT_AUTHOR_EMAIL": "robin@example.com",
+    "GIT_COMMITTER_NAME": "Robin Hale",
+    "GIT_COMMITTER_EMAIL": "robin@example.com",
+}
+# 2026-01-01T00:00:00Z. Commit n, counted across main and then the branch, is
+# dated n hours later. Every working file's mtime is this too: a past time keeps
+# Git's racy-clean check from rehashing a file.
+FIRST_COMMIT = 1767225600
+COMMIT_STEP = 3600
+# Both arms get the same file, and the baseline has neither directory, so it
+# tells the agent nothing about its arm. See docs/explanation/eval-isolation.md.
+EXCLUDE = "/.claude/\n/.agents/\n"
+# Git ignores reflogs for these calls, so .git/logs never exists.
+NO_REFLOG = ("-c", "core.logAllRefUpdates=false")
+
 
 @dataclass(frozen=True)
 class Commit:
@@ -65,6 +89,8 @@ class Commit:
 
 @dataclass(frozen=True)
 class Fixture:
+    """A validated fixture: its directory, and what its fixture.json names."""
+
     name: str
     path: Path
     branch: str
@@ -75,6 +101,27 @@ class Fixture:
     # The working directory's tree, else the index's.
     worktree: str | None = None
     executable: frozenset[str] = frozenset()
+
+    @property
+    def tip_tree(self) -> str:
+        return (self.commits or self.main)[-1].tree
+
+    @property
+    def index_tree(self) -> str:
+        return self.staged or self.tip_tree
+
+    @property
+    def working_tree(self) -> str:
+        return self.worktree or self.index_tree
+
+    def files(self, tree: str) -> dict[str, Path]:
+        """The tree's files, by their path in it."""
+        base = self.path / "trees" / tree
+        return {p.relative_to(base).as_posix(): p for p in sorted(base.rglob("*")) if p.is_file()}
+
+    def mode(self, path: str) -> int:
+        """The path's git mode, in every tree that has it. Modes on disk are ignored."""
+        return 0o100755 if path in self.executable else 0o100644
 
 
 def _unknown(data: dict[str, object], allowed: set[str], where: str) -> list[str]:
@@ -347,3 +394,84 @@ def load_fixtures(root: Path, skill: str, problems: list[str]) -> Fixtures:
         path.name: load_fixture(root, path, problems) for path in sorted(directory.glob("*/"))
     }
     return Fixtures(directory.relative_to(root).as_posix(), found)
+
+
+def _git(workspace_dir: Path, *args: str, env: Mapping[str, str] | None = None) -> str:
+    result = workspace.git(*args, cwd=workspace_dir, env=env)
+    if result.returncode != 0:
+        msg = f"git {' '.join(args)} failed in {workspace_dir}: {result.stderr.strip()}"
+        raise RuntimeError(msg)
+    return result.stdout.strip()
+
+
+def _write_tree(fixture: Fixture, tree: str, trial: TrialPaths) -> str:
+    """Store the tree's files as blobs, by path, with no filters, and return the tree's id."""
+    files = fixture.files(tree)
+    # A temporary index, so the trial's own index is written once, by read-tree.
+    index = trial.tmp / "fixture-index"
+    env = {"GIT_INDEX_FILE": str(index)}
+    try:
+        if files:
+            # The ids come back one per line, in argument order. The files sit outside
+            # the work tree, and --no-filters stores their bytes as they are.
+            stored = _git(
+                trial.workspace,
+                "hash-object",
+                "-w",
+                "--no-filters",
+                "--",
+                *map(str, files.values()),
+            )
+            entries = [
+                argument
+                for (path, blob) in zip(files, stored.splitlines(), strict=True)
+                for argument in ("--cacheinfo", f"{fixture.mode(path):o},{blob},{path}")
+            ]
+            _git(trial.workspace, "update-index", "--add", *entries, env=env)
+        return _git(trial.workspace, "write-tree", env=env)
+    finally:
+        index.unlink(missing_ok=True)
+
+
+def build(fixture: Fixture, trial: TrialPaths) -> None:
+    """Give a fresh trial workspace the fixture's history, index and working directory.
+
+    Plumbing only, with a fixed identity and dates, so a fixture's commits are
+    the same in every trial, run and machine. Nothing but the fixture's files
+    and .git is written to the workspace, and nothing is left in trial.tmp.
+    """
+    work = trial.workspace
+    object_format = _git(work, "rev-parse", "--show-object-format")
+    if object_format != "sha1":
+        msg = f"a fixture is built in a sha1 repository; {work} uses {object_format}"
+        raise RuntimeError(msg)
+    trees: dict[str, str] = {}
+
+    def tree_id(tree: str) -> str:
+        if tree not in trees:
+            trees[tree] = _write_tree(fixture, tree, trial)
+        return trees[tree]
+
+    tips: list[str] = []
+    for number, commit in enumerate((*fixture.main, *fixture.commits)):
+        date = f"@{FIRST_COMMIT + number * COMMIT_STEP} +0000"
+        parent = ("-p", tips[-1]) if tips else ()
+        env = {**IDENTITY, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
+        tips.append(
+            _git(work, "commit-tree", tree_id(commit.tree), *parent, "-m", commit.message, env=env)
+        )
+    _git(work, *NO_REFLOG, "update-ref", "refs/heads/main", tips[len(fixture.main) - 1])
+    _git(work, *NO_REFLOG, "update-ref", f"refs/heads/{fixture.branch}", tips[-1])
+    _git(work, *NO_REFLOG, "symbolic-ref", "HEAD", f"refs/heads/{fixture.branch}")
+    _git(work, "read-tree", tree_id(fixture.index_tree))
+    for path, source in fixture.files(fixture.working_tree).items():
+        target = work / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+        target.chmod(fixture.mode(path) & 0o777)
+        os.utime(target, (FIRST_COMMIT, FIRST_COMMIT))
+    # The index takes each file's stat data now, so a later `git status` has
+    # nothing to write. -q: a file that differs from the index is not an error.
+    _git(work, "update-index", "-q", "--refresh")
+    (work / ".git/info").mkdir(exist_ok=True)
+    (work / ".git/info/exclude").write_text(EXCLUDE)
