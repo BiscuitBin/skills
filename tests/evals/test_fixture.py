@@ -227,3 +227,35 @@ def test_git_lists_only_the_fixture_edits_with_the_skill_installed_or_not(
     others = agent_git(trial, "ls-files", "--others", "--exclude-standard")
     assert status.decode().splitlines() == ["M  README.md", " M tally.py", "?? notes.txt"]
     assert others == b"notes.txt\n"
+
+
+def drop(*paths: str) -> Callable[[Path], None]:
+    """Delete paths, given as trees/<tree>/<path>, from the fixture's directory."""
+
+    def change(directory: Path) -> None:
+        for path in paths:
+            (directory / path).unlink()
+
+    return change
+
+
+@pytest.mark.parametrize(
+    ("paths", "status"),
+    [
+        (
+            ["trees/average-wip/numbers.txt"],
+            ["M  README.md", " D numbers.txt", " M tally.py", "?? notes.txt"],
+        ),
+        (
+            ["trees/average-staged/numbers.txt", "trees/average-wip/numbers.txt"],
+            ["M  README.md", "D  numbers.txt", " M tally.py", "?? notes.txt"],
+        ),
+    ],
+    ids=["unstaged", "staged"],
+)
+def test_a_deletion_is_a_file_left_out_of_a_tree(
+    tmp_path: Path, paths: list[str], status: list[str]
+) -> None:
+    trial = built(tmp_path, load(tmp_path, "small-tally", drop(*paths)))
+    assert not (trial.workspace / "numbers.txt").exists()
+    assert agent_git(trial, "status", "--porcelain").decode().splitlines() == status

@@ -46,6 +46,13 @@ def tree_files() -> list[str]:
     return sorted(found | set(SAMPLES))
 
 
+def test_the_layout_globs_find_the_shipped_fixture_trees() -> None:
+    # Otherwise every check below could pass on the two sample paths alone.
+    shipped = [p for p in tree_files() if p not in SAMPLES]
+    assert "tests/fixtures/evals/git/small-tally/trees/average-wip/notes.txt" in shipped
+    assert "tests/fixtures/evals/git/clean-branch/trees/start/greet.py" in shipped
+
+
 def hooks() -> dict[str, dict[str, Any]]:
     config = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text())
     return {hook["id"]: hook for repo in config["repos"] for hook in repo["hooks"]}

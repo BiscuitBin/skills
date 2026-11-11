@@ -161,7 +161,7 @@ def _commits(
             continue
         problems += _unknown(item, COMMIT_KEYS, at)
         tree, message = item.get("tree"), item.get("message")
-        if tree not in trees:
+        if not isinstance(tree, str) or tree not in trees:
             problems.append(f"{at}: tree {tree!r} is not a directory under trees/")
         if not _message(message):
             problems.append(
@@ -339,7 +339,7 @@ def _spec(
     main = _commits(data, "main", names, where, problems)
     commits = _commits(data, "commits", names, where, problems)
     for key in ("staged", "worktree"):
-        if key in data and data[key] not in names:
+        if key in data and (not isinstance(data[key], str) or data[key] not in names):
             problems.append(f"{where}: {key} {data[key]!r} is not a directory under trees/")
     executable = data.get("executable", [])
     if not isinstance(executable, list) or not all(isinstance(p, str) for p in executable):

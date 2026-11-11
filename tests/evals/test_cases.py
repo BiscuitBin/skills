@@ -428,7 +428,9 @@ def fixture_problems(
     return errors(root, {"skill_name": "cowsay", "evals": [{**trigger(), "fixture": "f"}]})
 
 
-def commit(tree: str = "start", message: object = "Add the greeting script") -> dict[str, object]:
+def commit(
+    tree: object = "start", message: object = "Add the greeting script"
+) -> dict[str, object]:
     return {"tree": tree, "message": message}
 
 
@@ -457,6 +459,10 @@ def commit(tree: str = "start", message: object = "Add the greeting script") -> 
         ({"main": [commit(message="Add it\n")]}, "main[0]: message must be"),
         ({"staged": "missing"}, "staged 'missing' is not a directory under trees/"),
         ({"worktree": 3}, "worktree 3 is not a directory under trees/"),
+        ({"worktree": {}}, "worktree {} is not a directory under trees/"),
+        ({"staged": ["start"]}, "staged ['start'] is not a directory under trees/"),
+        ({"main": [commit(["start"])]}, "main[0]: tree ['start'] is not a directory under trees/"),
+        ({"commits": [commit({})]}, "commits[0]: tree {} is not a directory under trees/"),
         ({"executable": "greet.py"}, "executable must be a list of paths"),
         ({"executable": ["nope.py"]}, "executable 'nope.py' is not a file in any tree"),
         (
