@@ -346,3 +346,110 @@ def test_a_run_without_its_session_record_fails_closed() -> None:
 def test_a_missing_session_record_does_not_hide_why_a_run_failed() -> None:
     trace = CLAUDE.parse(raw_run(FIXTURES / "fake-by-name.jsonl", exit_code=3))
     assert (trace.status, trace.status_reason) == ("infra_error", "nonzero exit 3")
+
+
+def test_a_read_of_the_installed_skill_md_is_a_trigger() -> None:
+    # The CLI records nothing for it, but the Read tool's result is the file.
+    assert session_lines(FIXTURES / "fake-by-name-read.session.jsonl") == (
+        f"session {session_id('fake-by-name-read')}",
+    )
+    trace = by_name("fake-by-name-read")
+    assert (trace.status, trace.status_reason) == ("ok", "")
+    assert (trace.skills_triggered, trace.skills_invoked) == ([BY_NAME], [BY_NAME])
+
+
+SKILL_MD = f"<TRIAL>/workspace/.claude/skills/{BY_NAME}/SKILL.md"
+SKILL_TEXT = f"---\nname: {BY_NAME}\ndescription: Summarise a branch.\n---\n\n# Branch brief\n"
+
+
+def with_call(
+    tmp_path: Path, name: str, tool_input: dict[str, Any], output: str, *, is_error: bool = False
+) -> Trace:
+    """fake-by-name-read with its one tool call, and that call's result, replaced."""
+
+    def replace_call(event: dict[str, Any]) -> dict[str, Any]:
+        for block in event.get("message", {}).get("content", []):
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                block["name"], block["input"] = name, tool_input
+            elif isinstance(block, dict) and block.get("type") == "tool_result":
+                block["content"], block["is_error"] = output, is_error
+        return event
+
+    path = edited(tmp_path, "fake-by-name-read", replace_call)
+    lines = session_lines(FIXTURES / "fake-by-name-read.session.jsonl")
+    return CLAUDE.parse(raw_run(path, session_lines=lines))
+
+
+@pytest.mark.parametrize(
+    ("command", "is_error", "triggered"),
+    [
+        (f"cat .claude/skills/{BY_NAME}/SKILL.md", False, [BY_NAME]),
+        # Any skills directory: the rule names the skill, not its installed path.
+        (f"cat /trial/workspace/.claude/skills/{BY_NAME}/SKILL.md", False, [BY_NAME]),
+        (f"cd .claude/skills/{BY_NAME} && head -n 20 SKILL.md", False, [BY_NAME]),
+        # The stated limit: sed reads whatever its script, so it counts.
+        (f"sed -n = .claude/skills/{BY_NAME}/SKILL.md", False, [BY_NAME]),
+        (f"cat .claude/skills/{BY_NAME}/SKILL.md", True, []),
+        # The stated lower bound: after a pipe, the output is not the read's.
+        (f"cat .claude/skills/{BY_NAME}/SKILL.md | cat", False, []),
+        (f"cat .claude/skills/{BY_NAME}/SKILL.md; true", False, []),
+    ],
+)
+def test_a_bash_read_of_skill_md_counts_when_the_shared_read_rule_confirms_it(
+    tmp_path: Path, command: str, *, is_error: bool, triggered: list[str]
+) -> None:
+    trace = with_call(tmp_path, "Bash", {"command": command}, SKILL_TEXT, is_error=is_error)
+    assert trace.status == "ok"
+    assert [(c.command, c.ok) for c in trace.commands] == [(command, not is_error)]
+    assert (trace.skills_triggered, trace.skills_invoked) == (triggered, [BY_NAME])
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # Not a reader, or not a skill's SKILL.md.
+        f"ls .claude/skills/{BY_NAME}/SKILL.md",
+        f"awk '{{print}}' .claude/skills/{BY_NAME}/SKILL.md",
+        f"cat /tmp/{BY_NAME}/SKILL.md",
+    ],
+)
+def test_a_bash_command_that_reads_no_installed_skill_names_none(
+    tmp_path: Path, command: str
+) -> None:
+    trace = with_call(tmp_path, "Bash", {"command": command}, SKILL_TEXT)
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], [])
+
+
+@pytest.mark.parametrize(
+    ("file_path", "is_error", "triggered", "invoked"),
+    [
+        (f".claude/skills/{BY_NAME}/SKILL.md", False, [BY_NAME], [BY_NAME]),
+        (f"./.claude/skills/{BY_NAME}/../{BY_NAME}/SKILL.md", False, [BY_NAME], [BY_NAME]),
+        (SKILL_MD, True, [], [BY_NAME]),
+        # Not the installed copy: only the workspace's own skills directory counts.
+        (f"<TRIAL>/workspace/nested/.claude/skills/{BY_NAME}/SKILL.md", False, [], []),
+        (f"<TRIAL>/home/.claude/skills/{BY_NAME}/SKILL.md", False, [], []),
+        (f"/elsewhere/.claude/skills/{BY_NAME}/SKILL.md", False, [], []),
+        (f"<TRIAL>/workspace/.claude/skills/{BY_NAME}/scripts/SKILL.md", False, [], []),
+        (f"<TRIAL>/workspace/.claude/skills/{BY_NAME}/README.md", False, [], []),
+        (f"../.claude/skills/{BY_NAME}/SKILL.md", False, [], []),
+    ],
+)
+def test_a_read_tool_call_counts_only_for_the_installed_skill_md(
+    tmp_path: Path, file_path: str, *, is_error: bool, triggered: list[str], invoked: list[str]
+) -> None:
+    output = f"1\t---\n2\tname: {BY_NAME}\n"
+    trace = with_call(tmp_path, "Read", {"file_path": file_path}, output, is_error=is_error)
+    assert trace.status == "ok"
+    assert (trace.skills_triggered, trace.skills_invoked) == (triggered, invoked)
+
+
+def test_a_read_without_a_result_is_not_a_trigger(tmp_path: Path) -> None:
+    def drop_result(event: dict[str, Any]) -> dict[str, Any] | None:
+        content = event.get("message", {}).get("content", [])
+        return None if any(b.get("type") == "tool_result" for b in content) else event
+
+    path = edited(tmp_path, "fake-by-name-read", drop_result)
+    lines = session_lines(FIXTURES / "fake-by-name-read.session.jsonl")
+    trace = CLAUDE.parse(raw_run(path, session_lines=lines))
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], [BY_NAME])

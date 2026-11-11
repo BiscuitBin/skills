@@ -1,6 +1,7 @@
 """The Claude Code adapter. See docs/reference/evals.md for the facts it relies on."""
 
 import json
+import posixpath
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from skills_tooling.evals.adapter import (
     RawRun,
     Trace,
 )
+from skills_tooling.evals.reads import outcome_is_the_read, skills_read
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -423,6 +425,21 @@ def _expanded_skills(lines: tuple[str, ...], cwd: str) -> list[str]:
     return skills
 
 
+def _skill_md_read(file_path: str, cwd: str) -> str | None:
+    """The skill whose installed SKILL.md a Read names, or None.
+
+    The path is `{init.cwd}/.claude/skills/<skill>/SKILL.md`, or the same path
+    relative to `cwd`. It is compared as text, as the CLI reported it.
+    """
+    if not cwd:
+        return None
+    parts = posixpath.normpath(file_path.removeprefix(f"{cwd}/")).split("/")
+    root = ClaudeCode.skills_dir.split("/")
+    if len(parts) == len(root) + 2 and parts[: len(root)] == root and parts[-1] == "SKILL.md":
+        return parts[-2]
+    return None
+
+
 def _blocks(event: Mapping[str, Any], role: str) -> list[dict[str, Any]]:
     if event.get("type") != role:
         return []
@@ -458,6 +475,15 @@ class _Calls:
 def parse_stream(raw: RawRun, *, session_record: bool = False) -> Trace:
     """Normalise a stream-json transcript. Run status never comes from `subtype`.
 
+    The trigger rule: a Skill call whose result is not an error, the CLI's
+    record that a slash command expanded the skill (see `session_lines`), or
+    a read of its SKILL.md the trace confirms. A confirmed read is a Read of
+    the installed copy's path with a result that is not an error, or a Bash
+    command that passes the shared read rule (see `reads`), which, as on
+    Codex, names the skill in any skills directory and counts a transforming
+    `sed`. Each is evidence of a load, and together they are a lower bound:
+    a pipe, `awk`, an interpreter or the Grep tool can read the file unrecorded.
+
     With `session_record`, as for an agent's run, an otherwise ok run fails
     closed unless `raw.session_lines` is its own session's record: without
     one, nothing shows whether a slash command expanded a skill. The grader's
@@ -476,7 +502,8 @@ def parse_stream(raw: RawRun, *, session_record: bool = False) -> Trace:
     # The CLI's own record that it injected a skill's text: a by-name trigger.
     session_id = str(init.get("session_id", ""))
     owned = bool(session_id) and raw.session_lines[:1] == (f"session {session_id}",)
-    expanded = _expanded_skills(raw.session_lines[1:], str(init.get("cwd", ""))) if owned else []
+    cwd = str(init.get("cwd", ""))
+    expanded = _expanded_skills(raw.session_lines[1:], cwd) if owned else []
     triggered, invoked, commands = list(expanded), list(expanded), []
     for call_id, (name, tool_input) in seen.calls.items():
         error, output = seen.results.get(call_id, (True, ""))
@@ -487,8 +514,21 @@ def parse_stream(raw: RawRun, *, session_record: bool = False) -> Trace:
             invoked.append(skill)
             if call_id in seen.results and not error:
                 triggered.append(skill)
+        elif name == "Read" and (
+            placed := _skill_md_read(str(tool_input.get("file_path", "")), cwd)
+        ):
+            # A confirmed read of the installed SKILL.md: its result is the file.
+            invoked.append(placed)
+            if call_id in seen.results and not error:
+                triggered.append(placed)
         elif name == "Bash":
-            commands.append(Command(str(tool_input.get("command", "")), not error, output))
+            command = str(tool_input.get("command", ""))
+            commands.append(Command(command, not error, output))
+            # A read the shared rule confirms, as on Codex. An unplaced path names no skill.
+            read, _ = skills_read(command)
+            invoked += read
+            if call_id in seen.results and not error and outcome_is_the_read(command, output):
+                triggered += read
     last = events[-1] if events else {}
     completed = clean and last.get("type") == "result"
     last_text = seen.last_text
