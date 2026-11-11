@@ -12,6 +12,10 @@ from typing import TYPE_CHECKING, Literal
 
 from skills_tooling.evals.fixture import Fixture, Fixtures, load_fixtures
 
+# Beside the disclosure check, which shares it, because fixture already
+# imports grader: grader importing from here would cycle.
+from skills_tooling.evals.grader import invocation_mentions
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -29,6 +33,7 @@ CASE_KEYS = {
     "assertions",
     "expectations",
     "placeholder",
+    "by_name",
 }
 EXPECTATION_KEYS = {"text", "needs_transcript"}
 # Each assertion type's required and optional fields, beyond `type`.
@@ -78,6 +83,9 @@ class Case:
     placeholder: bool = False
     # The git fixture the trial's workspace starts in; None for an empty `git init`.
     fixture: Fixture | None = None
+    # The skill arm invokes the skill by name: the adapter puts its own syntax
+    # before the prompt, which holds only the bare request.
+    by_name: bool = False
 
 
 @dataclass(frozen=True)
@@ -193,6 +201,31 @@ def _fixture(
     return fixtures.found[name]
 
 
+def _by_name(data: dict[str, object], where: str, skill: str, problems: list[str]) -> None:
+    """A by_name case loads the skill, and its prompt is the bare request."""
+    if "by_name" not in data:
+        return
+    # false is the default; two spellings of one thing are rejected.
+    if data["by_name"] is not True:
+        problems.append(f"{where}: by_name must be true, or left out")
+        return
+    if data.get("should_trigger") is not True:
+        problems.append(f"{where}: by_name cases need should_trigger: true")
+    prompt = data.get("prompt")
+    if not isinstance(prompt, str):
+        return
+    # The adapter puts the agent's own syntax before the prompt.
+    if prompt.lstrip().startswith(("/", "$")):
+        problems.append(
+            f"{where}: a by_name prompt is the bare request, so it must not start with / or $"
+        )
+    problems += [
+        f"{where}: a by_name prompt holds an invocation of the skill ({mention!r}); "
+        "the adapter adds one, so leave it out"
+        for mention in invocation_mentions(prompt, skill)
+    ]
+
+
 def _case(  # noqa: PLR0912 -- one check per schema rule
     data: object, where: str, skill_dir: Path, fixtures: Fixtures, problems: list[str]
 ) -> Case | None:
@@ -240,6 +273,7 @@ def _case(  # noqa: PLR0912 -- one check per schema rule
     # false is the default; two spellings of one thing are rejected.
     if "placeholder" in data and data["placeholder"] is not True:
         problems.append(f"{where}: placeholder must be true, or left out")
+    _by_name(data, where, skill_dir.name, problems)
     if kind == "trigger" and raw_assertions:
         problems.append(f"{where}: assertions are allowed on behaviour cases only")
     if kind == "behaviour":
@@ -259,6 +293,7 @@ def _case(  # noqa: PLR0912 -- one check per schema rule
         expectations=tuple(expectations),
         placeholder="placeholder" in data,
         fixture=fixture,
+        by_name="by_name" in data,
     )
 
 

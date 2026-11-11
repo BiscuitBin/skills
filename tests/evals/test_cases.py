@@ -12,6 +12,7 @@ import pytest
 
 from skills_tooling.evals.cases import CaseError, load_suite, validate_all
 from skills_tooling.evals.fixture import case_clashes, load_fixture
+from skills_tooling.evals.grader import invocation_mentions
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -272,6 +273,97 @@ def test_a_placeholder_case_loads_marked_as_a_placeholder(tmp_path: Path) -> Non
 def test_placeholder_false_is_rejected(tmp_path: Path) -> None:
     problems = errors(tmp_path, {"skill_name": "cowsay", "evals": [behaviour(placeholder=False)]})
     assert any("placeholder must be true, or left out" in p for p in problems), problems
+
+
+@pytest.mark.parametrize("kind", ["trigger", "behaviour"])
+def test_a_case_invoked_by_name_loads_marked(tmp_path: Path, kind: str) -> None:
+    case = behaviour() if kind == "behaviour" else trigger()
+    write_suite(
+        tmp_path,
+        {"skill_name": "cowsay", "evals": [{**case, "by_name": True}, trigger("trigger-plain")]},
+    )
+    assert [case.by_name for case in load_suite(tmp_path, "cowsay").cases] == [True, False]
+
+
+def by_name(prompt: str) -> dict[str, Any]:
+    return {**trigger(), "by_name": True, "prompt": prompt}
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ({**trigger(), "by_name": False}, "by_name must be true, or left out"),
+        ({**trigger(), "by_name": "yes"}, "by_name must be true, or left out"),
+        (
+            {**trigger(should=False), "by_name": True},
+            "by_name cases need should_trigger: true",
+        ),
+        (by_name("/cowsay Make a cow talk"), "must not start with / or $"),
+        (by_name("$cowsay:cowsay Make a cow talk"), "must not start with / or $"),
+        (by_name("  /tmp/cow.txt needs a cow"), "must not start with / or $"),
+        (by_name("$HOME needs a cow"), "must not start with / or $"),
+        (
+            by_name("Make a cow talk, as $cowsay:cowsay would"),
+            "holds an invocation of the skill ('$cowsay:cowsay')",
+        ),
+        (
+            by_name("Make a cow talk with /cowsay."),
+            "holds an invocation of the skill ('/cowsay')",
+        ),
+        (
+            by_name("Make a cow talk with `/COWSAY`"),
+            "holds an invocation of the skill ('/COWSAY')",
+        ),
+    ],
+)
+def test_a_case_invoked_by_name_is_rejected_with_a_reason(
+    tmp_path: Path, case: dict[str, Any], expected: str
+) -> None:
+    problems = errors(tmp_path, {"skill_name": "cowsay", "evals": [case]})
+    assert any(expected in problem for problem in problems), problems
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Make a cow read src/app.py",
+        "Make a cow read src/cowsay/x.py",
+        "Make a cow read docs/cowsay.md",
+        "Make a cow read ~/cowsay",
+        "Make a cow say $HOME",
+    ],
+)
+def test_a_by_name_prompt_may_hold_paths_and_variables(tmp_path: Path, prompt: str) -> None:
+    write_suite(tmp_path, {"skill_name": "cowsay", "evals": [by_name(prompt)]})
+    [case] = load_suite(tmp_path, "cowsay").cases
+    assert (case.prompt, case.by_name) == (prompt, True)
+
+
+def test_an_unmarked_case_may_invoke_the_skill_in_its_prompt(tmp_path: Path) -> None:
+    case = {**trigger(), "prompt": "$cowsay:cowsay Make a cow talk"}
+    write_suite(tmp_path, {"skill_name": "cowsay", "evals": [case]})
+    [loaded] = load_suite(tmp_path, "cowsay").cases
+    assert (loaded.prompt, loaded.by_name) == ("$cowsay:cowsay Make a cow talk", False)
+
+
+@pytest.mark.parametrize(
+    ("text", "found"),
+    [
+        ("/cowsay hi", ["/cowsay"]),
+        ("Run `/cowsay` on it", ["/cowsay"]),
+        ("Use $cowsay now", ["$cowsay"]),
+        ("Ask $cowsay:cowsay, then stop", ["$cowsay:cowsay"]),
+        ("Ask $kit.v2:cowsay", ["$kit.v2:cowsay"]),
+        ("It ends with /cowsay.", ["/cowsay"]),
+        ("Say /CowSay, then $COWSAY", ["/CowSay", "$COWSAY"]),
+        ("src/cowsay/x.py docs/cowsay.md ~/cowsay /cowsay/notes.txt /cowsay-extra", []),
+        ("src/app.py $HOME /cowsays $cowsay_x /cowsay.py a:/cowsay x$cowsay $$cowsay", []),
+    ],
+)
+def test_an_invocation_is_the_skills_name_after_a_slash_or_dollar_as_a_whole_token(
+    text: str, found: list[str]
+) -> None:
+    assert invocation_mentions(text, "cowsay") == found
 
 
 def run_command(root: Path, *args: str) -> subprocess.CompletedProcess[str]:

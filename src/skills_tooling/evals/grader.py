@@ -357,6 +357,22 @@ def _written(directory: Path, excluded: set[Path]) -> list[Path]:
     return sorted(found, key=lambda path: path.relative_to(directory).as_posix())
 
 
+def invocation_mentions(text: str, skill: str) -> list[str]:
+    """Each invocation of `skill` in the text, as written, ignoring case.
+
+    An invocation is `/` or `$`, an optional `<plugin>:`, then the skill's
+    name, as a whole token. Nothing that sits inside a path or a longer name
+    comes before it, and nothing that continues one comes after it, so
+    `src/<skill>/x.py`, `docs/<skill>.md`, `~/<skill>` and `$HOME` are not
+    invocations. The case loader keeps invocations out of a by_name prompt,
+    and the disclosure check flags an agent's echo of one.
+    """
+    pattern = re.compile(
+        rf"(?<![\w./:$~-])[/$](?:[\w.-]+:)?{re.escape(skill)}(?![\w/:-]|\.\w)", re.IGNORECASE
+    )
+    return [match.group(0) for match in pattern.finditer(text)]
+
+
 def disclosure_matches(material: str, skill_files: Iterable[str]) -> list[str]:
     """The distinct strings in the material that can tell the grader the arm.
 
