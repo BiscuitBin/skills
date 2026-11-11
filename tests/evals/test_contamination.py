@@ -9,7 +9,7 @@ from skills_tooling.evals import workspace
 from skills_tooling.evals.adapter import Location, Trace, TrialPaths
 from skills_tooling.evals.claude_code import BUILTIN_PLUGINS, BUILTIN_SKILLS, ClaudeCode
 from skills_tooling.evals.contamination import NeverAppear, check, never_appear, preflight
-from tests.evals.test_claude_parser import parse
+from tests.evals.test_claude_parser import BY_NAME, SKILL_TEXT, parse, with_call
 
 ROOT = Path(__file__).parents[2]
 ADAPTER = ClaudeCode(ROOT / "node_modules/.bin/claude")
@@ -128,6 +128,39 @@ def test_calling_an_unlisted_skill_fails(trial: TrialPaths) -> None:
 
 def test_a_failed_call_to_a_missing_skill_is_not_contamination(trial: TrialPaths) -> None:
     assert problems(trial, trace(trial, skills_invoked=["ascii-art"])) == []
+
+
+def test_a_confirmed_bash_read_of_a_dev_skill_fails_and_a_read_tool_call_of_it_does_not(
+    trial: TrialPaths, tmp_path: Path
+) -> None:
+    # The repo's dev skill, reached from .eval-workspaces/<run>/<case>/workspace.
+    dev_skill = "../../../../dev-skills/build/cross-model-review/SKILL.md"
+    forbidden = NeverAppear(skills={"cross-model-review": "dev skill"}, instruction_files=())
+
+    def found(tool: str, tool_input: dict[str, str]) -> list[str]:
+        # The recorded by-name run with its one tool call replaced, parsed as the adapter does.
+        observed = replace(
+            with_call(tmp_path, tool, tool_input, SKILL_TEXT), debug_lines=discovery(trial)
+        )
+        return check(
+            ADAPTER,
+            observed,
+            skill=BY_NAME,
+            baseline=False,
+            trial=trial,
+            never=forbidden,
+            system_root=Path("/nonexistent-system-root"),
+        ).problems
+
+    assert found("Bash", {"command": f"cat {dev_skill}"}) == [
+        "unexpected skills visible: cross-model-review",
+        "never-appear skill 'cross-model-review' (dev skill) is visible",
+    ]
+    # The same trial reading the installed copy instead is clean.
+    assert found("Bash", {"command": f"cat .claude/skills/{BY_NAME}/SKILL.md"}) == []
+    # A Read tool call counts only for the installed copy, and an unconfirmed read not at all.
+    assert found("Read", {"file_path": dev_skill}) == []
+    assert found("Bash", {"command": f"cat {dev_skill} | cat"}) == []
 
 
 def test_an_empty_project_list_is_not_a_location(trial: TrialPaths) -> None:
