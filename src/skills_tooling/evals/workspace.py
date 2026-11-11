@@ -32,10 +32,12 @@ GRACE_SECONDS = 2.0
 TERMINATING = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 # Git sees neither the user's nor the system's config, so no hooks, helpers or
-# templates reach the workspace.
+# templates reach the workspace, and no system attributes: Apple's git reads its
+# gitattributes even with GIT_CONFIG_NOSYSTEM set.
 GIT_ENV = {
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_ATTR_NOSYSTEM": "1",
     "GIT_AUTHOR_NAME": "Eval Harness",
     "GIT_AUTHOR_EMAIL": "eval@example.invalid",
     "GIT_COMMITTER_NAME": "Eval Harness",

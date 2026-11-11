@@ -119,6 +119,7 @@ HARNESS_GIT_ENV = {
     "HOME": "/dev/null",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_ATTR_NOSYSTEM": "1",
     "GIT_AUTHOR_NAME": "Eval Harness",
     "GIT_AUTHOR_EMAIL": "eval@example.invalid",
     "GIT_COMMITTER_NAME": "Eval Harness",
