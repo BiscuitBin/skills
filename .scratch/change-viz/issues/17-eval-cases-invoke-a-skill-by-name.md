@@ -159,8 +159,9 @@ Commits `4a295e8..de9d947`, then the review fix `115ba26` and a test, `37ec5a1`.
 
 #### Checks run
 
-- `just check` on `37ec5a1` (this branch, with ticket 16 and both tickets' review fixes): passed, exit 0. pytest: 1195 passed, 4 skipped. The skips are the two runs of the on-disk case-clash test, because macOS folds case, and the two CI-only canaries. Every other step passed, including `validate-evals` (1 suite valid) and the version check (Claude Code 2.1.309, Codex 0.163.0). Log: `ai_tmp/gate-16-17.log`.
-- Before the review, `just check` passed on `de9d947`: 1184 passed, 4 skipped (`ai_tmp/verify-17-check.log`). Each criterion was checked against the code and the tests (`ai_tmp/impl-17-progress.md`, **Verify**).
+- `just check` on `a083291` (this branch, with ticket 16, both tickets' review fixes and ticket 16's /code-review fixes; this ticket had none): passed, exit 0. pytest: 1202 passed, 4 skipped. The skips are the two runs of the on-disk case-clash test, because macOS folds case, and the two CI-only canaries. Every other step passed, including `validate-evals` (1 suite valid) and the version check (Claude Code 2.1.309, Codex 0.163.0). Log: `ai_tmp/gate-cr.log`.
+- Before the /code-review, `just check` passed on `37ec5a1`: 1195 passed, 4 skipped (`ai_tmp/gate-16-17.log`).
+- Before the cross-model review, `just check` passed on `de9d947`: 1184 passed, 4 skipped (`ai_tmp/verify-17-check.log`). Each criterion was checked against the code and the tests (`ai_tmp/impl-17-progress.md`, **Verify**).
 - The review fix was red first: the three new absolute `Read` rows gave `([], [])`, and the guard row passed before and after. `37ec5a1`'s test passed on arrival, because the code already existed, and failed with `skills_triggered` taken out of contamination's `seen`.
 - Not run: Ubuntu CI, because nothing was pushed, and the live trials (below).
 
@@ -180,12 +181,21 @@ Also closed, though not a finding: the docs say a confirmed Bash read of a dev s
 
 No second round: the fix reorders one line, as the triage proposed, so the code does what the reference already said. The mechanism, the rule and the data format are unchanged, and `37ec5a1` adds only a test.
 
+**/code-review (high, Stage 1):** a separate stage from the cross-model review. Claude Code's `/code-review` skill, model `claude-fable-5-2`, reviewed branch `change-viz` against `main` at `5bf7fe0`. Findings: `ai_tmp/code-review-stage1.json` · Triage: `ai_tmp/triage-code-review-stage1.md`. The numbers are the findings file's, from 1; findings 1 to 3, 5, 6, 8 and 9 are ticket 16's. No finding of this ticket's was fixed.
+
+| # | Finding | Verdict | Action |
+| --- | --- | --- | --- |
+| 4 | Every ok Claude Code run fails closed without its session record, not only by-name runs, so a CLI change to the session file would fail every trial | invalid | none: pins are exact, and `test_claude_adapter.py` runs the pinned CLI with a plain prompt and expects `ok`, so a CLI that moved the file fails `just check` at the pin bump. The design applies the record to every trial on purpose, so both arms take the same path. Gating on the prompt sent would exclude skill-arm trials only |
+| 7 | The slash expansion rule compares raw paths, while the `Read` rule normalises them | invalid | none: both paths in the expansion rule are the CLI's own, the runner starts it in a resolved workspace, and `test_claude_adapter.py` shows the pinned CLI writes them in normal form. A miss could only fail a by-name skill arm loudly. If the two rules are ever unified, the shared helper keeps the empty-`cwd` guard |
+| 10 | `_kept_session_lines` parses the whole transcript to find init's `session_id`, and `parse_stream` parses it again | out of scope | none: it costs milliseconds a trial, and each way to remove it changes a design decision, which event counts as init, or a shared data type. No follow-up filed |
+
 **Follow-ups:**
 
 - Still open from the design checkpoint: a trial-record field holding both agents' kept trigger lines, so a trigger can be audited after teardown. It needs its own ticket.
 - Left as the triage scoped it: a relative `../workspace/.claude/…` `Read` path, and an absolute one that starts with exactly two slashes (which `normpath` keeps as `//`), still do not count. Both are conservative misses.
 - Closed here: `just check` has run on `115ba26` and `37ec5a1` (above), and this record adds the review entry and ticks the boxes.
-- No finding was out of scope.
+- No cross-model review finding was out of scope.
+- /code-review finding 10: none filed. Reading the transcript once would keep its meaning only by duplicating the transcript reader, for milliseconds a trial.
 
 **Residual risk:**
 

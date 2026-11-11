@@ -158,8 +158,10 @@ Commits `6a08917..4a295e8`, then the review fixes `9ab646d` and `bed4ae0`.
 
 #### Checks run
 
-- `just check` on `37ec5a1` (this branch, with ticket 17 and both tickets' review fixes): passed, exit 0. pytest: 1195 passed, 4 skipped. The skips are the two runs of the on-disk case-clash test, because macOS folds case, and the two CI-only canaries. Lint, mypy (58 files), the distribution check, `validate-skills` (2 skills, 0 errors), `validate-evals` (1 suite valid) and the version check (Claude Code 2.1.309, Codex 0.163.0) passed. Log: `ai_tmp/gate-16-17.log`.
-- Before the review, `just check` passed on `4a295e8`: 1084 passed, 4 skipped (`ai_tmp/verify-16-check.log`). Each criterion was checked against the code and the tests that pin it (`ai_tmp/impl-16-progress.md`, **Verify**).
+- `just check` on `a083291` (this branch, with ticket 17, both tickets' review fixes and the /code-review fixes): passed, exit 0. pytest: 1202 passed, 4 skipped. The skips are the two runs of the on-disk case-clash test, because macOS folds case, and the two CI-only canaries. Lint, mypy (58 files), the distribution check, `validate-skills` (2 skills, 0 errors), `validate-evals` (1 suite valid) and the version check (Claude Code 2.1.309, Codex 0.163.0) passed. Log: `ai_tmp/gate-cr.log`.
+- Before the /code-review, `just check` passed on `37ec5a1`: 1195 passed, 4 skipped (`ai_tmp/gate-16-17.log`).
+- The /code-review fixes: each new test failed first for the stated reason, finding 1's with the host's identity in place of Robin Hale and the others with `DID NOT RAISE CaseError`. After the last fix, `test_cases.py`, `test_fixture.py`, `test_benchmark.py`, `test_workspace.py`, `test_grader.py` and `test_dispatch.py` gave 523 passed, 2 skipped (the case-clash skips). For finding 1, `test_fixture.py`, `test_runner.py`, `test_trials_and_baselines.py`, `test_codex_adapter.py` and `test_claude_adapter.py`, with the pinned CLIs and fake APIs, gave 94 passed. Cowsay is unchanged: `git diff 5bf7fe0..a083291 -- evals/` is empty, its `evals_sha256` pin passes and `grader.py` was not touched.
+- Before the cross-model review, `just check` passed on `4a295e8`: 1084 passed, 4 skipped (`ai_tmp/verify-16-check.log`). Each criterion was checked against the code and the tests that pin it (`ai_tmp/impl-16-progress.md`, **Verify**).
 - Each review fix was red first: the five new `__pycache__` cases loaded, and the new `now-a-dir` case raised `IsADirectoryError`.
 - Not run: Ubuntu CI, because nothing was pushed, so the two canaries and the case-clash test have not run. No live eval, which this ticket does not need.
 
@@ -177,12 +179,31 @@ Commits `6a08917..4a295e8`, then the review fixes `9ab646d` and `bed4ae0`.
 
 No second round: neither fix changes a mechanism, a rule set in substance or a data format. Fix 1 adds one load-time refusal, for a path no committed fixture can hold, and fix 2 moves the mode check in `unchanged` ahead of the wrap. The hash, the build, the map and the existing messages are unchanged.
 
+**/code-review (high, Stage 1):** a separate stage from the cross-model review. Claude Code's `/code-review` skill, model `claude-fable-5-2`, reviewed branch `change-viz` against `main` at `5bf7fe0`. Findings: `ai_tmp/code-review-stage1.json` · Triage: `ai_tmp/triage-code-review-stage1.md`. The numbers are the findings file's, from 1; findings 4, 7 and 10 are ticket 17's. The fixes are `5fa644c`, `8226ae3`, `cc4fad8` and `a083291`.
+
+| # | Finding | Verdict | Action |
+| --- | --- | --- | --- |
+| 1 | The agent's Git has no identity, so a commit the agent makes takes the machine's account name and `<login>@<host>`, or is refused where Git cannot guess an email | valid (low) | fixed in `a083291`: `fixture.AGENT_GIT_ENV` adds `IDENTITY`, `Robin Hale <robin@example.com>` as author and committer, with no dates. `test_fixture.py::test_a_commit_the_agent_makes_is_robin_hales_on_any_machine` failed first with the host's identity. The env pins in `test_trials_and_baselines.py` and `test_codex_adapter.py:552` now check all eight variables. `evals.md` says eight and has a row for the identity, and `eval-isolation.md` gains a sentence on it |
+| 2 | The ignore check skips the author's global ignore file, so a file only that file ignores passes validation and is built and hashed locally, but no checkout has it | valid (low) | fixed in `cc4fad8`: `workspace.global_excludes()`, moved from `benchmark`, and a new `workspace.is_toplevel()` serve both `benchmark.git_state` and `fixture._ignored`, which passes the global file to `git check-ignore`. The message now says "Git ignores it". `test_cases.py::test_a_path_the_authors_global_ignore_file_ignores_is_rejected` (`core.excludesFile` and XDG cases) loaded first. `evals.md` names the global ignore file |
+| 3 | Commit messages and the branch are not checked for Codex's denial keywords, though `git log` and `git status` print them | valid (low) | fixed in `5fa644c`: `_denial` checks each message and the branch. `test_cases.py::test_a_sandbox_denial_keyword_in_the_branch_or_a_message_is_rejected` (`sandbox-cleanup`, "Fix Permission Denied on read") loaded first. The **Neutral text** rule in `evals.md` covers both |
+| 5 | The grader material shows no trace of a fixture file the agent deleted | known residual | none: the design left it out, because it needs a new `FRAMING` line and so a new `grader_prompt_sha256`. It is in Residual risk below and in `.scratch/foundation/follow-ups.md` (Ticket 05) |
+| 6 | An empty `evals/<skill>/fixtures/` changes `evals_sha256`, and an empty `trees/<t>/` validates, though Git keeps neither | valid (low) for the empty tree; known residual for the empty `fixtures/` | fixed in `8226ae3`, the empty tree only: `_spec` takes the tree names from `_walk`, which holds only trees with a file, and `_tree_names` is gone. The tree, `staged` and `worktree` messages now say "is not a directory under trees/ that holds a file (Git keeps no empty directory)", as a checkout gives. `test_cases.py::test_an_empty_tree_is_rejected_as_a_checkout_would_be` (`worktree` and commit cases) loaded first. The empty `fixtures/` was not touched |
+| 8 | `Fixture.files()` walks each tree again at build, though load's walk already collected it | out of scope | none: a few files cost nothing next to an agent run, and load rejects symlinks, so both walks see the same files. Follow-up below |
+| 9 | The install directories are written down three times, in `HIDDEN_PARTS`, `EXCLUDE` and the adapters' `skills_dir`, and nothing ties them together | out of scope | none: the three agree, and only a third adapter, Pi, which is deferred, could make them differ. Follow-up below |
+
 **Follow-ups:**
 
 - The descriptor close in `unchanged` has no test of its own. A fix that only caught `OSError` around `fdopen` would also pass the `now-a-dir` case.
 - The nested-negation test asserts an exact problem list that depends on how Git re-includes ignored paths, seen only with Apple Git 2.50.1. Ubuntu CI is its first Linux run, and the `now-a-dir` case's.
 - Closed here: the design and the Maintainer decisions now say `git clean -n -d -x`, as the docs do. The progress note's claim that the repository ignore check rejects `__pycache__` is superseded by finding 1's rule, as the note says. `just check` has run on the fix commits (above).
-- No finding was out of scope.
+- No cross-model review finding was out of scope.
+- /code-review finding 5 is a known residual, already filed in `.scratch/foundation/follow-ups.md:58` (Ticket 05). So is finding 6's empty `fixtures/` half, under **Stray files** in Residual risk below.
+- /code-review finding 8, optional: keep the validated per-tree map on `Fixture`, so a build does not walk the trees again.
+- /code-review finding 9, for the Pi adapter ticket: build `HIDDEN_PARTS` and `EXCLUDE` from one ordered tuple in `workspace.py`, which keeps `EXCLUDE`'s bytes, and add a test over every adapter `adapter_for` returns.
+- The agent's Git variables are now eight, with /code-review finding 1's identity. **What was built** and two Residual risk lines below still say four, as written before the /code-review. The four were seen reaching Codex's commands, and all eight now are, through `test_codex_adapter.py:552`.
+- Claude Code was not checked passing `GIT_AUTHOR_*` and `GIT_COMMITTER_*` to its Bash tool's commands, as with the other four variables. /code-review finding 1's test shows what Git does with them, not that the CLI passes them on.
+- /code-review finding 2 changed a validation message from "the repository ignores it, so a checkout would not have it" to "Git ignores it, so a checkout would not have it". Notes in `ai_tmp/` that quote the old text are stale.
+- Fixture validation now reads the global ignore file of whoever runs it, as `git_state` already did. A maintainer whose global ignore file lists a shipped fixture's file sees a validation failure locally. That is correct, but local results depend on that file.
 
 **Residual risk:**
 
