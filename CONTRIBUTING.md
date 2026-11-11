@@ -96,6 +96,16 @@ To bump it:
 
 The Python tooling's version in `pyproject.toml` and the npm package's version in `package.json` are separate, and a skill change does not bump them.
 
+## Dependency updates
+
+Renovate opens a pull request for each pin bump on Monday mornings, once the release is at least 7 days old, and never merges one itself ([ADR 0016](docs/adr/0016-dependency-updates-via-renovate.md)). To review one:
+
+1. Wait for CI to pass on both Ubuntu and macOS. A bump that misses a copy of its pin fails there, at `required-version`, `just-version`, `engine-strict` or `npm ci`.
+2. Read the release notes the PR links, then merge or close it.
+3. For a PR labelled `agent-cli`, work through the checklist in its body before you approve it.
+
+Renovate relocks `uv.lock` and `package-lock.json` itself. uv resolves only releases at least 7 days old (`exclude-newer` in `pyproject.toml`), so `uv add` cannot pick a newer one either. When you change a pin by hand, run `just lock` and commit the manifest and its lockfile together. If you reword a README row, workflow step or Justfile line that holds a pin, keep `renovate.json`'s regex managers matching it; `tests/test_renovate.py` fails until they do.
+
 ## Releases
 
 There is no release recipe and no tag. A release is a version bump merged to `main`:

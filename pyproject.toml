@@ -34,6 +34,11 @@ python-downloads = "automatic"
 required-version = "==0.13.6"
 # `uv add` writes an exact pin, as every other dependency here is.
 add-bounds = "exact"
+# Resolve only releases at least as old as renovate.json's minimumReleaseAge.
+# Renovate passes no age limit to uv, so its monthly `uv lock --upgrade` would
+# otherwise take a transitive release published that morning (ADR 0016). uv
+# stores the computed cutoff in uv.lock, so `--locked` stays stable over time.
+exclude-newer = "7 days"
 
 [tool.ruff]
 line-length = 99
