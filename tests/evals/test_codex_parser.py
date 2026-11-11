@@ -18,9 +18,9 @@ from skills_tooling.evals.codex import (
     echoed_lines,
     kept_lines,
     parse_stream,
-    skills_read,
     stored_stderr,
 )
+from skills_tooling.evals.reads import skills_read
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/codex"
 SKILL_DIR = Path(__file__).parents[2] / "skills/cowsay"
