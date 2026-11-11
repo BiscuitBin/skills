@@ -26,7 +26,7 @@
         },
         {
           "type": "output_matches",
-          "pattern": "(?ms)^##[ \\t]+Why the change[ \\t]*\\n(?:[ \\t]*\\n)*(?:[^\\s#][^\\n]*\\n)+(?:[ \\t]*\\n)*(?:\\*\\*Risk:(?:(?!^##[ \\t]).)*?|(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?^##[ \\t]+Special things to note[ \\t]*$"
+          "pattern": "(?ms)^##[ \\t]+Why the change[ \\t]*\\n(?:[ \\t]*\\n)*(?:(?!\\*\\*Risk:)[^\\s#][^\\n]*\\n)+(?:[ \\t]*\\n)*(?:\\*\\*Risk:(?:(?!^##[ \\t]).)*?|(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?^##[ \\t]+Special things to note[ \\t]*$"
         }
       ],
       "expectations": [
