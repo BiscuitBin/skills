@@ -8,7 +8,7 @@ Why: the `change-viz` skill (ticket 18) loads only when the user names it. The h
 
 Tickets 16 and 17 do not depend on each other, but both edit the case loader, `docs/reference/evals.md` and `GLOSSARY.md`. Whichever lands second rebases onto the first.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). The spike prefers the pinned CLIs against the local fake API, which records each request and costs nothing. One live trial per agent then confirms it: the maintainer runs those in their own terminal, with the token, from absolute-path commands the agent hands over. Cross-model review is also required.
 
@@ -59,7 +59,7 @@ Make a throwaway by-name-only skill (both settings above) and answer these on bo
   - `docs/reference/evals.md`: the case schema, both trigger rules, and what the baseline arm gets.
   - `GLOSSARY.md`: **Trigger** covers a by-name invocation on both agents.
   - An ADR, if the design changes what a trigger is.
-- [ ] Shown working: one live trial per agent of a marked case, and one of a quiet plain request, with the run ids recorded here.
+- [x] Shown working: one live trial per agent of a marked case, and one of a quiet plain request, with the run ids recorded here.
 - [x] `just check` passes.
 
 ## Out of scope
@@ -199,8 +199,8 @@ No second round: the fix reorders one line, as the triage proposed, so the code 
 
 **Residual risk:**
 
-- **The live-trials criterion is not met, so the ticket stays open.** The live trials run in ticket 18's RED run (the maintainer's Hand-off 1), with a hand read of the quiet cases' transcripts. Their run ids go here.
-- **The by-name trigger and quiet-case criteria are met offline only.** No test runs the real Codex CLI with a by-name prompt: Codex's trigger is shown from the recorded run. The runner-level test triggers through a scripted `Skill` call, and the expansion is shown end to end only in `test_claude_adapter.py`. No live trial has shown `skill_triggered` pass or a quiet case stay quiet.
+- **The live-trials criterion was not met at this checkpoint.** It is met since ticket 18's RED run, the maintainer's Hand-off 1 (**Live trials**).
+- **The by-name trigger and quiet-case criteria were met offline only at this checkpoint.** No test runs the real Codex CLI with a by-name prompt: Codex's trigger is shown from the recorded run. The runner-level test triggers through a scripted `Skill` call, and the expansion is shown end to end only in `test_claude_adapter.py`. Since then, the live trials have shown `skill_triggered` pass and a quiet case stay quiet on both agents, with the trigger deduced rather than seen (**Live trials**).
 - **Quiet cases are a lower bound** (maintainer decision 2). A read through a pipe, `awk`, an interpreter, the `Grep` tool or a copy records no trigger, and a transforming `sed` such as `sed -n = SKILL.md` counts as one.
 - **Cowsay could move in a live run.** Its criterion is met offline. Claude Code now counts a confirmed `Read` or Bash read and keeps session persistence on in every trial, so cowsay's three `should_trigger: false` cases could change. ADR 0017's "cowsay's recorded results do not change" holds for the recorded files only.
 - **The agent can write the session file.** Its Bash tool could rewrite its own session file in the trial home. `eval-isolation.md` states this as a known limit.
@@ -208,3 +208,56 @@ No second round: the fix reorders one line, as the triage proposed, so the code 
 - **The `Read` rule is exact-path, the Bash rule is not.** The shared Bash rule names a skill in any skills directory, as on Codex.
 - **Linux is unrun.** Ubuntu CI has not run, because nothing was pushed. The parser tests' "any OS" rests on macOS, and Ubuntu CI is the first run of dash under the two adapter tests' `/bin/sh` stand-in scripts, of Codex's bwrap or Landlock sandbox on `.git`, of the on-disk case-clash test and of `GIT_ATTR_NOSYSTEM` on a non-Apple Git.
 - **Fixture trials, as in ticket 16:** deleted fixture files are not shown to the grader; cowsay's skill arm still shows `.claude/` in Claude Code's startup git status (a follow-up); and `git status --ignored`, `git ls-files --others` without `--exclude-standard` and `git clean -n -d -x` still list the skill.
+
+### Live trials (2026-11-11)
+
+The live trials ran in ticket 18's RED run (Hand-off 1), from `b28cd28`, against `change-viz`'s RED stub. That skill sets both by-name-only settings. Ticket 18's **RED run** has the full read, and the readers' and skeptics' reports are in `ai_tmp/red/`.
+
+**Run ids:**
+
+| Agent | Run id | Agent CLI and model |
+| --- | --- | --- |
+| Claude Code | `20261111T211415Z-73e4` | 2.1.309, `claude-sonnet-5-5` |
+| Codex | `20261111T211625Z-9e0f` | 0.163.0, `gpt-5.6-terra` |
+
+**What each run holds.**
+
+- **The marked case:** `behaviour-describe-branch`, with `by_name: true`, in both arms.
+- **The quiet plain request:** `no-trigger-unnamed-request`, with `should_trigger: false`, in the skill arm.
+- **Status:** all six trials are `ok` and valid.
+- **The recorded `prompt`:**
+  - The marked skill arm got `/change-viz Describe what this branch changes.` on Claude Code, and `$change-viz:change-viz Describe what this branch changes.` on Codex.
+  - The baseline arm and both quiet trials got the bare request.
+- **Disclosure:** no grading file has `arm_disclosed` set, and no final message echoes the invocation.
+
+**Marked case: the trigger.** On both agents, `skill_triggered` passed. Both have `trigger` `{expected: true, actual: true, matched: true}` and the evidence `triggered: ['change-viz']`. Neither run stores the line that set the trigger, so on both agents it is deduced from the stored fields and the code at `b28cd28`, not seen.
+
+- **Claude Code, the session record:**
+  - **Not stored:** the adapter keeps the `skill_expanded` line in memory, and teardown removes the agent home.
+  - **Deduced:** status `ok` requires the trial's own session record (`claude_code.py:507`, `:541-542`). The trial's only tool call was a Bash `git log --stat main..HEAD; git diff main...HEAD`. It made no `Skill` call and no `Read`, and named no `SKILL.md`. So only a `skill_expanded <cwd>/.claude/skills/change-viz` line can have set the trigger.
+  - **Supporting, at n = 1:**
+    - The init event lists `change-viz` in `skills` and `slash_commands`.
+    - The first turn's input was 138 tokens over the quiet trial's, which fits the expansion having been sent.
+- **Codex, the explicit event:**
+  - **Not stored:** `stored_stderr` drops the `codex.skill_invocation` telemetry, and `kept_lines` stays in memory (`codex.py:445-466`).
+  - **Deduced:** none of the trial's three commands reads a `SKILL.md` or names the skill. Re-parsing the stored transcript with `codex.parse_stream` and no telemetry lines gives `skills_triggered == []`. Only an `explicit` event adds the skill without a read (`codex.py:547-582`).
+  - **Supporting:** only the skill arm opened with `## Summary` and promised a "pull-request description", which echoes the stub's injected description. Its input was 586 tokens over the baseline's, with the same tokens cached.
+
+**Quiet case.** Both agents passed it, with `trigger` `{expected: false, actual: false, matched: true}`. The reader and the skeptic each read every transcript by hand.
+
+- **Claude Code:**
+  - The transcript has six events and one Bash call, `git diff main...HEAD --stat && git diff main...HEAD`.
+  - It made no `Skill`, `Read`, `ls` or `find` call, and named no skill path. The only `change-viz` hits are in the init event's own listing.
+  - Status `ok` shows the trial had its own session record, and that record held no expansion.
+  - Its first turn was 3 tokens over the baseline's, a hint that the skill was not listed to the model.
+- **Codex:**
+  - It ran two git-only commands, with no `ls`, `find` or `cat`.
+  - It made no mention of `.agents`, `SKILL.md` or the skill's name.
+  - Whether Codex logged an `implicit` event is unobserved, because none is stored. Without a read, one would not set the trigger.
+- **Both are a lower bound** (decision 2). They see only confirmed loads, and neither trace shows whether the model was told the skill exists.
+
+**The criterion is met.** It reads: "Shown working: one live trial per agent of a marked case, and one of a quiet plain request, with the run ids recorded here."
+
+- On each agent, one marked trial passed `skill_triggered` and one quiet trial passed. The run ids are above.
+- The box is ticked, and with it every criterion, so the status is done.
+- **Limit:** the trigger is deduced, not read from the kept line, which no trial record stores. That is the open follow-up, a trial-record field for the kept trigger lines (design finding 4), not a criterion.

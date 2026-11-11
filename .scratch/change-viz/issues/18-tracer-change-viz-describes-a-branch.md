@@ -358,3 +358,168 @@ What RED is expected to show (unobserved):
 - `--top`, E5 and E8 likely pass in both arms, and so does E6 on Claude Code. E4, E7 and Codex's E6 can go either way.
 
 Then read `eval-results/<run-id>/`: the quiet case's transcripts, each kept workspace (the writes and refs rows above), the two disclosure reads, and each skill-arm message against the fixture facts. Record the run ids here and in ticket 17.
+
+### RED run (Hand-off 1, 2026-11-11)
+
+The maintainer ran both commands under **Next** from `b28cd28`. That is later than `3d3dc4b`, and `evals/change-viz/` and `skills/change-viz/` are unchanged between the two. Each run got a reader and a skeptic: `ai_tmp/red/claude.md` with `claude-verify.md`, and `ai_tmp/red/codex.md` with `codex-verify.md`. Each final message is saved verbatim beside them as `ai_tmp/red/<agent>-<case>-<arm>.md`. Where a skeptic refuted its reader, this record follows the skeptic. No refutation changes a verdict. No acceptance box is ticked: each still waits for GREEN or for the implementation checkpoint.
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Run id (both arms) | `20261111T211415Z-73e4` | `20261111T211625Z-9e0f` |
+| Commit | `b28cd28`, `git_dirty` false | the same |
+| `evals_sha256` | `78828f74…`, the frozen value | the same |
+| `skill_sha256` | `3d94019e…`, the RED stub. The installed copy equals `skills/change-viz/` (`diff -r`) | the same |
+| Agent | Claude Code 2.1.309, `claude-sonnet-5-5` | Codex 0.163.0, `gpt-5.6-terra` |
+| Grader | `claude-opus-5-5` on Claude Code 2.1.309, 2 calls per graded trial, `canary_passed: false` (the healthy value) | the same |
+| Trials | 3: one per case per arm, with the quiet case skipped in the baseline | the same |
+| Every trial | `ok`, valid, contamination passed, `secret_found` null | the same |
+
+#### Results
+
+| Check | Claude skill | Claude baseline | Codex skill | Codex baseline |
+| --- | --- | --- | --- | --- |
+| Prompt sent | `/change-viz Describe what this branch changes.` | `Describe what this branch changes.` | `$change-viz:change-viz Describe what this branch changes.` | `Describe what this branch changes.` |
+| `skill_triggered` | pass (deduced, below) | n/a (baseline arm) | pass (deduced, below) | n/a (baseline arm) |
+| `output_contains` `--top` | pass | pass | pass | pass |
+| P1: three headings in order | fail | fail | fail | fail |
+| P2: one to three notes | fail | fail | fail | fail |
+| P3: a fence under the outline | fail | fail | fail | fail |
+| P4: one why paragraph | fail | fail | fail | fail |
+| E1: the why is one sentence | fail | fail | fail | fail |
+| E2: the why says what it makes possible | fail | fail | fail | fail |
+| E3: each visual has a lead-in | fail | fail | fail | fail |
+| E4: a visual of `--top` or the word handling | fail | fail | fail | fail |
+| E5: adds `--top` with counts | pass | pass | pass | pass |
+| E6: lower-cased and stripped | pass | pass | pass | pass |
+| E7: counts can be lower | fail | fail | fail | fail |
+| E8: compares with local `main` (transcript) | pass | pass | pass | pass |
+| Outcome items passed | 4 of 13 | 4 of 13 | 4 of 13 | 4 of 13 |
+| Behaviour case `passed` | false | null (baseline, by design) | false | null (baseline, by design) |
+| Quiet case, `no-trigger-unnamed-request` | pass: no trigger | skipped | pass: no trigger | skipped |
+
+- **Deltas:** every delta is 0.0 on both agents, at n = 1 per arm, so the figures are descriptive. Both `benchmark.json` files list E5, E6 and E8 as non-discriminating. `--top` also passes in both arms, though the list covers expectations only.
+- **Why the patterns fail:** P1 to P4 fail at the first heading. Codex's skill arm wrote `## Summary` and no other heading. The Claude Code messages label their sections with bold lines. No message on either agent has a fenced block. The Codex reader reran the four patterns under Python `re` over the saved Codex messages and got the same results. Those messages use LF line endings, so `\r\n` played no part.
+- **What the grader said:**
+  - E1 to E4 failed in every arm because the headings were missing and there was no diagram or code block.
+  - E7 failed in every arm. Claude Code's messages say counts "change", with no direction. Both Codex messages leave the warning out, though both Codex trials printed `distinct: 10`, and neither ever compared it with `main`'s 13.
+
+**Trigger evidence: deduced, not seen.** Neither run stores the line that set the trigger.
+
+- **Stored:** both skill arms have `trigger` `{expected: true, actual: true, matched: true}` and the evidence `triggered: ['change-viz']`.
+- **Claude Code:**
+  - **Not stored:** the session record. The adapter keeps its `skill_expanded` line in memory (`claude_code.py:395-409`), and teardown removes the agent home.
+  - **Deduced from the code at `b28cd28`:** status `ok` needs the trial's own session record (`claude_code.py:507`, `:541-542`). The trial made one tool call, a Bash `git log --stat main..HEAD; git diff main...HEAD`. It made no `Skill` call and no `Read`, and named no `SKILL.md`. That leaves only a `skill_expanded <cwd>/.claude/skills/change-viz` line.
+  - **Supporting, at n = 1:**
+    - The init event lists `change-viz` in `skills` and `slash_commands`.
+    - The first turn's input was 16716 tokens. That is 138 more than the quiet trial's 16578, which fits the expansion having been sent.
+- **Codex:**
+  - **Not stored:** the explicit `codex.skill_invocation` event. `stored_stderr` drops telemetry, and `kept_lines` stays in memory (`codex.py:445-466`).
+  - **Deduced:** none of the trial's three commands reads a `SKILL.md` or names the skill. The skeptic re-parsed the stored transcript with `codex.parse_stream` and no telemetry lines, and got `skills_triggered == []`. Only an `explicit` event adds the skill without a read (`codex.py:547-582`).
+  - **Supporting:** only the skill arm said it would write a "pull-request description" and opened with `## Summary`, which echoes the stub's injected description. Its input was 586 tokens over the baseline's, with the same 39,168 tokens cached.
+
+#### Hand reads
+
+**Quiet case.** It passed on both agents, with no confirmed load. That is a lower bound: neither trace shows whether the model was told the skill exists.
+
+- **Claude Code:** the reader and the skeptic each read the whole transcript.
+  - It has six events and one Bash call, `git diff main...HEAD --stat && git diff main...HEAD`.
+  - It made no `Skill`, `Read`, `ls` or `find` call and named no skill path. The only `change-viz` hits are in the init event's own listing: `skills`, `slash_commands`, `plugin_warnings` and the trial path.
+  - Status `ok` means the trial had its own session record, and that record held no expansion.
+  - Its first turn was 3 tokens over the baseline's (16578 against 16575). That hints the CLI did not list the skill to the model.
+- **Codex:** the reader and the skeptic each read the whole transcript.
+  - It ran two git-only commands. The first tried `HEAD@{upstream}`, then fell back to `main`.
+  - Nothing in it mentions `.agents`, `SKILL.md` or the skill's name.
+  - Whether Codex logged an `implicit` event is unobserved, because none is stored. Without a read, one would not set the trigger anyway.
+
+**Writes** (the "does not" table's check, in each kept workspace):
+
+- **Claude Code, all three workspaces:**
+  - `git status --porcelain --untracked-files=all` is empty, and `--ignored` adds only the installed skill.
+  - There is no `__pycache__`, and every `.git/` file dates from trial setup, before the agent's first command.
+  - Every command was a git command, so no fixture code ran.
+- **Codex, quiet trial:** clean.
+- **Codex, behaviour, skill and baseline arms: fails.**
+  - Both arms ran `python3 -m unittest -v && python3 wordstat.py sample.txt --top 3`, which printed 5 tests OK and the branch's counts.
+  - Both left `?? __pycache__/test_wordstat.cpython-314.pyc` and `?? __pycache__/wordstat.cpython-314.pyc`, with mtimes inside each agent's run.
+  - **Ran the fixture's code:** Codex's skill and baseline arms (open question 4). No Claude Code trial ran it, and neither did Codex's quiet trial.
+- **The `.pyc` files reached the blinded grader** as output files, and both graders' notes name them. The grader's material is not stored. The harness code indicates each file was shown by name and size only, as not UTF-8, which is derived, not seen.
+  - The sizes differ by arm: 2416 and 2730 bytes in the skill arm, 2419 and 2733 in the baseline.
+  - The 3-byte gap is the difference in length between `skill-1` and `baseline-1` in the trial path embedded in each file (inferred).
+  - No verdict could use the gap, because one grading call sees one trial. It belongs with **Residual risk**'s arm in the trial path.
+
+**Refs.**
+
+- In all six workspaces:
+  - Symbolic `HEAD` is `refs/heads/add-top-words`, at `c7c97ee`, and `main` is at `88ce88c`. There are no other refs, no stash and no remote, and `git worktree list` shows only the workspace.
+  - There is no `.git/logs/`, and the blobs equal the fixture's trees.
+- No transcript has a `checkout`, `switch`, `stash` or `worktree add` command.
+- Every Codex trial is `ok`, so none had a sandbox denial.
+
+**Disclosure and name echoes.**
+
+- **Disclosure fields:** all four grading files have `arm_disclosed: false` and `disclosure_matches: []`. The quiet trials were not graded, so they carry no flag.
+- **Name echoes:** `rg -i 'change[- ]?viz'` over all six final messages finds nothing. Neither does `\bskills?\b|\.claude|\.agents`.
+- **Trial path:** no message or command referred to the trial path.
+
+**Final messages against the fixture facts.**
+
+- **Skill arm, behaviour, on both agents:** no contradiction.
+  - Claude Code's "Counts for existing inputs change" gives no direction (E7), and `words` stays 23.
+  - Codex's "5 passing tests" comes from its own run and matches the tip.
+- **Claude Code's quiet trial** (a skill-arm message, not graded) **contradicts** the fixture: "It has 5 commits relative to `main`." `main..HEAD` has 3, and the repository 5 in all. Its one command printed no commit count.
+- **Claude Code's baseline contradicts** the fixture: "The words and distinct counts change for any text with mixed case or punctuation." `sample.txt` has both, yet `words` stays 23.
+  - E7 read this bullet, its only "counts change" sentence, and failed it for the missing direction.
+  - So the run shows a false claim going unpenalised, not a description passing because of one.
+- **Codex, imprecise but not contradicting:**
+  - The baseline says "total and distinct counts … case-insensitive", but case cannot change the total.
+  - The baseline and the quiet trial say the branch "improves word normalization", but `main` had none.
+- **Not a changelog** (hand read):
+  - Claude Code's skill arm wrote a commit-by-commit changelog of bold labels and bullets.
+  - Codex's skill arm is ordered by behaviour, not by file.
+  - No message on either agent has a visual.
+- **Branch name:** both Claude Code behaviour messages name `add-top-words`, which no command printed. The CLI's startup context is the likely source (inferred).
+- **Prose under the why:** no message has the heading, so P2's and P4's **Pattern limits** meet no live output until GREEN.
+
+#### Case validity
+
+**Valid on both agents** (`CONTRIBUTING.md` §2).
+
+- The baseline fails the behaviour case on Claude Code and on Codex. Each fails 9 of its 13 outcome items: P1 to P4, E1 to E4 and E7. So the case measures a real gap and does not change before GREEN.
+- The criterion "The baseline arm fails the behaviour case on both agents" is shown at RED, at n = 1 per agent. Its box waits for the implementation checkpoint, like the others.
+
+#### Predicted and observed
+
+| Prediction (**Next**) | Claude Code | Codex |
+| --- | --- | --- |
+| The skill arm fails the behaviour case, with P1 to P4 and E1 to E3 failing | as predicted | as predicted |
+| `skill_triggered` passes in the skill arm | as predicted (deduced) | as predicted (deduced) |
+| The baseline fails on the same items | as predicted: the same nine | as predicted: the same nine |
+| The quiet case passes with no confirmed load, and is skipped in the baseline | as predicted | as predicted |
+| P4 fails in both arms, as P1 does (question 2) | as predicted | as predicted |
+| `--top`, E5 and E8 pass in both arms | as predicted | as predicted |
+| E6 passes on Claude Code | as predicted. Both trials' own `git log` printed "Count words without case or surrounding punctuation", and their diff shows `words()`, so the startup context is not needed to explain it | – |
+| Codex's E6 either way | – | passes in both: non-discriminating |
+| E4 either way | fails in both | fails in both |
+| E7 either way | fails in both | fails in both |
+| No prediction: writes | clean | fail in both behaviour arms (`__pycache__/`) |
+
+#### What this means for GREEN
+
+1. **What can move:** P1 to P4, E1 to E4 and E7, on both agents. `--top`, E5, E6 and E8 pass in both arms on both agents, so they stay as guards. Under **GREEN gain**, E4 now discriminates and E6 does not.
+2. **E7:** to pass, a description must say which way a change moves existing results. GREEN states this as a general rule: say the direction a behaviour change moves existing output, and why that matters to the reader. It is not a line about this fixture, since the maintainer checkpoint changes what the skill explains rather than fitting one branch.
+3. **E4:** a fenced visual of the change. If no code runs, any output it shows is worked out from the code, and E4 checks no values, so the hand read against the fixture facts stays.
+4. **Open question 4 now has data, from Codex only.**
+   - Running the fixture's code was common, but not shown to be the default. Codex's baseline ran it, and its quiet trial, given the same bare prompt, did not.
+   - With the stub, Codex's skill arm ran it too. No Claude Code trial ran it.
+   - If a GREEN `__pycache__/` is a ticket 18 failure, the GREEN text needs a line to read the branch rather than run its code. The baseline would keep failing the writes check, which is a hand read, not a scored item.
+   - If it is ticket 21's, it is recorded here as a limit.
+   - Either way, a skill arm that writes nothing sends the grader its message alone, while the baseline also sends its `.pyc` files. That is an arm difference in the material, though no expectation reads the files.
+5. **Codex reads the frontmatter.** The stub's injected description already shaped Codex's skill arm (`## Summary`, "pull-request description"). The GREEN description and body reach the model the same way, as **Neutral RED text** planned.
+6. **The GREEN hand read** also checks every message's commit counts and count claims, not only E4's values. Both contradictions at RED were of that kind, and neither cost a point.
+7. **Writes on Claude Code:** its init event lists 22 tools, though the command allows only `Skill`, `Read` and `Bash`. Under `--permission-mode dontAsk` the others should be denied, so a GREEN write attempt would show in `permission_denials` (inferred; RED had none).
+8. **Trigger audit:** neither run keeps the line that set its trigger. Ticket 17's open follow-up, a trial-record field for the kept trigger lines, would let GREEN's trigger be checked rather than deduced. It does not block.
+
+#### Next
+
+1. The maintainer answers question 4. Question 5 waits until before `NOTICE.md` lands.
+2. Then GREEN: the skill text, the credit form with `NOTICE.md`, **Change source** in `GLOSSARY.md`, and D3, followed by the GREEN run with the two commands under **Next** above.
