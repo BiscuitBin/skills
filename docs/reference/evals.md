@@ -182,6 +182,7 @@ So a fixture's commits hash the same in every trial, run and machine. A fixture 
 - **Paths.** ASCII, and unique within a tree ignoring case, directories included. No symlink anywhere, and the fixture's directory may not be one.
 - **Neutral text.** No `skill` or `skills` wording, which the grader's [disclosure check](#grader) looks for, in a path, a file (binary files included), the branch or a message. None of Codex's sandbox denial keywords ([run status](#codex)), ignoring case, in a path or a file, because a failing command mostly prints the project's own text. Both checks read every file as UTF-8, so keep text files UTF-8: a word in a UTF-16 file is missed.
 - **Committed files only.** No file this repository ignores, such as `.DS_Store`, `.env` or `__pycache__/`, which would be on the author's disk but in no checkout. `git check-ignore --no-index` checks it when the suite's root is its repository's top level, as it is for `just validate-evals`; a copy of `evals/` outside any repository skips the check.
+- **No `__pycache__`.** No file anywhere under the fixture's directory may have `__pycache__` in its path, as a directory or as its own name, whether or not the ignore check runs and whatever a nested `.gitignore` re-includes. `evals_sha256` leaves `__pycache__` out ([provenance](#benchmark)), so a fixture that differed only there would hash the same.
 
 **Limits.**
 

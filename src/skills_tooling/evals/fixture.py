@@ -284,6 +284,13 @@ def _walk(directory: Path, where: str, problems: list[str]) -> dict[str, dict[st
                 problems.append(f"{where}: {relative}: is a symlink")
                 continue
             parts = relative.split("/")
+            # benchmark.tree_sha256 skips these, so evals_sha256 would miss a
+            # change to one that the build writes, whatever the ignore check says.
+            if "__pycache__" in parts and path.is_file():
+                problems.append(
+                    f"{where}: {relative}: a fixture may hold no '__pycache__', "
+                    "which evals_sha256 leaves out"
+                )
             if parts[0] != "trees" or len(parts) < 3:  # noqa: PLR2004 -- trees/<tree>/<path>
                 if name.lower() == ".gitattributes":
                     problems.append(f"{where}: {relative}: a fixture may hold no '.gitattributes'")

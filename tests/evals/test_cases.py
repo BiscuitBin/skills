@@ -852,6 +852,38 @@ def test_a_path_the_repository_ignores_is_rejected(tmp_path: Path, path: str) ->
     assert any(expected in problem for problem in problems), problems
 
 
+PYCACHE = "a fixture may hold no '__pycache__', which evals_sha256 leaves out"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "trees/start/sub/__pycache__/data.txt",
+        "trees/start/__pycache__",
+        "trees/__pycache__/data.txt",
+        "__pycache__/fixture.cpython-314.pyc",
+    ],
+)
+def test_a_pycache_anywhere_in_a_fixture_is_rejected_outside_a_repository(
+    tmp_path: Path, path: str
+) -> None:
+    problems = fixture_problems(tmp_path, lambda d: plant(d / path))
+    assert f"evals/cowsay/fixtures/f: {path}: {PYCACHE}" in problems, problems
+
+
+def test_a_pycache_a_nested_gitignore_re_includes_is_rejected(tmp_path: Path) -> None:
+    root = git_root(tmp_path / "repo")
+
+    def re_include(directory: Path) -> None:
+        plant(directory / "trees/start/sub/.gitignore", b"!__pycache__/\n")
+        plant(directory / "trees/start/sub/__pycache__/data.txt")
+
+    # The only problem: the repository's ignore check does not see this file.
+    assert fixture_problems(root, re_include) == [
+        f"evals/cowsay/fixtures/f: trees/start/sub/__pycache__/data.txt: {PYCACHE}"
+    ]
+
+
 def test_a_fixture_in_a_repository_that_ignores_none_of_it_loads(tmp_path: Path) -> None:
     root = git_root(tmp_path / "repo")
     add_fixture(root, "small-tally")
