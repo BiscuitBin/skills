@@ -2,11 +2,11 @@
 
 Agent skills for Claude Code and Codex, in the [Agent Skills](https://agentskills.io/specification) `SKILL.md` format. This repository is where they are developed, evaluated against both agents, and distributed. Pi can install them through `npx skills`, but they are not yet evaluated on Pi.
 
-The first shipped skill is `cowsay`, with a bundled Python script. Work is tracked in `.scratch/foundation/issues/`.
+The shipped skills are `cowsay`, which makes an ASCII cow say your text with a bundled Python script, and `change-viz`, which describes what a branch changes as Markdown for a pull request and runs only when you invoke it by name. Work is tracked in `.scratch/foundation/issues/`.
 
-## Install cowsay
+## Install
 
-Python 3 is required to run the bundled script. Run these commands in the project where you want the skill available.
+cowsay needs Python 3 to run its bundled script. Run these commands in the project where you want the skills available.
 
 Contributors working from a clone of this repository use [Check the install channels from a checkout](docs/reference/distribution.md#check-the-install-channels-from-a-checkout) instead, because these commands write to your real agent home.
 
@@ -15,14 +15,15 @@ Contributors working from a clone of this repository use [Check the install chan
 ```sh
 claude plugin marketplace add BiscuitBin/skills
 claude plugin install cowsay@biscuitbin-skills --scope project
+claude plugin install change-viz@biscuitbin-skills --scope project
 ```
 
-These are shell commands for an installed Claude Code CLI.
-Invoke the installed skill with `/cowsay:cowsay Hello there`.
+These are shell commands for an installed Claude Code CLI. Each skill is its own plugin, so install the ones you want.
+Invoke them with `/cowsay:cowsay Hello there`, and with `/change-viz:change-viz` on the branch you want described.
 
 ### npx skills
 
-Choose your agent; these commands install every shipped skill in this repo, currently just `cowsay`:
+Choose your agent; these commands install every shipped skill in this repo:
 
 ```sh
 npx skills@1.7.4 add BiscuitBin/skills --agent claude-code --yes
@@ -30,8 +31,8 @@ npx skills@1.7.4 add BiscuitBin/skills --agent codex --yes
 npx skills@1.7.4 add BiscuitBin/skills --agent pi --yes
 ```
 
-Claude Code discovers the result in `.claude/skills/cowsay`; Codex and Pi use `.agents/skills/cowsay`.
-Invoke it with `/cowsay` in Claude Code, `$cowsay:cowsay` in Codex (it reads the skill's plugin manifest, so the name carries a prefix), or `/skill:cowsay` in Pi.
+Claude Code discovers each skill in `.claude/skills/<name>`; Codex and Pi use `.agents/skills/<name>`.
+Invoke one with `/<name>` in Claude Code, `$<name>:<name>` in Codex (it reads the skill's plugin manifest, so the name carries a prefix), or `/skill:<name>` in Pi: for example `/cowsay Hello there`, or `$change-viz:change-viz` on the branch you want described. `change-viz` never loads unless invoked this way.
 Pi requires project trust before loading project skills.
 List available skills without installing with `npx skills@1.7.4 add BiscuitBin/skills --list`.
 
