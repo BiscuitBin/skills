@@ -1,0 +1,6 @@
+# Git fixture trees are committed into eval trials byte for byte, and their
+# bytes are hashed into evals_sha256, so Git never converts their line endings.
+# A fixture may hold no .gitattributes of its own, which would outrank these
+# (src/skills_tooling/evals/fixture.py).
+evals/*/fixtures/*/trees/** -text
+tests/fixtures/evals/git/*/trees/** -text

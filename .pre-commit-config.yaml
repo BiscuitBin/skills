@@ -26,13 +26,14 @@ repos:
 
       # After `--`, markdownlint-cli2 reads each argument as a literal path
       # rather than a glob, so `docs/[x].md` is that file. Literal paths skip
-      # the config's ignores, so CLAUDE.md is excluded here.
+      # the config's ignores, so CLAUDE.md and the Git fixture trees are
+      # excluded here.
       - id: markdownlint
         name: markdownlint
         entry: ./node_modules/.bin/markdownlint-cli2 --
         language: system
         types: [markdown]
-        exclude: ^CLAUDE\.md$
+        exclude: ^(CLAUDE\.md$|(evals/[^/]+/fixtures|tests/fixtures/evals/git)/[^/]+/trees/)
 
       # Markdown belongs to markdownlint; .prettierignore says so.
       - id: prettier
@@ -48,11 +49,17 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=768, --enforce-all]
       - id: check-case-conflict
+      # A Git fixture tree is data an eval trial commits, with modes from its
+      # fixture.json, not from disk, and its files may hold any text. The
+      # exclusions are per hook: a top-level one would drop every hook here.
       - id: check-executables-have-shebangs
+        exclude: ^(evals/[^/]+/fixtures|tests/fixtures/evals/git)/[^/]+/trees/
       - id: check-json
       - id: check-merge-conflict
         args: [--assume-in-merge]
+        exclude: ^(evals/[^/]+/fixtures|tests/fixtures/evals/git)/[^/]+/trees/
       - id: check-shebang-scripts-are-executable
+        exclude: ^(evals/[^/]+/fixtures|tests/fixtures/evals/git)/[^/]+/trees/
       - id: check-toml
       - id: check-yaml
       - id: detect-private-key

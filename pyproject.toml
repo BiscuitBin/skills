@@ -46,8 +46,9 @@ target-version = "py314"
 unsafe-fixes = false
 src = ["src", "tests"]
 # Ruff formats the Python fences inside Markdown too; Markdown belongs to
-# markdownlint.
-extend-exclude = ["*.md"]
+# markdownlint. Git fixture trees are data that eval trials commit, not this
+# repo's code (src/skills_tooling/evals/fixture.py).
+extend-exclude = ["*.md", "evals/*/fixtures/*/trees/**", "tests/fixtures/evals/git/*/trees/**"]
 
 [tool.ruff.lint]
 select = [
@@ -83,6 +84,9 @@ line-ending = "lf"
 testpaths = ["tests"]
 # No cache directory: the gate must leave the worktree as it found it.
 addopts = "-p no:cacheprovider --strict-markers"
+# pytest's defaults, plus tests/fixtures, which holds only data: a Git fixture
+# tree can hold its project's own tests.
+norecursedirs = ["*.egg", ".*", "_darcs", "build", "CVS", "dist", "node_modules", "venv", "{arch}", "fixtures"]
 
 [tool.mypy]
 files = ["src", "tests"]
@@ -90,3 +94,5 @@ strict = true
 python_version = "3.14"
 # No cache directory, for the same reason pytest has none.
 cache_dir = "/dev/null"
+# Git fixture trees, in a skill's evals and in the harness's test fixtures.
+exclude = '^(evals/[^/]+/fixtures|tests/fixtures/evals/git)/[^/]+/trees/'
