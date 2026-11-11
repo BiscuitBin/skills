@@ -316,10 +316,9 @@ Fixture facts for the hand read. The first four were observed at apply time; the
 
 Questions 1, 2, 3 and 6 are settled. P4 is the only change they make to `evals.json`, and it is committed after `just format` and `just validate-evals`. P4's focused cross-model review is done (**P4 review**): its three findings change nothing frozen unless the maintainer takes a candidate under question 7, which then lands, with another focused review, before RED. Questions 4 and 5 stay open: 4 before GREEN, and 5 before `NOTICE.md` lands.
 
-Then, in the maintainer's terminal with `CLAUDE_CODE_OAUTH_TOKEN` exported (the grader needs it on both agents; Codex also uses its login in the project's Codex home):
+Then, in the maintainer's terminal at the root of this worktree, with `CLAUDE_CODE_OAUTH_TOKEN` exported (the grader needs it on both agents; Codex also uses its login in the project's Codex home):
 
 ```sh
-cd /Users/scutting/.supacode/repos/skills/change-viz
 just eval change-viz --agent claude --baseline
 just eval change-viz --agent codex --baseline
 ```
