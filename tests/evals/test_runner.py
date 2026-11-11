@@ -85,6 +85,10 @@ AGENT_GIT_ENV = {
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_ATTR_NOSYSTEM": "1",
+    "GIT_AUTHOR_NAME": "Robin Hale",
+    "GIT_AUTHOR_EMAIL": "robin@example.com",
+    "GIT_COMMITTER_NAME": "Robin Hale",
+    "GIT_COMMITTER_EMAIL": "robin@example.com",
 }
 SMALL_TALLY_HEAD = "c63fc294563293a6dbacf229d040cc4dafc59f58"
 # The baseline's Skill call fails (nothing is installed), and the agent answers anyway.

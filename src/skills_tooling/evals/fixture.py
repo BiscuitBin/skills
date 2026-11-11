@@ -87,12 +87,15 @@ NO_REFLOG = ("-c", "core.logAllRefUpdates=false")
 # git reads no system or global config and no system attributes, which differ
 # from machine to machine (Apple's git has a gitattributes that changes diff
 # hunk headers), and takes no optional lock, which Codex's sandbox denies on
-# .git. A trial with no fixture keeps the environment it had.
+# .git. A commit the agent makes has the fixture's identity: with no config, git
+# would take the machine's account name and <login>@<host>, or refuse where it
+# cannot guess an email. A trial with no fixture keeps the environment it had.
 AGENT_GIT_ENV = {
     "GIT_OPTIONAL_LOCKS": "0",
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_ATTR_NOSYSTEM": "1",
+    **IDENTITY,
 }
 
 

@@ -25,13 +25,17 @@ ROBIN = "Robin Hale <robin@example.com>"
 # 2026-01-01T00:00:00Z, then an hour per commit across main and then the branch.
 FIRST = 1767225600
 # What a fixture trial adds to the agent's environment (design-16 §6), so the
-# agent's git reads no system or global config or system attributes, and takes
-# no optional lock.
+# agent's git reads no system or global config or system attributes, takes no
+# optional lock, and commits as Robin Hale.
 AGENT_GIT_ENV = {
     "GIT_OPTIONAL_LOCKS": "0",
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_ATTR_NOSYSTEM": "1",
+    "GIT_AUTHOR_NAME": "Robin Hale",
+    "GIT_AUTHOR_EMAIL": "robin@example.com",
+    "GIT_COMMITTER_NAME": "Robin Hale",
+    "GIT_COMMITTER_EMAIL": "robin@example.com",
 }
 
 
@@ -70,7 +74,7 @@ def git(trial: TrialPaths, *args: str) -> str:
 
 
 def agent_env(trial: TrialPaths) -> dict[str, str]:
-    """The agent's environment in a fixture trial: its homes, its PATH and the three git variables."""
+    """The agent's environment in a fixture trial: its homes, its PATH and the git variables."""
     homes = ClaudeCode(ROOT / "node_modules/.bin/claude").prepare_homes(trial)
     return {**homes.env, **AGENT_GIT_ENV}
 
@@ -105,6 +109,29 @@ def test_every_commit_is_robin_hale_at_the_fixed_dates(tmp_path: Path) -> None:
         f"{ROBIN}|{FIRST + 7200} +0000|{ROBIN}|{FIRST + 7200} +0000|Print the average after the total",
     ]
     assert "Eval Harness" not in git(trial, "log", "--all", "--format=%an%n%cn")
+
+
+def test_a_commit_the_agent_makes_is_robin_hales_on_any_machine(tmp_path: Path) -> None:
+    # With no config, git would take the machine's account name and <login>@<host>,
+    # or refuse to commit where it cannot guess an email.
+    trial = built(tmp_path, load(tmp_path, "small-tally"))
+    homes = ClaudeCode(ROOT / "node_modules/.bin/claude").prepare_homes(trial)
+    env = {**homes.env, **fixture.AGENT_GIT_ENV}
+
+    def run(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],  # noqa: S607 -- the trial's PATH finds its git
+            cwd=trial.workspace,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        return result.stdout
+
+    run("commit", "--allow-empty", "-q", "-m", "Note")
+    assert run("log", "-1", "--format=%an <%ae>%n%cn <%ce>").splitlines() == [ROBIN, ROBIN]
 
 
 def test_the_host_time_zone_changes_nothing(
