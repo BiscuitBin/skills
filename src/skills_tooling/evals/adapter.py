@@ -75,6 +75,9 @@ class RawRun:
     python_calls: tuple[PythonCall, ...]
     survivors: bool
     elapsed: float
+    # The lines the trace reads from the agent's session file, which is never
+    # stored. Only Claude Code keeps one; see claude_code.session_lines.
+    session_lines: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

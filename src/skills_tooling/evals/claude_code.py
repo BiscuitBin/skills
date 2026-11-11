@@ -72,6 +72,11 @@ TIMESTAMP = re.compile(r"^\S+ \[DEBUG\] ")
 LOADING = re.compile(r"Loading skills from: managed=(.*?), user=(.*?), project=\[(.*)\]$")
 LOADED = re.compile(r"Loaded \d+ unique skills \((.*)\)$")
 COUNT = re.compile(r"(managed|user|project|additional): (\d+)")
+# The first line of the text the CLI injects when a slash command expands a skill.
+EXPANSION = "Base directory for this skill: "
+# The CLI names a session's file after its id, a UUID. Anything else could name
+# a path, so it finds no file.
+SESSION_ID = re.compile(r"[0-9A-Za-z-]+")
 
 
 class ClaudeCode:
@@ -234,7 +239,8 @@ class ClaudeCode:
             "--verbose",
             "--model",
             model,
-            "--no-session-persistence",
+            # Session persistence stays on: the session file is the only local
+            # record of a slash command's expansion. It changes no request.
             "--strict-mcp-config",
             "--permission-mode",
             "dontAsk",
@@ -263,10 +269,12 @@ class ClaudeCode:
             python_calls=workspace.python_calls(trial),
             survivors=finished.survivors,
             elapsed=finished.elapsed,
+            # Reduced, never stored: teardown removes the file with the home.
+            session_lines=_kept_session_lines(homes.agent_home, transcript),
         )
 
     def parse(self, raw: RawRun) -> Trace:
-        return parse_stream(raw)
+        return parse_stream(raw, session_record=True)
 
     def discovery_report_problems(
         self, trace: Trace, trial: TrialPaths, *, installed: bool, system_root: Path
@@ -314,6 +322,107 @@ def _read_events(transcript: Path) -> tuple[list[dict[str, Any]], bool]:
     return events, clean
 
 
+def _init(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """The CLI's system/init event, or nothing."""
+    return next(
+        (e for e in events if e.get("type") == "system" and e.get("subtype") == "init"), {}
+    )
+
+
+def _texts(record: Mapping[str, Any]) -> list[str]:
+    """The text blocks of a session record's message, in order."""
+    message = record.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    if isinstance(content, str):
+        return [content]
+    if not isinstance(content, list):
+        return []
+    return [
+        block["text"]
+        for block in content
+        if isinstance(block, dict)
+        and block.get("type") == "text"
+        and isinstance(block.get("text"), str)
+    ]
+
+
+def session_lines(session: Path) -> tuple[str, ...]:
+    """The lines the trace reads from a session file: `session <id>`, then each expansion.
+
+    With session persistence on, the CLI writes each session to
+    `<agent home>/projects/<cwd slug>/<session id>.jsonl`. A slash command's
+    expansion of a skill shows in no stream event, only here: a `user` record
+    with `isMeta: true`, written before the session's first `assistant`
+    record, whose text starts `Base directory for this skill: <path>`. Each
+    becomes `skill_expanded <path>`. Text a tool printed sits in a
+    `tool_result`, never in such a record. The first line names the one
+    session id the records carry, so the parser can tell its own session's
+    file from another's. A file that is missing, unreadable, not JSONL or not
+    one session's gives nothing.
+    """
+    try:
+        # Only \n ends a JSONL record: session records hold raw U+2028 too.
+        lines = session.read_text(errors="replace").split("\n")
+    except OSError:
+        return ()
+    records: list[dict[str, Any]] = []
+    for line in filter(str.strip, lines):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            return ()
+        if isinstance(record, dict):
+            records.append(record)
+    ids = [record["sessionId"] for record in records if "sessionId" in record]
+    if not ids or not isinstance(ids[0], str) or not ids[0] or ids.count(ids[0]) != len(ids):
+        return ()
+    kept = [f"session {ids[0]}"]
+    for record in records:
+        if record.get("type") == "assistant":
+            break
+        if record.get("type") != "user" or record.get("isMeta") is not True:
+            continue
+        expansion = next((t for t in _texts(record) if t.startswith(EXPANSION)), None)
+        if expansion is not None:
+            kept.append(f"skill_expanded {expansion.removeprefix(EXPANSION).split('\n', 1)[0]}")
+    return tuple(kept)
+
+
+def _kept_session_lines(agent_home: Path, transcript: Path) -> tuple[str, ...]:
+    """The kept lines of the session file named by the transcript's init `session_id`.
+
+    Found by name in any project directory, so the CLI's slug for the
+    workspace path need not be rebuilt. Nothing unless exactly one file has
+    that name; an id that is not a plain file name finds nothing.
+    """
+    session_id = str(_init(_read_events(transcript)[0]).get("session_id", ""))
+    if not SESSION_ID.fullmatch(session_id):
+        return ()
+    try:
+        found = list((agent_home / "projects").glob(f"*/{session_id}.jsonl"))
+    except OSError:
+        return ()
+    return session_lines(found[0]) if len(found) == 1 else ()
+
+
+def _expanded_skills(lines: tuple[str, ...], cwd: str) -> list[str]:
+    """The skills a slash command expanded from the workspace's own skills directory.
+
+    The trigger rule: a `skill_expanded` line whose path is exactly
+    `{init.cwd}/.claude/skills/<skill>`.
+    """
+    root = f"{cwd}/{ClaudeCode.skills_dir}/"
+    skills = []
+    for line in lines:
+        path = line.removeprefix("skill_expanded ")
+        skill = path.removeprefix(root)
+        # One name right under the root: not a deeper path, nor another directory.
+        placed = cwd and line.startswith("skill_expanded ") and path.startswith(root)
+        if placed and skill not in ("", ".", "..") and "/" not in skill:
+            skills.append(skill)
+    return skills
+
+
 def _blocks(event: Mapping[str, Any], role: str) -> list[dict[str, Any]]:
     if event.get("type") != role:
         return []
@@ -346,12 +455,16 @@ class _Calls:
                 )
 
 
-def parse_stream(raw: RawRun) -> Trace:
-    """Normalise a stream-json transcript. Run status never comes from `subtype`."""
+def parse_stream(raw: RawRun, *, session_record: bool = False) -> Trace:
+    """Normalise a stream-json transcript. Run status never comes from `subtype`.
+
+    With `session_record`, as for an agent's run, an otherwise ok run fails
+    closed unless `raw.session_lines` is its own session's record: without
+    one, nothing shows whether a slash command expanded a skill. The grader's
+    runs keep no session file, so they parse without it.
+    """
     events, clean = _read_events(raw.transcript)
-    init = next(
-        (e for e in events if e.get("type") == "system" and e.get("subtype") == "init"), {}
-    )
+    init = _init(events)
     seen = _Calls()
     dynamic: list[str] = []
     for event in events:
@@ -360,7 +473,11 @@ def parse_stream(raw: RawRun) -> Trace:
             dynamic += [
                 str(c.get("name")) for c in event.get("commands", []) if isinstance(c, dict)
             ]
-    triggered, invoked, commands = [], [], []
+    # The CLI's own record that it injected a skill's text: a by-name trigger.
+    session_id = str(init.get("session_id", ""))
+    owned = bool(session_id) and raw.session_lines[:1] == (f"session {session_id}",)
+    expanded = _expanded_skills(raw.session_lines[1:], str(init.get("cwd", ""))) if owned else []
+    triggered, invoked, commands = list(expanded), list(expanded), []
     for call_id, (name, tool_input) in seen.calls.items():
         error, output = seen.results.get(call_id, (True, ""))
         if name == "Skill":
@@ -377,9 +494,12 @@ def parse_stream(raw: RawRun) -> Trace:
     last_text = seen.last_text
     final = str(last.get("result", "")) if completed else last_text
     reason = _status_reason(raw, completed=completed, result=last)
+    if not reason and session_record and not owned:
+        reason = "no session record; failing closed"
     return Trace(
-        skills_triggered=triggered,
-        skills_invoked=invoked,
+        # An expansion and a Skill call of the same skill are one trigger.
+        skills_triggered=list(dict.fromkeys(triggered)),
+        skills_invoked=list(dict.fromkeys(invoked)),
         commands=commands,
         final_message=final,
         cli_version=str(init.get("claude_code_version", "")),
