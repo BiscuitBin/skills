@@ -657,3 +657,36 @@ def test_a_read_of_a_dev_skill_names_it(command: str) -> None:
 
 def test_a_build_directory_elsewhere_is_not_a_skills_directory() -> None:
     assert skills_read("cat /tmp/build/cowsay/SKILL.md") == ([], False)
+
+
+# Recorded for ticket 17 from the pinned CLI and the fake API, with a throwaway
+# by-name-only skill, branch-brief (`allow_implicit_invocation: false`), whose
+# plugin.json names the plugin branch-brief.
+BY_NAME = "branch-brief"
+
+
+def test_a_by_name_mention_is_a_trigger_through_codexs_explicit_event() -> None:
+    # `$branch-brief:branch-brief` injects SKILL.md; no command reads it.
+    trace = parse("fake-by-name")
+    assert (trace.status, trace.commands, trace.final_message) == ("ok", [], "BRIEFED")
+    assert (trace.skills_triggered, trace.skills_invoked) == ([BY_NAME], [BY_NAME])
+    alone = parse("fake-by-name", debug_lines=without_invocations("fake-by-name"))
+    assert (alone.skills_triggered, alone.skills_invoked) == ([], [])
+
+
+@pytest.mark.parametrize("name", ["fake-by-name-quiet", "fake-by-name-baseline"])
+def test_a_plain_request_and_a_baselines_mention_record_nothing(name: str) -> None:
+    # Codex lists a by-name-only skill to no model, and a baseline has none to load.
+    trace = parse(name)
+    assert trace.status == "ok"
+    assert (trace.skills_triggered, trace.skills_invoked, trace.listed_skills) == ([], [], [])
+    assert trace.commands == []
+
+
+def test_a_read_of_a_by_name_only_skill_is_a_trigger() -> None:
+    trace = parse("fake-by-name-read")
+    assert [c.command for c in trace.commands] == [f"cat .agents/skills/{BY_NAME}/SKILL.md"]
+    assert trace.skills_triggered == [BY_NAME]
+    # The read alone counts; Codex's implicit event for it adds nothing.
+    alone = parse("fake-by-name-read", debug_lines=without_invocations("fake-by-name-read"))
+    assert alone.skills_triggered == [BY_NAME]
