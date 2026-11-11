@@ -99,6 +99,8 @@ SKILLS_DIR = re.compile(r"skills$|(?:^|/)dev-skills/build$|(?:^|/)\.system$")
 NOT_SECRET = {"auth_mode", "last_refresh"}
 SECRET_MIN_LENGTH = 20
 TRANSCRIPT = "transcript.jsonl"
+# A skill's plugin manifest, which names the plugin in a by-name mention.
+PLUGIN_MANIFEST = ".claude-plugin/plugin.json"
 
 
 def pinned_executable(root: Path) -> Path:
@@ -280,6 +282,29 @@ class Codex:
         target = workspace / self.skills_dir / skill_dir.name
         shutil.copytree(skill_dir, target, ignore=shutil.ignore_patterns("__pycache__"))
         return target
+
+    def by_name_prompt(self, installed: Path, request: str) -> str:
+        """`$<plugin>:<skill> <request>`, or `$<skill> <request>` for a copy with no manifest.
+
+        Codex reads the copy's .claude-plugin/plugin.json as a plugin manifest
+        and loads the skill by name only under the plugin's `name`. A manifest
+        that names no plugin raises, rather than send a mention that loads nothing.
+        """
+        manifest = installed / PLUGIN_MANIFEST
+        try:
+            text = manifest.read_text()
+        except FileNotFoundError:
+            return f"${installed.name} {request}"
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as error:
+            msg = f"{manifest} is not valid JSON: {error}"
+            raise ValueError(msg) from error
+        plugin = data.get("name") if isinstance(data, dict) else None
+        if not isinstance(plugin, str) or not plugin:
+            msg = f"{manifest} names no plugin"
+            raise ValueError(msg)
+        return f"${plugin}:{installed.name} {request}"
 
     def run(  # noqa: PLR0913 -- the adapter interface
         self,

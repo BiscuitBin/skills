@@ -178,6 +178,14 @@ class Adapter(Protocol):
 
     def install_skill(self, skill_dir: Path | None, workspace: Path) -> Path | None: ...
 
+    def by_name_prompt(self, installed: Path, request: str) -> str:
+        """A by_name case's prompt in the skill arm: the agent's own invocation, then the request.
+
+        installed is the copy install_skill returned, so the prompt names what
+        the agent has.
+        """
+        ...
+
     def run(  # noqa: PLR0913 -- every argument is part of one headless run
         self,
         prompt: str,

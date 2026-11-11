@@ -209,6 +209,10 @@ class ClaudeCode:
         shutil.copytree(skill_dir, target, ignore=shutil.ignore_patterns("__pycache__"))
         return target
 
+    def by_name_prompt(self, installed: Path, request: str) -> str:
+        # A slash command. A project skill needs no plugin prefix.
+        return f"/{installed.name} {request}"
+
     def run(  # noqa: PLR0913 -- the adapter interface
         self,
         prompt: str,

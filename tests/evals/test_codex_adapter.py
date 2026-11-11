@@ -83,6 +83,47 @@ def test_trial_records_trigger_command_and_final_message(tmp_path: Path) -> None
     assert any(Path(c.cwd, c.argv[0]).resolve() == installed for c in trace.python_calls)
 
 
+@pytest.mark.parametrize(
+    ("manifest", "prompt"),
+    [
+        (None, "$cowsay:cowsay Have a cow say: moo"),
+        ({"name": "cow-kit"}, "$cow-kit:cowsay Have a cow say: moo"),
+    ],
+    ids=["shipped", "renamed-plugin"],
+)
+def test_a_by_name_prompt_names_the_installed_copys_plugin(
+    tmp_path: Path, manifest: dict[str, str] | None, prompt: str
+) -> None:
+    adapter = Codex(pinned_executable(ROOT))
+    installed = adapter.install_skill(ROOT / "skills/cowsay", tmp_path)
+    assert installed is not None
+    if manifest is not None:
+        (installed / ".claude-plugin/plugin.json").write_text(json.dumps(manifest))
+    assert adapter.by_name_prompt(installed, "Have a cow say: moo") == prompt
+
+
+def test_a_by_name_prompt_without_a_plugin_manifest_is_the_bare_mention(tmp_path: Path) -> None:
+    adapter = Codex(pinned_executable(ROOT))
+    installed = adapter.install_skill(ROOT / "skills/cowsay", tmp_path)
+    assert installed is not None
+    (installed / ".claude-plugin/plugin.json").unlink()
+    assert (
+        adapter.by_name_prompt(installed, "Have a cow say: moo") == "$cowsay Have a cow say: moo"
+    )
+
+
+@pytest.mark.parametrize("manifest", ["{", '{"version": "1.0.0"}', '{"name": ""}', "[]"])
+def test_a_by_name_prompt_refuses_a_manifest_it_cannot_name_the_plugin_from(
+    tmp_path: Path, manifest: str
+) -> None:
+    adapter = Codex(pinned_executable(ROOT))
+    installed = adapter.install_skill(ROOT / "skills/cowsay", tmp_path)
+    assert installed is not None
+    (installed / ".claude-plugin/plugin.json").write_text(manifest)
+    with pytest.raises(ValueError, match=r"plugin\.json"):
+        adapter.by_name_prompt(installed, "Have a cow say: moo")
+
+
 # The second prints a carriage return before the header, which a reader that
 # took \r for a line break would see as a line of its own.
 @pytest.mark.parametrize("form", ["%s\\n", "x\\r%s\\n"], ids=["line", "after-cr"])

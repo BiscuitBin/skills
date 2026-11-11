@@ -50,3 +50,30 @@ def test_trial_records_trigger_command_and_final_message(tmp_path: Path) -> None
     assert trace.cli_version == "2.1.309"
     assert trace.model == "claude-sonnet-5-5"
     assert server.requests[0].headers["Authorization"] == f"Bearer {TOKEN}"
+
+
+def test_a_by_name_prompt_runs_the_skill_as_a_slash_command(tmp_path: Path) -> None:
+    repo = fake_repo(tmp_path)
+    trial = workspace.create_trial(repo / ".eval-workspaces", "run-1", "case-1")
+    with serve([text("Here is your cow.")]) as server:
+        adapter = ClaudeCode(executable=CLAUDE, api_base_url=server.url)
+        homes = adapter.prepare_homes(trial)
+        installed = adapter.install_skill(ROOT / "skills/cowsay", trial.workspace)
+        assert installed is not None
+        prompt = adapter.by_name_prompt(installed, "Have a cow say: Ship it")
+        assert prompt == "/cowsay Have a cow say: Ship it"
+        raw = adapter.run(
+            prompt,
+            trial,
+            homes,
+            model=adapter.default_model,
+            timeout=90,
+            credentials={"CLAUDE_CODE_OAUTH_TOKEN": TOKEN},
+        )
+    trace = adapter.parse(raw)
+    assert (trace.status, trace.status_reason) == ("ok", "")
+    # The CLI expanded the command: the skill's text is in the first request.
+    first = server.requests[0].body
+    assert "<command-name>/cowsay</command-name>" in first
+    assert f"Base directory for this skill: {installed.resolve()}" in first
+    assert "ARGUMENTS: Have a cow say: Ship it" in first
