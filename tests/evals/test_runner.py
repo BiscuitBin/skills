@@ -18,6 +18,9 @@ from tests.evals.fake_anthropic import Turn, serve, text, tool
 if TYPE_CHECKING:
     import pytest
 
+    from skills_tooling.evals.adapter import Homes, RawRun, TrialPaths
+    from tests.evals.fake_anthropic import Request
+
 ROOT = Path(__file__).parents[2]
 TOKEN = "sk-ant-oat01-fake-runner-test"
 TRIGGER = "Make a cow say moo."
@@ -61,6 +64,37 @@ def fake_root(tmp_path: Path, cases: list[dict[str, Any]] = CASES) -> Path:
     )
     (root / ".gitignore").write_text(".eval-workspaces/\neval-results/\n")
     workspace.git("init", "--quiet", cwd=root)
+    return root
+
+
+AVERAGE = "Print the average of the numbers."
+FIXTURE_CASE: dict[str, Any] = {
+    "id": "behaviour-average",
+    "kind": "behaviour",
+    "prompt": AVERAGE,
+    "should_trigger": True,
+    "fixture": "small-tally",
+    "assertions": [{"type": "output_contains", "value": "2.5"}],
+    "expectations": ["The average is given."],
+}
+# What a fixture trial adds to the agent's environment, in both arms.
+AGENT_GIT_ENV = {
+    "GIT_OPTIONAL_LOCKS": "0",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_ATTR_NOSYSTEM": "1",
+}
+SMALL_TALLY_HEAD = "c63fc294563293a6dbacf229d040cc4dafc59f58"
+# The baseline's Skill call fails (nothing is installed), and the agent answers anyway.
+SKILL = tool("Skill", {"skill": "cowsay"}, "toolu_1")
+
+
+def fixture_root(tmp_path: Path) -> Path:
+    """A root whose suite holds the fixture case, cowsay's no-trigger case and small-tally."""
+    root = fake_root(tmp_path, [FIXTURE_CASE, CASES[1]])
+    shutil.copytree(
+        ROOT / "tests/fixtures/evals/git/small-tally", root / "evals/cowsay/fixtures/small-tally"
+    )
     return root
 
 
@@ -192,6 +226,57 @@ def test_a_failed_preflight_skips_the_agent(tmp_path: Path) -> None:
     [trial] = results(root)["trials"]
     assert trial["status"] == "infra_error"
     assert "gitignored" in trial["status_reason"]
+
+
+def git_context(request: Request) -> str:
+    """The git status block Claude Code attaches to a conversation's first message."""
+    messages = json.loads(request.body)["messages"]
+    blocks = [b for m in messages for b in m["content"] if isinstance(m["content"], list)]
+    [context] = [b["text"] for b in blocks if "# gitStatus" in b.get("text", "")]
+    return str(context)
+
+
+def test_a_fixture_trial_starts_with_the_same_git_context_in_both_arms(tmp_path: Path) -> None:
+    starts: dict[str, int] = {}
+
+    class Marking(ClaudeCode):
+        def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401
+            starts[trial.root.name] = len(server.requests)
+            return super().run(prompt, trial, homes, **kwargs)
+
+    root = fixture_root(tmp_path)
+    with serve({AVERAGE: [SKILL, text("The average is 2.5.")]}) as server:
+        adapter = Marking(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+        run = settings(
+            root,
+            server.url,
+            adapter=adapter,
+            baseline=True,
+            grading_skipped=True,
+            case_ids=("behaviour-average",),
+        )
+        exit_code = run_suite(run)
+        contexts = {name: git_context(server.requests[at]) for name, at in starts.items()}
+    data = results(root)
+    assert exit_code == 0, json.dumps(data, indent=2)
+    by_arm = {trial["arm"]: trial for trial in data["trials"]}
+    for trial in by_arm.values():
+        assert (trial["status"], trial["contamination"]["passed"]) == ("ok", True), trial
+    # The skill was installed, and found, in one arm only.
+    assert (by_arm["skill"]["trigger"]["actual"], by_arm["baseline"]["trigger"]["actual"]) == (
+        True,
+        False,
+    )
+    assert set(contexts) == {"skill-1", "baseline-1"}
+    assert contexts["skill-1"] == contexts["baseline-1"]
+    context = contexts["skill-1"]
+    assert ".claude" not in context
+    assert "Current branch: add-average\n" in context
+    # The fixture's own edits and nothing else: the blank line ends the list.
+    assert "Status:\nM  README.md\n M tally.py\n?? notes.txt\n\n" in context
+    assert (
+        f"Recent commits:\n{SMALL_TALLY_HEAD[:7]} Print the average after the total\n" in context
+    )
 
 
 def run_cli(*args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:

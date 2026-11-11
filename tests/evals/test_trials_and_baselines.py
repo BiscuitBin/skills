@@ -3,7 +3,6 @@
 import contextlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 from typing import TYPE_CHECKING, Any
@@ -20,7 +19,19 @@ from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import describe_plan, run_suite
 from tests.evals.fake_anthropic import Turn, serve, text, tool
 from tests.evals.test_grader import FakeGrader, fake_grader
-from tests.evals.test_runner import ROOT, TOKEN, fake_root, results, run_cli, settings
+from tests.evals.test_runner import (
+    AGENT_GIT_ENV,
+    AVERAGE,
+    ROOT,
+    SKILL,
+    SMALL_TALLY_HEAD,
+    TOKEN,
+    fake_root,
+    fixture_root,
+    results,
+    run_cli,
+    settings,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -592,37 +603,6 @@ def test_no_grader_runs_a_codex_suite_with_expectations_without_the_graders_toke
     assert exited.value.code == 0
     (settings,) = started
     assert (settings.grader, settings.grading_skipped) == (None, True)
-
-
-AVERAGE = "Print the average of the numbers."
-FIXTURE_CASE: dict[str, Any] = {
-    "id": "behaviour-average",
-    "kind": "behaviour",
-    "prompt": AVERAGE,
-    "should_trigger": True,
-    "fixture": "small-tally",
-    "assertions": [{"type": "output_contains", "value": "2.5"}],
-    "expectations": ["The average is given."],
-}
-# What a fixture trial adds to the agent's environment, in both arms.
-AGENT_GIT_ENV = {
-    "GIT_OPTIONAL_LOCKS": "0",
-    "GIT_CONFIG_NOSYSTEM": "1",
-    "GIT_CONFIG_GLOBAL": "/dev/null",
-    "GIT_ATTR_NOSYSTEM": "1",
-}
-SMALL_TALLY_HEAD = "c63fc294563293a6dbacf229d040cc4dafc59f58"
-# The baseline's Skill call fails, as in SCRIPT, and the agent answers anyway.
-SKILL = tool("Skill", {"skill": "cowsay"}, "toolu_1")
-
-
-def fixture_root(tmp_path: Path) -> Path:
-    """A root whose suite holds the fixture case, cowsay's no-trigger case and small-tally."""
-    root = fake_root(tmp_path, [FIXTURE_CASE, CASES[0]])
-    shutil.copytree(
-        ROOT / "tests/fixtures/evals/git/small-tally", root / "evals/cowsay/fixtures/small-tally"
-    )
-    return root
 
 
 def test_a_fixture_trial_starts_in_the_fixture_in_both_arms_and_no_other_trial_does(
