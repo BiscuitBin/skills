@@ -110,6 +110,49 @@ def test_child_env_overrides_the_shared_config_dir(
     assert env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] == "1"
 
 
+HARNESS_GIT_ENV = {
+    "PATH": "/usr/bin:/bin",
+    "HOME": "/dev/null",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_AUTHOR_NAME": "Eval Harness",
+    "GIT_AUTHOR_EMAIL": "eval@example.invalid",
+    "GIT_COMMITTER_NAME": "Eval Harness",
+    "GIT_COMMITTER_EMAIL": "eval@example.invalid",
+}
+
+
+def captured_git_env(monkeypatch: pytest.MonkeyPatch, call: Callable[[], object]) -> object:
+    """The environment that call's one workspace.git call hands to subprocess.run."""
+    seen: list[object] = []
+
+    def fake_run(*_args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.append(kwargs["env"])
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    call()
+    [env] = seen
+    return env
+
+
+def test_git_without_env_passes_exactly_the_harness_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = captured_git_env(monkeypatch, lambda: workspace.git("status", cwd=Path()))
+    assert env == HARNESS_GIT_ENV
+
+
+def test_git_env_is_merged_last(monkeypatch: pytest.MonkeyPatch) -> None:
+    extra = {"GIT_AUTHOR_NAME": "Robin Hale", "GIT_INDEX_FILE": "index.tmp"}
+    env = captured_git_env(monkeypatch, lambda: workspace.git("status", cwd=Path(), env=extra))
+    assert env == {
+        **HARNESS_GIT_ENV,
+        "GIT_AUTHOR_NAME": "Robin Hale",
+        "GIT_INDEX_FILE": "index.tmp",
+    }
+
+
 def test_constructed_path_runs_python3_and_git_and_logs_python(tmp_path: Path) -> None:
     trial = workspace.create_trial(tmp_path, "run", "case")
     env = dict(ClaudeCode(ROOT / "node_modules/.bin/claude").prepare_homes(trial).env)

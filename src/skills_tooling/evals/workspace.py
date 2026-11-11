@@ -41,11 +41,14 @@ RECORD_END = "\x1e"
 FIELD_END = "\x1f"
 
 
-def git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+def git(
+    *args: str, cwd: Path, env: Mapping[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run git with no user or system config; env, merged last, adds to or overrides that."""
     return subprocess.run(  # noqa: S603 -- arguments come from this module
         ["git", *args],  # noqa: S607 -- git is a documented host prerequisite
         cwd=cwd,
-        env={"PATH": SYSTEM_PATH, "HOME": os.devnull, **GIT_ENV},
+        env={"PATH": SYSTEM_PATH, "HOME": os.devnull, **GIT_ENV, **(env or {})},
         capture_output=True,
         text=True,
         check=False,
