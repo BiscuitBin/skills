@@ -142,7 +142,7 @@ Commits `6a08917..4a295e8`, then the review fixes `9ab646d` and `bed4ae0`.
 
 - **Schema** (`cases.py`): a case may name `"fixture"`. A name that is not a slug, or has no directory, is a load error, and a nonempty `files` is rejected with a message that points to `fixture`.
 - **Fixtures** (`src/skills_tooling/evals/fixture.py`, new): `load_fixtures` validates every fixture directory by the design's rules, plus a ban on `__pycache__` (review finding 1). `build` writes the history with plumbing only, with Robin Hale's fixed identity and dates, no reflog and the exclude, and returns `{path: (sha256, git mode)}` for the files it wrote. Small-tally's HEAD is pinned at `c63fc294563293a6dbacf229d040cc4dafc59f58`.
-- **Runner** (`runner._attempt`): a fixture case builds its fixture first, in both arms, and adds four Git variables to the agent's environment. `workspace.git` takes a keyword-only `env`.
+- **Runner** (`runner._attempt`): a fixture case builds its fixture first, in both arms, and adds eight Git variables to the agent's environment: four at first, then the author and committer identity from /code-review finding 1 (`a083291`). `workspace.git` takes a keyword-only `env`.
 - **Inventory** (`workspace.inventory_problems(expected=...)`, through `contamination.preflight`): the workspace must be exactly the built map plus `.git` and the installed skill, and a fixture trial fails if `git status --porcelain -z` names a path under `.claude/` or `.agents/`. `workspace.unchanged` is the one test of "as built", shared with the grader. A directory at a fixture path counts as changed (review finding 2).
 - **Grader** (`grader.blinded_material`, `grade(fixture_files=...)`): only new or changed files. A deleted fixture file is not shown, so `FRAMING` and `prompt_sha256` do not change.
 - **Hash** (`benchmark.evals_sha256`): with no `evals/<skill>/fixtures/` it is the `evals.json` digest alone, so cowsay's recorded value still matches. Otherwise it also covers `FIXTURE_FORMAT` and `tree_sha256` of the fixtures.
@@ -150,7 +150,7 @@ Commits `6a08917..4a295e8`, then the review fixes `9ab646d` and `bed4ae0`.
 - **Tests:** `test_cases.py`, `test_fixture.py` (new), `test_workspace.py`, `test_grader.py`, `test_benchmark.py`, `test_dispatch.py` and `test_repo_config.py` (new), plus the pinned CLIs against the fake APIs in `test_runner.py` and `test_trials_and_baselines.py` (Claude Code: the same git status and startup git context in both arms) and `test_codex_adapter.py` (Codex: Git reads not denied, a `git add` denied).
 - **Docs and records:** `docs/reference/evals.md` (**Fixtures**, Isolation, Grader, Provenance, History), `docs/explanation/eval-isolation.md` (**Fixture trials** and three known limits), ADR 0011, `GLOSSARY.md` **Fixture**, and in `.scratch/foundation/follow-ups.md` the rewritten Ticket 05 residual and a new Ticket 16 entry.
 - **Departures from the approved design:**
-  - Four agent Git variables, not three. `GIT_ATTR_NOSYSTEM=1` joins them, because Apple Git 2.50.1 reads the system gitattributes even with `GIT_CONFIG_NOSYSTEM=1`. `workspace.GIT_ENV` has it too (`51fb829`), which leaves cowsay trials unchanged.
+  - Four agent Git variables, not three. `GIT_ATTR_NOSYSTEM=1` joins them, because Apple Git 2.50.1 reads the system gitattributes even with `GIT_CONFIG_NOSYSTEM=1`. `workspace.GIT_ENV` has it too (`51fb829`), which leaves cowsay trials unchanged. /code-review finding 1 later added the four `GIT_AUTHOR_*` and `GIT_COMMITTER_*` variables, so there are eight.
   - The repository ignore check runs only when the root is its own Git top level. A copy of `evals/` outside any repository skips it.
   - A branch must pass both `git check-ref-format --branch` and the `refs/heads/` form, and a commit message may not start or end with whitespace.
   - `commits` and `executable` may be left out, and default to `[]`.
@@ -191,6 +191,15 @@ No second round: neither fix changes a mechanism, a rule set in substance or a d
 | 8 | `Fixture.files()` walks each tree again at build, though load's walk already collected it | out of scope | none: a few files cost nothing next to an agent run, and load rejects symlinks, so both walks see the same files. Follow-up below |
 | 9 | The install directories are written down three times, in `HIDDEN_PARTS`, `EXCLUDE` and the adapters' `skills_dir`, and nothing ties them together | out of scope | none: the three agree, and only a third adapter, Pi, which is deferred, could make them differ. Follow-up below |
 
+**Re-review of the /code-review fixes:** a focused cross-model round, shared with ticket 18's P4.
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`), per the commits' trailers. The review script recorded no implementer model.
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `5bf7fe0..a083291`, the fixes `5fa644c`, `8226ae3`, `cc4fad8` and `a083291`, at `227eb93`, against this ticket's acceptance criteria and the triage of /code-review findings 1, 2, 3 and 6. The brief asked whether the fixes are right and complete, whether they set the arms apart, whether they change cowsay's results, and whether the docs match the code.
+- **Findings:** `ai_tmp/review-20261111T185340Z-codex.md` · **Triage:** `ai_tmp/triage-pre-red.md`
+
+The review reported no finding on `5bf7fe0..a083291`, so this round has no table, no fix and no second round here. Its three findings are all on P4, in ticket 18's **P4 review**.
+
 **Follow-ups:**
 
 - The descriptor close in `unchanged` has no test of its own. A fix that only caught `OSError` around `fdopen` would also pass the `now-a-dir` case.
@@ -200,19 +209,19 @@ No second round: neither fix changes a mechanism, a rule set in substance or a d
 - /code-review finding 5 is a known residual, already filed in `.scratch/foundation/follow-ups.md:58` (Ticket 05). So is finding 6's empty `fixtures/` half, under **Stray files** in Residual risk below.
 - /code-review finding 8, optional: keep the validated per-tree map on `Fixture`, so a build does not walk the trees again.
 - /code-review finding 9, for the Pi adapter ticket: build `HIDDEN_PARTS` and `EXCLUDE` from one ordered tuple in `workspace.py`, which keeps `EXCLUDE`'s bytes, and add a test over every adapter `adapter_for` returns.
-- The agent's Git variables are now eight, with /code-review finding 1's identity. **What was built** and two Residual risk lines below still say four, as written before the /code-review. The four were seen reaching Codex's commands, and all eight now are, through `test_codex_adapter.py:552`.
+- Closed after the re-review: the agent's Git variables are eight, with /code-review finding 1's identity, and **What was built**, its departures and the two Residual risk lines below now say so. All eight are seen reaching Codex's commands, through `test_codex_adapter.py:552`.
 - Claude Code was not checked passing `GIT_AUTHOR_*` and `GIT_COMMITTER_*` to its Bash tool's commands, as with the other four variables. /code-review finding 1's test shows what Git does with them, not that the CLI passes them on.
 - /code-review finding 2 changed a validation message from "the repository ignores it, so a checkout would not have it" to "Git ignores it, so a checkout would not have it". Notes in `ai_tmp/` that quote the old text are stale.
 - Fixture validation now reads the global ignore file of whoever runs it, as `git_state` already did. A maintainer whose global ignore file lists a shipped fixture's file sees a validation failure locally. That is correct, but local results depend on that file.
 
 **Residual risk:**
 
-- **Linux is unrun.** Ubuntu CI has not run, because nothing was pushed. It is the first run of dash, Codex's bwrap or Landlock sandbox on `.git` (the `git add` denial, and the four variables reaching its commands), the on-disk case-clash test, and `GIT_ATTR_NOSYSTEM` on a non-Apple Git.
+- **Linux is unrun.** Ubuntu CI has not run, because nothing was pushed. It is the first run of dash, Codex's bwrap or Landlock sandbox on `.git` (the `git add` denial, and the eight variables reaching its commands), the on-disk case-clash test, and `GIT_ATTR_NOSYSTEM` on a non-Apple Git.
 - **Deleted fixture files are not shown to the grader.** A case that judges a deletion needs a `needs_transcript` expectation.
 - **Cowsay's skill arm still shows `?? .claude/`** in Claude Code's startup git status, as before this ticket. The follow-up is in `.scratch/foundation/follow-ups.md`.
 - **The Git views boundary.** `git status --ignored`, `git ls-files --others` without `--exclude-standard` and `git clean -n -d -x` still list the skill in the skill arm, as `ls -a` does.
 - **The secret-sweep criterion is met by inspection.** The sweep and teardown are unchanged code, and no test plants a secret in a fixture file.
 - **A Git write cannot be scored on Codex.** `git add` in a fixture trial is denied and the trial is `infra_error`, observed on macOS only.
-- **The four variables were seen reaching Codex's commands only.** For Claude Code, the check is the environment the CLI starts with and its startup git context, not a Bash command's environment.
+- **The eight variables were seen reaching Codex's commands only.** For Claude Code, the check is the environment the CLI starts with and its startup git context, not a Bash command's environment.
 - **The wording check reads UTF-8.** `skill` wording in a UTF-16 file would pass validation.
 - **Stray files.** A file directly in `evals/<skill>/fixtures/`, such as a Finder `.DS_Store`, or an empty fixtures directory, changes `evals_sha256` locally but not in a clean checkout. Runs then refuse to share an iteration; they never wrongly share one.

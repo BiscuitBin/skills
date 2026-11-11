@@ -218,9 +218,27 @@ metadata:
 
 No second round: the only frozen change rewords one clause of E2 and keeps its scope. The other two fixes are design text: a hand-read row and a list of facts. The maintainer took P4, a new frozen assertion, so it gets a focused review before RED.
 
+#### P4 review
+
+A focused cross-model round on P4 before RED, shared with ticket 16's /code-review fixes, which drew no finding.
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`), per the commits' trailers. The review script recorded no implementer model.
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** P4 as added in `227eb93` (`evals/change-viz/evals.json:29`), against **Decisions already made** and the acceptance criteria. The brief asked whether P4 passes every correct description, including ticket 19's risk line, whether it fails extra prose under the why, and whether it is safe under Python `re` as the harness applies it.
+- **Findings:** `ai_tmp/review-20261111T185340Z-codex.md` · **Triage:** `ai_tmp/triage-pre-red.md`, whose candidates f1, f2, f3 and f23 are substitutions into P4, probed under PCRE2 (`ai_tmp/triage-pre-red/probe.sh` and `probe.out`)
+- **Timing:** `ai_tmp/triage-pre-red/p4_timing.py`, run under Python 3.14.8 `re` after the review, output in `p4_timing.out`
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium (triage: low) | After a `**Risk:` line, P4 lets anything through up to the next level-two heading, so an extra paragraph after the risk line passes | valid, already disclosed under question 2's costs and **Pattern limits**. The reviewer's premise, that the decided risk content is a single line, is wrong: ticket 19's block is a line, a blank line and two bullets, so a one-line limit would fail a correct ticket 19 description | Nothing frozen changes, pending question 7. Ticket 18's runs carry no risk line, and the hand read covers what follows one. For ticket 19: once its block is frozen, narrow P4's risk branch with f1 (the `**Risk:` line, at most two column-0 bullets with indented continuations, then an optional thematic break). f1 also bounds finding 3 |
+| 2 | medium (triage: low) | P4 fails a why indented one to three spaces, or wrapped with an indented continuation line, though GitHub renders both as one paragraph. `\r\n` endings fail too | valid, already disclosed under question 2's costs and **Pattern limits**. The `\r\n` part changes no result: P1 to P3 already fail `\r\n` endings, and no recorded agent message uses them | Nothing frozen changes, pending question 7. The GREEN text writes the why unindented, as the decided outline does, and the hand read notes an indented one. f2 (up to three spaces before the first line, any indent after) would trade this false fail for a false pass: an indented bullet or fence directly under the sentence. `\r\n` handling would be a harness change for every suite, out of scope |
+| 3 | medium (triage: low) | P4 backtracks quadratically when many `**Risk:` lines sit in the why paragraph and the match fails, and scoring has no regex timeout or size cap | valid. Timed on the reviewer's input: 0.093 s at 12 KB, 0.843 s at 36 KB and 9.370 s at 120 KB. A slow score, not a wrong verdict, on a shape no description the skill asks for has | Recorded under **Pattern limits**. Nothing frozen changes, pending question 7. f3 (no `**Risk:` line inside the paragraph) took 0.003 s at 120 KB, and f1 0.002 s. f3 also fails a why section that opens with `**Risk:` before any sentence, which breaks the decided order |
+
+No second round unless the maintainer takes a candidate under question 7: none of the findings changes P4 as committed.
+
 #### Questions for the maintainer
 
-The maintainer answered questions 1, 2, 3 and 6 on 2026-11-11, as the brief relays the answers. Questions 4 and 5 are still open.
+The maintainer answered questions 1, 2, 3 and 6 on 2026-11-11, as the brief relays the answers. Questions 4, 5 and 7 are still open.
 
 1. **A values clause on E4** (finding 1). **Decided: no clause.** The hand read against the fixture facts covers the gap (the "does not" table under **Design as approved**), and E4's text does not change. The clause would have appended "If it shows wordstat's output for sample.txt, that output is …". The recommendation was no, for these reasons:
    - A pass needs a verbatim quote, and the burden of proof is on passing, so a correct visual made only of a diagram risks failing it.
@@ -244,7 +262,7 @@ The maintainer answered questions 1, 2, 3 and 6 on 2026-11-11, as the brief rela
      - P4 is in `evals.json`.
      - `ai_tmp/apply-18/patterns.py` has its count assert, its expected columns, and a bolded `**Risk:` copy of its unbolded `Risk: Low.` control, which P4 rejects.
      - `just format` and `just validate-evals` ran, and the change is committed (**Checks run**).
-   - **Still to do:** a focused review of P4, before RED.
+   - **Reviewed:** the focused review found three limits, two already disclosed above and one now under **Pattern limits** (**P4 review**). Whether any of them changes P4 is question 7.
 3. **"One-line lead-in" in E3.** **Decided: one physical line of one to three sentences**, as the four liked pull requests write their lead-ins, not one sentence. E3's text does not change.
 4. **`__pycache__/` as a write.** **Open.** The design counts it, through the hand read, and reports it on its own line as "ran the fixture's code". If GREEN trials leave one, is that a ticket 18 failure, which needs a "read the branch, do not run its code" line in the skill now, or a limit recorded for ticket 21, which owns running code? No frozen text changes; settle before GREEN.
 5. **ADR 0008.** **Open.** It says everything in the repository is under `LICENSE`. With an upstream notice beside a skill, does it need a sentence? The decision left this to the design review, which did not raise it. Not blocking; settle before `NOTICE.md` lands at GREEN.
@@ -254,14 +272,18 @@ The maintainer answered questions 1, 2, 3 and 6 on 2026-11-11, as the brief rela
    - Matt Pocock's notice shipping with ticket 19, though "each upstream's" notice can be read as all three at 18.
 
    The answer did not address the other implementer decisions, so they stand as the implementer made them. Among them, this repository's own notice stays out of `NOTICE.md`, so D3 stays open for it.
+7. **P4 after its focused review** (**P4 review**). **Open.** Each candidate in `ai_tmp/triage-pre-red.md` changes frozen text, so settle before RED, the last cheap moment. Taking any means an `evals.json` edit, `just format`, `just validate-evals`, updated probes (`ai_tmp/apply-18/p4_probe.py` and `patterns.py`), a commit and another focused review. The candidates' pass and fail results were probed under PCRE2 only; only the timing ran under Python. **Recommendation: no change; RED runs from `227eb93`.**
+   - f1 (finding 1) belongs to ticket 19: it would freeze ticket 19's block before that ticket's design checkpoint, and changes nothing ticket 18's runs measure.
+   - f2 (finding 2) trades a rare false fail for a rare false pass.
+   - f3 (finding 3), or f23 (f2 with f3), makes P4 linear. Take f3 if a bounded scoring time matters before RED. It drops only a why section that starts with `**Risk:`.
 
 #### Design as approved
 
 **Design as approved:** `ai_tmp/design-18.md` (gitignored), as reviewed at this checkpoint, with the fixes above and the maintainer's decisions of 2026-11-11 (its **Maintainer decisions (2026-11-11)** section). These bullets carry what exists only in that file:
 
-- **Freeze.** `evals_sha256` covers `evals.json` and the fixture directory. The rubric does not change from the RED run to GREEN. Of the three possible changes before RED, the maintainer took only P4, which landed after `just format` and `just validate-evals`. E4 and E3 keep their text. RED runs from the commit that adds P4, or later, once P4's focused review is done.
+- **Freeze.** `evals_sha256` covers `evals.json` and the fixture directory. The rubric does not change from the RED run to GREEN. Of the three possible changes before RED, the maintainer took only P4, which landed after `just format` and `just validate-evals`. E4 and E3 keep their text. RED runs from the commit that adds P4, or later. P4's focused review is done (**P4 review**), and RED waits for question 7.
 - **Grader material.** The blinded call sees the bare prompt, never the invocation, the final message up to 20 KB, and any file the agent created or changed. Fixture files left as built are not sent, so each expectation carries its own facts. E8 is judged in a second call from the commands and their output. No expectation refers to another, so the canary's random place changes nothing.
-- **Pattern limits.** P2 reads bullet markers at column 0 only: an indented marker, or an unindented wrapped line, fails on purpose, since allowing one would let four bullets pass as one. So the GREEN text writes note bullets at column 0 with indented continuations. P2 also reads an indented `- b` after `- a` as a continuation, though GitHub renders two bullets, and passes nested bullets. P4 is lenient when a bullet or fence sits directly under the sentence with no blank line, and after a `**Risk:` line. A why line indented one space fails it. `\r\n` endings fail all four patterns.
+- **Pattern limits.** P2 reads bullet markers at column 0 only: an indented marker, or an unindented wrapped line, fails on purpose, since allowing one would let four bullets pass as one. So the GREEN text writes note bullets at column 0 with indented continuations. P2 also reads an indented `- b` after `- a` as a continuation, though GitHub renders two bullets, and passes nested bullets. P4 is lenient when a bullet or fence sits directly under the sentence with no blank line, and after a `**Risk:` line. A why line indented one space fails it. P4 backtracks quadratically when many `**Risk:` lines sit in the why paragraph and the match fails: 9.4 s on a 120 KB message under Python `re` (**P4 review**, finding 3). P1 and P3 are in the same class on their own pathological inputs (inferred, not timed), and scoring has no regex timeout. `\r\n` endings fail all four patterns.
 - **Room for tickets 19 to 24.** P1 allows prose before the first heading (ticket 22's scope line) but no fence, and anything between the headings. P4 narrows the room under the why: one paragraph, then only a block starting `**Risk:` (ticket 19's line) or one thematic break. Ticket 21's label passes inline on the sentence or on the next line, and fails as its own paragraph. E1 and E2 read only the first paragraph. P3 needs a fence under the outline, so a table-only outline (ticket 20) fails this case; a table can sit beside a fence. Ticket 19 asserts only its line's shape on this case and brings its own fixtures. Ticket 22 needs its own fixture, or a copy of these trees with `staged` and `worktree`. Ticket 23 can reuse this one (no remote). Ticket 24 can reuse it for Mermaid labels with parentheses.
 - **GREEN gain,** recorded three ways: shape (P1 to P4, E1, E3); substance measured in both arms (E4 to E7); and E2, substance that passes only once the heading exists. E5, E8, and maybe E4 and E6, will show as non-discriminating. They stay as guards that make a wrong description fail. E6 may pass at RED on Claude Code if its startup context lists the commit subjects; the RED transcripts confirm it.
 - **Disclosure reads.** In the skill arm the CLI's own text says "skill", so an echo marks the trial `arm_disclosed`, and it is still graded. E8's transcript material widens the check: on Codex at GREEN, a `cat` of the skill's files likely sets the flag. So read `disclosure_matches` in each grading file and look for each match in the final message; only those reached the blinded call. A bare `change-viz` or `Change Viz` is not flagged, so run `rg -i 'change[- ]?viz'` over each skill-arm final message and report hits beside `arm_disclosed`.
@@ -290,9 +312,9 @@ Fixture facts for the hand read. The first four were observed at apply time; the
 
 #### Next
 
-**Next:** a focused review of P4, then Hand-off 1, the RED run.
+**Next:** the maintainer's answer to question 7, then Hand-off 1, the RED run.
 
-Questions 1, 2, 3 and 6 are settled. P4 is the only change they make to `evals.json`, and it is committed after `just format` and `just validate-evals`. As a new frozen assertion, P4 gets a focused cross-model review before the run. If that review changes P4, the fix also lands before RED. Questions 4 and 5 stay open: 4 before GREEN, and 5 before `NOTICE.md` lands.
+Questions 1, 2, 3 and 6 are settled. P4 is the only change they make to `evals.json`, and it is committed after `just format` and `just validate-evals`. P4's focused cross-model review is done (**P4 review**): its three findings change nothing frozen unless the maintainer takes a candidate under question 7, which then lands, with another focused review, before RED. Questions 4 and 5 stay open: 4 before GREEN, and 5 before `NOTICE.md` lands.
 
 Then, in the maintainer's terminal with `CLAUDE_CODE_OAUTH_TOKEN` exported (the grader needs it on both agents; Codex also uses its login in the project's Codex home):
 
