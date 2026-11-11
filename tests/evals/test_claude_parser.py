@@ -453,3 +453,16 @@ def test_a_read_without_a_result_is_not_a_trigger(tmp_path: Path) -> None:
     lines = session_lines(FIXTURES / "fake-by-name-read.session.jsonl")
     trace = CLAUDE.parse(raw_run(path, session_lines=lines))
     assert (trace.skills_triggered, trace.skills_invoked) == ([], [BY_NAME])
+
+
+def test_the_clis_note_for_a_command_with_no_output_is_not_a_read(tmp_path: Path) -> None:
+    # Seen from the pinned CLI: a command that prints nothing returns this note
+    # as its result, so `tail -n 0` would otherwise look as if it printed a line.
+    note = "(Bash completed with no output)"
+    command = f"tail -n 0 .claude/skills/{BY_NAME}/SKILL.md"
+    trace = with_call(tmp_path, "Bash", {"command": command}, note)
+    assert [(c.command, c.ok, c.output) for c in trace.commands] == [(command, True, note)]
+    assert (trace.skills_triggered, trace.skills_invoked) == ([], [BY_NAME])
+    # A pwd before it prints the one line the pwd accounts for.
+    pwd = with_call(tmp_path, "Bash", {"command": f"pwd && {command}"}, "<TRIAL>/workspace")
+    assert pwd.skills_triggered == []

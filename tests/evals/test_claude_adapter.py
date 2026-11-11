@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from skills_tooling.evals import workspace
 from skills_tooling.evals.claude_code import ClaudeCode
 from tests.evals.fake_anthropic import serve, text, tool
@@ -128,3 +130,58 @@ def test_session_persistence_changes_no_request(tmp_path: Path) -> None:
             del body["metadata"]
     assert len(requests["on"]) == 2
     assert requests["on"] == requests["off"]
+
+
+RECORDED = ROOT / "tests/fixtures/evals/claude"
+RECORDED_ID = "aa4d4ef7-8611-4dba-9d39-9e95e53c9a5e"
+
+
+def stand_in(tmp_path: Path, session_id: str, directories: list[str]) -> Path:
+    """A stand-in CLI that prints fake-by-name's stream, with init's session_id
+    set, and writes the recorded session file into each project directory named."""
+    events = (RECORDED / "fake-by-name.jsonl").read_text().splitlines()
+    init = json.loads(events[0]) | {"session_id": session_id}
+    stream = tmp_path / "stream.jsonl"
+    stream.write_text("\n".join([json.dumps(init), *events[1:]]) + "\n")
+    session = shlex.quote(str(RECORDED / "fake-by-name.session.jsonl"))
+    writes = "".join(
+        f'mkdir -p "$CLAUDE_CONFIG_DIR/projects/{name}"\n'
+        f'cp {session} "$CLAUDE_CONFIG_DIR/projects/{name}/{RECORDED_ID}.jsonl"\n'
+        for name in directories
+    )
+    script = tmp_path / "claude"
+    script.write_text(f"#!/bin/sh\n{writes}cat {shlex.quote(str(stream))}\n")
+    script.chmod(0o755)
+    return script
+
+
+@pytest.mark.parametrize(
+    ("session_id", "directories", "found"),
+    [
+        (RECORDED_ID, ["-TRIAL--workspace"], True),
+        # Two files by that name: which is this run's cannot be told.
+        (RECORDED_ID, ["-TRIAL--workspace", "-elsewhere"], False),
+        # Not a plain file name, so it names no file, though a glob would match.
+        ("*", ["-TRIAL--workspace"], False),
+        (RECORDED_ID, [], False),
+    ],
+)
+def test_run_reduces_the_one_session_file_named_by_inits_session_id(
+    tmp_path: Path, session_id: str, directories: list[str], *, found: bool
+) -> None:
+    repo = fake_repo(tmp_path)
+    trial = workspace.create_trial(repo / ".eval-workspaces", "run-1", "case-1")
+    adapter = ClaudeCode(executable=stand_in(tmp_path, session_id, directories))
+    raw = adapter.run(
+        "/branch-brief Describe this branch.",
+        trial,
+        adapter.prepare_homes(trial),
+        model=adapter.default_model,
+        timeout=30,
+        credentials={"CLAUDE_CODE_OAUTH_TOKEN": TOKEN},
+    )
+    expected = (
+        f"session {RECORDED_ID}",
+        "skill_expanded <TRIAL>/workspace/.claude/skills/branch-brief",
+    )
+    assert raw.session_lines == (expected if found else ())

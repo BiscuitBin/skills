@@ -79,6 +79,8 @@ EXPANSION = "Base directory for this skill: "
 # The CLI names a session's file after its id, a UUID. Anything else could name
 # a path, so it finds no file.
 SESSION_ID = re.compile(r"[0-9A-Za-z-]+")
+# The Bash tool's result when a command printed nothing: the CLI's note, not output.
+NO_OUTPUT = "(Bash completed with no output)"
 
 
 class ClaudeCode:
@@ -527,7 +529,8 @@ def parse_stream(raw: RawRun, *, session_record: bool = False) -> Trace:
             # A read the shared rule confirms, as on Codex. An unplaced path names no skill.
             read, _ = skills_read(command)
             invoked += read
-            if call_id in seen.results and not error and outcome_is_the_read(command, output):
+            printed = "" if output == NO_OUTPUT else output
+            if call_id in seen.results and not error and outcome_is_the_read(command, printed):
                 triggered += read
     last = events[-1] if events else {}
     completed = clean and last.get("type") == "result"
