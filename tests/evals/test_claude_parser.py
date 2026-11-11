@@ -425,6 +425,15 @@ def test_a_bash_command_that_reads_no_installed_skill_names_none(
     [
         (f".claude/skills/{BY_NAME}/SKILL.md", False, [BY_NAME], [BY_NAME]),
         (f"./.claude/skills/{BY_NAME}/../{BY_NAME}/SKILL.md", False, [BY_NAME], [BY_NAME]),
+        # An absolute path is normalised before the workspace is matched.
+        (f"<TRIAL>/./workspace/.claude/skills/{BY_NAME}/SKILL.md", False, [BY_NAME], [BY_NAME]),
+        (
+            f"<TRIAL>/workspace/../workspace/.claude/skills/{BY_NAME}/SKILL.md",
+            False,
+            [BY_NAME],
+            [BY_NAME],
+        ),
+        (f"<TRIAL>/workspace//.claude/skills/{BY_NAME}/SKILL.md", False, [BY_NAME], [BY_NAME]),
         (SKILL_MD, True, [], [BY_NAME]),
         # Not the installed copy: only the workspace's own skills directory counts.
         (f"<TRIAL>/workspace/nested/.claude/skills/{BY_NAME}/SKILL.md", False, [], []),
@@ -433,6 +442,7 @@ def test_a_bash_command_that_reads_no_installed_skill_names_none(
         (f"<TRIAL>/workspace/.claude/skills/{BY_NAME}/scripts/SKILL.md", False, [], []),
         (f"<TRIAL>/workspace/.claude/skills/{BY_NAME}/README.md", False, [], []),
         (f"../.claude/skills/{BY_NAME}/SKILL.md", False, [], []),
+        (f"<TRIAL>/workspace/../.claude/skills/{BY_NAME}/SKILL.md", False, [], []),
     ],
 )
 def test_a_read_tool_call_counts_only_for_the_installed_skill_md(

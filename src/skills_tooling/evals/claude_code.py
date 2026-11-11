@@ -431,11 +431,12 @@ def _skill_md_read(file_path: str, cwd: str) -> str | None:
     """The skill whose installed SKILL.md a Read names, or None.
 
     The path is `{init.cwd}/.claude/skills/<skill>/SKILL.md`, or the same path
-    relative to `cwd`. It is compared as text, as the CLI reported it.
+    relative to `cwd`. It is compared as text once normalised, never resolved.
     """
     if not cwd:
         return None
-    parts = posixpath.normpath(file_path.removeprefix(f"{cwd}/")).split("/")
+    normal = posixpath.normpath(file_path)
+    parts = normal.removeprefix(f"{posixpath.normpath(cwd)}/").split("/")
     root = ClaudeCode.skills_dir.split("/")
     if len(parts) == len(root) + 2 and parts[: len(root)] == root and parts[-1] == "SKILL.md":
         return parts[-2]
