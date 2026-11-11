@@ -46,21 +46,21 @@ Make a throwaway by-name-only skill (both settings above) and answer these on bo
 
 ## Acceptance criteria
 
-- [ ] The spike's answers are recorded here, with the CLI versions and the transcripts or fake-API requests that showed them.
-- [ ] A case can be marked as invoked by name. The schema rejects the marking on a case whose `should_trigger` is `false`, and the field's name comes from the design checkpoint.
-- [ ] For a marked case the skill arm's prompt is the agent's own syntax followed by the request, built by the adapter. The case's `prompt` holds only the bare request, with no agent's syntax in it.
-- [ ] The baseline arm gets the bare request, and so does the grader in both arms. Nothing the grader is sent differs between the arms because of the prefix.
-- [ ] The trace records the trigger for a by-name invocation on both agents, so `skill_triggered` passes and the case counts in trigger accuracy. On Claude Code this needs whatever evidence the spike found, and the trigger rule in `docs/reference/evals.md` says what it is.
-- [ ] A plain request with `should_trigger: false` passes on both agents against a by-name-only skill: no trigger is recorded. A trial where the agent loads the skill anyway fails the case.
-- [ ] Results record the prompt each arm was actually given, or enough to rebuild it.
-- [ ] Cowsay's suite still passes. Whether `trigger-explicit-invocation` moves to the new marking is decided at the design checkpoint, because editing `evals/cowsay/evals.json` changes its `evals_sha256`.
-- [ ] Regression tests drive both parsers from recorded transcripts of a by-name invocation and of a quiet plain request, kept under `tests/fixtures/evals/`. They run in `just check` on any OS, with no agent and no network.
-- [ ] Docs and records:
+- [x] The spike's answers are recorded here, with the CLI versions and the transcripts or fake-API requests that showed them.
+- [x] A case can be marked as invoked by name. The schema rejects the marking on a case whose `should_trigger` is `false`, and the field's name comes from the design checkpoint.
+- [x] For a marked case the skill arm's prompt is the agent's own syntax followed by the request, built by the adapter. The case's `prompt` holds only the bare request, with no agent's syntax in it.
+- [x] The baseline arm gets the bare request, and so does the grader in both arms. Nothing the grader is sent differs between the arms because of the prefix.
+- [x] The trace records the trigger for a by-name invocation on both agents, so `skill_triggered` passes and the case counts in trigger accuracy. On Claude Code this needs whatever evidence the spike found, and the trigger rule in `docs/reference/evals.md` says what it is.
+- [x] A plain request with `should_trigger: false` passes on both agents against a by-name-only skill: no trigger is recorded. A trial where the agent loads the skill anyway fails the case.
+- [x] Results record the prompt each arm was actually given, or enough to rebuild it.
+- [x] Cowsay's suite still passes. Whether `trigger-explicit-invocation` moves to the new marking is decided at the design checkpoint, because editing `evals/cowsay/evals.json` changes its `evals_sha256`.
+- [x] Regression tests drive both parsers from recorded transcripts of a by-name invocation and of a quiet plain request, kept under `tests/fixtures/evals/`. They run in `just check` on any OS, with no agent and no network.
+- [x] Docs and records:
   - `docs/reference/evals.md`: the case schema, both trigger rules, and what the baseline arm gets.
   - `GLOSSARY.md`: **Trigger** covers a by-name invocation on both agents.
   - An ADR, if the design changes what a trigger is.
 - [ ] Shown working: one live trial per agent of a marked case, and one of a quiet plain request, with the run ids recorded here.
-- [ ] `just check` passes.
+- [x] `just check` passes.
 
 ## Out of scope
 
@@ -75,7 +75,7 @@ Use the `cross-model-review` dev skill.
 
 ## Spike answers
 
-Run on 2026-11-10 against the pinned Claude Code 2.1.309 and Codex 0.163.0, through the adapters, against the local fake APIs (`tests/evals/fake_anthropic.py`, `fake_openai.py`). The throwaway skill set `disable-model-invocation: true` in `SKILL.md` and `policy.allow_implicit_invocation: false` in `agents/openai.yaml`, and had a `.claude-plugin/plugin.json`, as `just new-skill` writes. The recordings become the `fake-by-name*` fixtures under `tests/fixtures/evals/{claude,codex}/` when step 4's parser tests land; until then they are in `ai_tmp/spike-17/` (gitignored). **The stop condition is not met:** both CLIs load a by-name-only skill headlessly.
+Run on 2026-11-10 against the pinned Claude Code 2.1.309 and Codex 0.163.0, through the adapters, against the local fake APIs (`tests/evals/fake_anthropic.py`, `fake_openai.py`). The throwaway skill set `disable-model-invocation: true` in `SKILL.md` and `policy.allow_implicit_invocation: false` in `agents/openai.yaml`, and had a `.claude-plugin/plugin.json`, as `just new-skill` writes. The recordings are committed as the `fake-by-name*` fixtures under `tests/fixtures/evals/{claude,codex}/`, which the parser tests drive. **The stop condition is not met:** both CLIs load a by-name-only skill headlessly.
 
 **Claude Code.**
 
@@ -134,3 +134,67 @@ No second round: the fixes narrow claims, add a `by_name`-only prompt check and 
 - **Confirmed reads on Claude Code.** A non-error `Read` of `{init.cwd}/.claude/skills/<skill>/SKILL.md`, or that path relative to `cwd`, is a trigger, and so is a non-error Bash command that passes Codex's read rule (`skills_read` and `outcome_is_the_read`, moved unchanged from `codex.py` to a shared module). ADR 0017, **A trigger is the CLI's injection record or a confirmed read of the skill**, records the rule as a lower bound with its limits: a transforming `sed` counts, and a pipe, `awk`, an interpreter or the `Grep` tool does not. Codex's rule does not change.
 - **Disclosure and cowsay.** `disclosure_matches` gains a keyword-only `invocation_of`. For a marked case the grader passes the skill's name, so an echoed `/<skill>`, `$<skill>` or `$<plugin>:<skill>` is flagged `arm_disclosed` and not redacted. Contamination is unchanged. Cowsay's `trigger-explicit-invocation` keeps its `$cowsay:cowsay` prompt and stays unmarked, so `evals/cowsay/evals.json` and its `evals_sha256` do not change.
 - **Live trials.** They run in ticket 18's RED run (the maintainer's Hand-off 1), which includes a marked case and a quiet plain request on `change-viz`. This ticket stays open until that run is read, with the quiet cases' transcripts read by hand, and its run ids are recorded here.
+
+### Implementation checkpoint
+
+#### What was built
+
+Commits `4a295e8..de9d947`, then the review fix `115ba26` and a test, `37ec5a1`.
+
+- **Schema** (`cases.py`): a case may set `"by_name": true` on a trigger or a behaviour case. Any other value is rejected, and so is the marking beside a `should_trigger` that is not `true`. A marked prompt is rejected when it starts with `/` or `$`, or holds an invocation of the skill. `invocation_mentions` is defined in `grader.py`, because `cases` imports `fixture`, which imports `grader`. The loader and the disclosure check share it.
+- **Prompts** (`adapter.py`, `claude_code.py`, `codex.py`, `runner.py`): `Adapter.by_name_prompt(installed, request)` gives `/<name> <request>` on Claude Code. On Codex it gives `$<plugin>:<name> <request>` from the installed `plugin.json`, the bare `$<name>` with no manifest, and a `ValueError` for a manifest that names no plugin. `runner._prompt` uses it in a marked case's skill arm only. The baseline arm and every grader request get `case.prompt`. Every trial record gains `"prompt"`, null when no run was recorded. A marked skill arm with no installed copy is an `infra_error`.
+- **Claude Code's evidence** (`claude_code.py`): the agent's run drops `--no-session-persistence`, and the grader keeps it. `session_lines` reduces the one session file named by init's `session_id` to `session <id>` and `skill_expanded <path>` lines in `RawRun.session_lines`. Nothing else is stored. `ClaudeCode.parse` fails an otherwise-ok trace closed without them. A trigger is a `Skill` call, a `skill_expanded` path of `{init.cwd}/.claude/skills/<skill>`, a non-error `Read` of the installed `SKILL.md` (compared once normalised, never resolved; review finding 1), or a Bash read that passes the shared rule, with the CLI's `(Bash completed with no output)` note counted as no output.
+- **Shared read rule** (`src/skills_tooling/evals/reads.py`, new): `skills_read` and `outcome_is_the_read` moved unchanged from `codex.py`. Codex's trigger rule does not change.
+- **Disclosure** (`grader.py`): `disclosure_matches(..., invocation_of=)` flags an echoed `/<skill>`, `$<skill>` or `$<plugin>:<skill>` in a marked case as `arm_disclosed`. Nothing is redacted, and `prompt_sha256` does not change.
+- **Recordings:** the spike's runs, as `tests/fixtures/evals/claude/fake-by-name{,-quiet,-refused,-read,-forged,-baseline}.{jsonl,session.jsonl}` and `tests/fixtures/evals/codex/fake-by-name{,-quiet,-read,-baseline}.{jsonl,log}`.
+- **Tests:** `test_cases.py`, `test_claude_parser.py`, `test_codex_parser.py`, `test_grader.py`, `test_runner.py`, `test_contamination.py` and `test_codex_adapter.py` (the Codex prompt forms). `test_claude_adapter.py` runs the pinned Claude Code against the fake API: the slash expansion triggers through the session record, the session file is found by init's id, and with persistence on only `metadata.user_id` differs between request bodies.
+- **Docs and records:** `docs/reference/evals.md` (**By-name cases**, the schema, both trigger rules, the session record, the trial's `prompt`, the disclosure check), `docs/explanation/eval-isolation.md`, `GLOSSARY.md` **Trigger**, and ADR 0017, **A trigger is the CLI's injection record or a confirmed read of the skill**, with its row in `docs/adr/README.md`.
+- **Cowsay:** `evals/cowsay/evals.json` is not edited, and `trigger-explicit-invocation` stays unmarked.
+- **Departures from the approved design:**
+  - The session file is found by glob, `<agent home>/projects/*/<session_id>.jsonl` with exactly one match, not by rebuilding the CLI's slug. The `session <id>` line comes from the records' `sessionId`.
+  - Failing closed applies only to an otherwise-ok trace, so an earlier reason, such as a timeout or a nonzero exit, is kept.
+  - On Claude Code a `Read` or Bash read also adds to `skills_invoked`, and both skill lists are deduplicated, as on Codex.
+  - The Bash tool's no-output note counts as no output. A probe of the real CLI found it: without the rule, `tail -n 0 SKILL.md` counted as a read.
+  - Codex's `by_name_prompt` refuses a manifest that names no plugin.
+
+#### Checks run
+
+- `just check` on `37ec5a1` (this branch, with ticket 16 and both tickets' review fixes): passed, exit 0. pytest: 1195 passed, 4 skipped. The skips are the two runs of the on-disk case-clash test, because macOS folds case, and the two CI-only canaries. Every other step passed, including `validate-evals` (1 suite valid) and the version check (Claude Code 2.1.309, Codex 0.163.0). Log: `ai_tmp/gate-16-17.log`.
+- Before the review, `just check` passed on `de9d947`: 1184 passed, 4 skipped (`ai_tmp/verify-17-check.log`). Each criterion was checked against the code and the tests (`ai_tmp/impl-17-progress.md`, **Verify**).
+- The review fix was red first: the three new absolute `Read` rows gave `([], [])`, and the guard row passed before and after. `37ec5a1`'s test passed on arrival, because the code already existed, and failed with `skills_triggered` taken out of contamination's `seen`.
+- Not run: Ubuntu CI, because nothing was pushed, and the live trials (below).
+
+#### Cross-model review
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`)
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `4a295e8..de9d947`
+- **Findings:** `ai_tmp/review-20261111T103637Z-codex.md` · **Triage:** `ai_tmp/triage-impl-17.md`
+- **Preconditions:** a `pytest` process from another session, in a different repository, was running. It had no file open in this worktree, and the worktree was clean after the review, so the run counts.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium (triage: low) | `_skill_md_read` removed the `{cwd}/` prefix before normalising, so a `Read` of the installed `SKILL.md` by an absolute path with `.`, `..` or `//` around the prefix was not a trigger, and a quiet case could pass a trial that read the skill | valid: no recording shows such a path, and it only adds to a lower bound the maintainer accepted | fixed in `115ba26`: the path and `cwd` are normalised, then the prefix is removed. The docstring says "once normalised, never resolved", and `docs/reference/evals.md` adds `{init.cwd}/./.claude/skills/<name>/SKILL.md` as a path that counts. Four rows in `test_claude_parser.py`: three that failed before the fix, and `<TRIAL>/workspace/../.claude/…`, which must not count |
+
+Also closed, though not a finding: the docs say a confirmed Bash read of a dev skill's `SKILL.md` fails contamination on Claude Code, and no test showed it. `37ec5a1` adds `test_a_confirmed_bash_read_of_a_dev_skill_fails_and_a_read_tool_call_of_it_does_not` (`test_contamination.py`).
+
+No second round: the fix reorders one line, as the triage proposed, so the code does what the reference already said. The mechanism, the rule and the data format are unchanged, and `37ec5a1` adds only a test.
+
+**Follow-ups:**
+
+- Still open from the design checkpoint: a trial-record field holding both agents' kept trigger lines, so a trigger can be audited after teardown. It needs its own ticket.
+- Left as the triage scoped it: a relative `../workspace/.claude/…` `Read` path, and an absolute one that starts with exactly two slashes (which `normpath` keeps as `//`), still do not count. Both are conservative misses.
+- Closed here: `just check` has run on `115ba26` and `37ec5a1` (above), and this record adds the review entry and ticks the boxes.
+- No finding was out of scope.
+
+**Residual risk:**
+
+- **The live-trials criterion is not met, so the ticket stays open.** The live trials run in ticket 18's RED run (the maintainer's Hand-off 1), with a hand read of the quiet cases' transcripts. Their run ids go here.
+- **The by-name trigger and quiet-case criteria are met offline only.** No test runs the real Codex CLI with a by-name prompt: Codex's trigger is shown from the recorded run. The runner-level test triggers through a scripted `Skill` call, and the expansion is shown end to end only in `test_claude_adapter.py`. No live trial has shown `skill_triggered` pass or a quiet case stay quiet.
+- **Quiet cases are a lower bound** (maintainer decision 2). A read through a pipe, `awk`, an interpreter, the `Grep` tool or a copy records no trigger, and a transforming `sed` such as `sed -n = SKILL.md` counts as one.
+- **Cowsay could move in a live run.** Its criterion is met offline. Claude Code now counts a confirmed `Read` or Bash read and keeps session persistence on in every trial, so cowsay's three `should_trigger: false` cases could change. ADR 0017's "cowsay's recorded results do not change" holds for the recorded files only.
+- **The agent can write the session file.** Its Bash tool could rewrite its own session file in the trial home. `eval-isolation.md` states this as a known limit.
+- **The persistence comparison covers one scenario**, a by-name run with a `Read`. The spike compared four.
+- **The `Read` rule is exact-path, the Bash rule is not.** The shared Bash rule names a skill in any skills directory, as on Codex.
+- **Linux is unrun.** Ubuntu CI has not run, because nothing was pushed. The parser tests' "any OS" rests on macOS, and Ubuntu CI is the first run of dash under the two adapter tests' `/bin/sh` stand-in scripts, of Codex's bwrap or Landlock sandbox on `.git`, of the on-disk case-clash test and of `GIT_ATTR_NOSYSTEM` on a non-Apple Git.
+- **Fixture trials, as in ticket 16:** deleted fixture files are not shown to the grader; cowsay's skill arm still shows `.claude/` in Claude Code's startup git status (a follow-up); and `git status --ignored`, `git ls-files --others` without `--exclude-standard` and `git clean -n -d -x` still list the skill.

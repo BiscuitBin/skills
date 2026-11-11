@@ -36,31 +36,31 @@ Follows from the above, not tried:
 
 ## Acceptance criteria
 
-- [ ] An eval case can name a fixture, and the schema rejects a name that does not resolve. The field's name and shape, and whether the deferred `files` field stays rejected, come from the design checkpoint.
-- [ ] A fixture trial's workspace starts with the fixture's state in both arms:
+- [x] An eval case can name a fixture, and the schema rejects a name that does not resolve. The field's name and shape, and whether the deferred `files` field stays rejected, come from the design checkpoint.
+- [x] A fixture trial's workspace starts with the fixture's state in both arms:
   - a `main` branch with at least one commit, and a second branch, checked out
   - optional commits on that branch ahead of `main`, staged edits, unstaged edits and untracked files, each of which a fixture can have or leave out. Ticket 22 needs a fixture with nothing ahead and a clean tree, and one with uncommitted edits only.
-- [ ] A fixture is built the same way every time: fixed author, committer and dates, so commit hashes do not change between trials, runs or machines. It needs no network and nothing outside the trial's `PATH`.
-- [ ] Whatever builds the fixture leaves nothing in the workspace but the fixture: no build script, no recipe file, no expected output.
-- [ ] The installed skill is invisible to Git in both arms. In a fresh fixture trial, `git status --porcelain` prints the same lines in the skill arm and the baseline arm, and they are only the fixture's own edits. Both arms are set up alike, so the setup itself does not tell the arms apart.
-- [ ] The inventory check accepts a fixture's files and still fails anything else the workspace should not hold. A test plants an unexpected file beside a fixture and sees it fail.
-- [ ] The grader is sent only the files the agent made or changed. A fixture file the agent left alone is not in the blinded material, and a test shows both halves.
-- [ ] The secret sweep and trial teardown still cover every file in the workspace, fixture files included.
-- [ ] A fixture edit is visible to the harness:
+- [x] A fixture is built the same way every time: fixed author, committer and dates, so commit hashes do not change between trials, runs or machines. It needs no network and nothing outside the trial's `PATH`.
+- [x] Whatever builds the fixture leaves nothing in the workspace but the fixture: no build script, no recipe file, no expected output.
+- [x] The installed skill is invisible to Git in both arms. In a fresh fixture trial, `git status --porcelain` prints the same lines in the skill arm and the baseline arm, and they are only the fixture's own edits. Both arms are set up alike, so the setup itself does not tell the arms apart.
+- [x] The inventory check accepts a fixture's files and still fails anything else the workspace should not hold. A test plants an unexpected file beside a fixture and sees it fail.
+- [x] The grader is sent only the files the agent made or changed. A fixture file the agent left alone is not in the blinded material, and a test shows both halves.
+- [x] The secret sweep and trial teardown still cover every file in the workspace, fixture files included.
+- [x] A fixture edit is visible to the harness:
   - `just eval-changed` selects the skill whose case names the fixture, and a test shows it.
   - Two benchmark runs made with different fixture contents cannot be recorded into one iteration as if their eval cases were equal. Either `evals_sha256` covers the fixtures a suite names, or the fixture's hash is recorded and compared beside it.
-- [ ] Cowsay is unaffected: `evals/cowsay/evals.json` is not edited, its trials still start in an empty workspace, and its recorded `evals_sha256` still matches.
-- [ ] One small neutral fixture ships with the ticket and is used by its tests:
+- [x] Cowsay is unaffected: `evals/cowsay/evals.json` is not edited, its trials still start in an empty workspace, and its recorded `evals_sha256` still matches.
+- [x] One small neutral fixture ships with the ticket and is used by its tests:
   - It holds no `skill` or `skills` wording, in file contents, paths, branch names or commit messages.
   - Nothing a failing command in it could print contains one of Codex's denial keywords listed above.
   - Anything it runs needs only `python3` and `git`.
-- [ ] Shown working without a paid run: a fixture trial reaches each adapter's agent with the fixture in place, using the pinned CLIs against the local fake API where the existing tests do, and the contamination check passes for both arms.
-- [ ] Docs and records:
+- [x] Shown working without a paid run: a fixture trial reaches each adapter's agent with the fixture in place, using the pinned CLIs against the local fake API where the existing tests do, and the contamination check passes for both arms.
+- [x] Docs and records:
   - ADR 0011 is updated, or a new ADR records where fixtures live and how they are built.
   - `docs/reference/evals.md` (case schema, isolation, grader material) and `docs/explanation/eval-isolation.md` describe a fixture trial.
   - The "Ticket 05" residual in `.scratch/foundation/follow-ups.md` says what is still deferred, if anything.
   - `GLOSSARY.md` gains **Fixture**.
-- [ ] `just check` passes.
+- [x] `just check` passes.
 
 ## Out of scope
 
@@ -121,7 +121,7 @@ No third round: the fixes add one reserved name, compare the reserved names igno
 
 **Maintainer decisions (2026-11-10):**
 
-- **Git views: the boundary is accepted.** This answers round 1's maintainer question. `git status --porcelain` (the ticket's test) and Claude Code's startup context hide the installed skill in both arms. `git ls-files --others` without `--exclude-standard`, `git status --ignored` and `git clean -n -x` still list `.claude/` or `.agents/` in the skill arm, as `ls -a` does. `docs/explanation/eval-isolation.md` documents this as a known limit.
+- **Git views: the boundary is accepted.** This answers round 1's maintainer question. `git status --porcelain` (the ticket's test) and Claude Code's startup context hide the installed skill in both arms. `git ls-files --others` without `--exclude-standard`, `git status --ignored` and `git clean -n -d -x` still list `.claude/` or `.agents/` in the skill arm, as `ls -a` does. `docs/explanation/eval-isolation.md` documents this as a known limit. (This said `git clean -n -x` until the implementation's probe showed that without `-d` it lists no directory, so it does not show the skill.)
 
 **Follow-ups:** none from the review. One comes from the design and goes in `.scratch/foundation/follow-ups.md`: cowsay's skill arm still shows `?? .claude/` in Claude Code's startup git context, because writing the exclude in every trial would change every cowsay trial.
 
@@ -133,3 +133,65 @@ No third round: the fixes add one reserved name, compare the reserved names igno
 - **Hiding the skill.** Every fixture trial, in both arms, gets a `.git/info/exclude` holding exactly `/.claude/` and `/.agents/`. Validation keeps it effective and the fixture neutral: no negation line in any tree's root `.gitignore`; no `.gitattributes` or symlink anywhere under a fixture directory; no path component equal, ignoring case, to `.claude`, `.agents`, `.codex`, `.git`, `.gitattributes`, `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md` or `SKILL.md`, and no directory ending in `skills`; no `skill` or `skills` wording and no Codex denial keyword anywhere; ASCII paths, unique ignoring case and not ignored by this repository; and a `branch` that is neither `main` nor `main/…`, ignoring case. Fixture trials also add `GIT_OPTIONAL_LOCKS=0`, `GIT_CONFIG_NOSYSTEM=1` and `GIT_CONFIG_GLOBAL=/dev/null` to the agent's environment. A flow that writes to Git (`git add`, `git commit`) cannot be scored on Codex, and the docs say so.
 - **Inventory and grader.** `inventory_problems` gains `expected`, a `{path: (sha256, mode)}` map built from the fixture definition, not from the workspace. The workspace must be exactly that map plus `.git` and the installed skill. A fixture trial also fails the preflight if `git status --porcelain --untracked-files=all`, run with `GIT_OPTIONAL_LOCKS=0`, names a path under `.claude/` or `.agents/`. `blinded_material` gets the same map and lists only new or changed files. Deleted fixture files are not shown to the grader, so `FRAMING` and `grader_prompt_sha256` do not change. With no fixture, the inventory check and the material are exactly today's.
 - **Shipped fixture and tooling.** `tests/fixtures/evals/git/small-tally/` has two `main` commits, one branch commit, a staged edit, an unstaged edit and an untracked file; a smaller fixture has nothing ahead and a clean tree. Fixture trees are excluded from ruff, mypy, pytest (`norecursedirs` adds `fixtures`), markdownlint, Prettier and the `check-executables-have-shebangs`, `check-shebang-scripts-are-executable` and `check-merge-conflict` hooks, by the regex `^(evals/[^/]+/fixtures|tests/fixtures/evals/git)/[^/]+/trees/` or the two globs above, and a test checks the wiring.
+
+### Implementation checkpoint
+
+#### What was built
+
+Commits `6a08917..4a295e8`, then the review fixes `9ab646d` and `bed4ae0`.
+
+- **Schema** (`cases.py`): a case may name `"fixture"`. A name that is not a slug, or has no directory, is a load error, and a nonempty `files` is rejected with a message that points to `fixture`.
+- **Fixtures** (`src/skills_tooling/evals/fixture.py`, new): `load_fixtures` validates every fixture directory by the design's rules, plus a ban on `__pycache__` (review finding 1). `build` writes the history with plumbing only, with Robin Hale's fixed identity and dates, no reflog and the exclude, and returns `{path: (sha256, git mode)}` for the files it wrote. Small-tally's HEAD is pinned at `c63fc294563293a6dbacf229d040cc4dafc59f58`.
+- **Runner** (`runner._attempt`): a fixture case builds its fixture first, in both arms, and adds four Git variables to the agent's environment. `workspace.git` takes a keyword-only `env`.
+- **Inventory** (`workspace.inventory_problems(expected=...)`, through `contamination.preflight`): the workspace must be exactly the built map plus `.git` and the installed skill, and a fixture trial fails if `git status --porcelain -z` names a path under `.claude/` or `.agents/`. `workspace.unchanged` is the one test of "as built", shared with the grader. A directory at a fixture path counts as changed (review finding 2).
+- **Grader** (`grader.blinded_material`, `grade(fixture_files=...)`): only new or changed files. A deleted fixture file is not shown, so `FRAMING` and `prompt_sha256` do not change.
+- **Hash** (`benchmark.evals_sha256`): with no `evals/<skill>/fixtures/` it is the `evals.json` digest alone, so cowsay's recorded value still matches. Otherwise it also covers `FIXTURE_FORMAT` and `tree_sha256` of the fixtures.
+- **Shipped fixtures and tooling:** `tests/fixtures/evals/git/small-tally` and `clean-branch`; a new root `.gitattributes` with the two `-text` lines; fixture trees kept out of ruff, mypy, pytest, markdownlint, Prettier and three pre-commit hooks.
+- **Tests:** `test_cases.py`, `test_fixture.py` (new), `test_workspace.py`, `test_grader.py`, `test_benchmark.py`, `test_dispatch.py` and `test_repo_config.py` (new), plus the pinned CLIs against the fake APIs in `test_runner.py` and `test_trials_and_baselines.py` (Claude Code: the same git status and startup git context in both arms) and `test_codex_adapter.py` (Codex: Git reads not denied, a `git add` denied).
+- **Docs and records:** `docs/reference/evals.md` (**Fixtures**, Isolation, Grader, Provenance, History), `docs/explanation/eval-isolation.md` (**Fixture trials** and three known limits), ADR 0011, `GLOSSARY.md` **Fixture**, and in `.scratch/foundation/follow-ups.md` the rewritten Ticket 05 residual and a new Ticket 16 entry.
+- **Departures from the approved design:**
+  - Four agent Git variables, not three. `GIT_ATTR_NOSYSTEM=1` joins them, because Apple Git 2.50.1 reads the system gitattributes even with `GIT_CONFIG_NOSYSTEM=1`. `workspace.GIT_ENV` has it too (`51fb829`), which leaves cowsay trials unchanged.
+  - The repository ignore check runs only when the root is its own Git top level. A copy of `evals/` outside any repository skips it.
+  - A branch must pass both `git check-ref-format --branch` and the `refs/heads/` form, and a commit message may not start or end with whitespace.
+  - `commits` and `executable` may be left out, and default to `[]`.
+  - The accepted Git views boundary names `git clean -n -d -x`, not `git clean -n -x` (see Maintainer decisions).
+
+#### Checks run
+
+- `just check` on `37ec5a1` (this branch, with ticket 17 and both tickets' review fixes): passed, exit 0. pytest: 1195 passed, 4 skipped. The skips are the two runs of the on-disk case-clash test, because macOS folds case, and the two CI-only canaries. Lint, mypy (58 files), the distribution check, `validate-skills` (2 skills, 0 errors), `validate-evals` (1 suite valid) and the version check (Claude Code 2.1.309, Codex 0.163.0) passed. Log: `ai_tmp/gate-16-17.log`.
+- Before the review, `just check` passed on `4a295e8`: 1084 passed, 4 skipped (`ai_tmp/verify-16-check.log`). Each criterion was checked against the code and the tests that pin it (`ai_tmp/impl-16-progress.md`, **Verify**).
+- Each review fix was red first: the five new `__pycache__` cases loaded, and the new `now-a-dir` case raised `IsADirectoryError`.
+- Not run: Ubuntu CI, because nothing was pushed, so the two canaries and the case-clash test have not run. No live eval, which this ticket does not need.
+
+#### Cross-model review
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`)
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `6a08917..4a295e8`
+- **Findings:** `ai_tmp/review-20261111T103027Z-codex.md` · **Triage:** `ai_tmp/triage-impl-16.md`
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium (triage: low) | A file under `__pycache__` in a fixture is built into the workspace but left out of `evals_sha256`, so two fixtures that differ only there share an iteration. A nested `!__pycache__/` negation, or a root outside any repository, gets it past the ignore check | valid: it needs a deliberate negation, or a root that is not a repository top level | fixed in `9ab646d`: `_walk` in `fixture.py` refuses any file under the fixture directory with a `__pycache__` path part, compared as `tree_sha256` compares it, whether or not the ignore check runs. That is wider than the triage's `_tree_path`, which never sees the tree name and would miss `trees/__pycache__/a.txt`. `docs/reference/evals.md` gains the rule. Five cases in `test_cases.py` loaded before the fix, the nested negation among them |
+| 2 | low | `unchanged` raises `IsADirectoryError` when a directory replaces a fixture file, so the preflight records a harness error instead of `changed in workspace`, and the descriptor leaks | valid: the preflight cannot reach it today, and the trial fails closed either way | fixed in `bed4ae0`: `fstat` on the raw descriptor before wrapping it with `closefd=False`, and one `os.close` in a `finally`. A `now-a-dir` case in `test_workspace.py` raised before the fix |
+
+No second round: neither fix changes a mechanism, a rule set in substance or a data format. Fix 1 adds one load-time refusal, for a path no committed fixture can hold, and fix 2 moves the mode check in `unchanged` ahead of the wrap. The hash, the build, the map and the existing messages are unchanged.
+
+**Follow-ups:**
+
+- The descriptor close in `unchanged` has no test of its own. A fix that only caught `OSError` around `fdopen` would also pass the `now-a-dir` case.
+- The nested-negation test asserts an exact problem list that depends on how Git re-includes ignored paths, seen only with Apple Git 2.50.1. Ubuntu CI is its first Linux run, and the `now-a-dir` case's.
+- Closed here: the design and the Maintainer decisions now say `git clean -n -d -x`, as the docs do. The progress note's claim that the repository ignore check rejects `__pycache__` is superseded by finding 1's rule, as the note says. `just check` has run on the fix commits (above).
+- No finding was out of scope.
+
+**Residual risk:**
+
+- **Linux is unrun.** Ubuntu CI has not run, because nothing was pushed. It is the first run of dash, Codex's bwrap or Landlock sandbox on `.git` (the `git add` denial, and the four variables reaching its commands), the on-disk case-clash test, and `GIT_ATTR_NOSYSTEM` on a non-Apple Git.
+- **Deleted fixture files are not shown to the grader.** A case that judges a deletion needs a `needs_transcript` expectation.
+- **Cowsay's skill arm still shows `?? .claude/`** in Claude Code's startup git status, as before this ticket. The follow-up is in `.scratch/foundation/follow-ups.md`.
+- **The Git views boundary.** `git status --ignored`, `git ls-files --others` without `--exclude-standard` and `git clean -n -d -x` still list the skill in the skill arm, as `ls -a` does.
+- **The secret-sweep criterion is met by inspection.** The sweep and teardown are unchanged code, and no test plants a secret in a fixture file.
+- **A Git write cannot be scored on Codex.** `git add` in a fixture trial is denied and the trial is `infra_error`, observed on macOS only.
+- **The four variables were seen reaching Codex's commands only.** For Claude Code, the check is the environment the CLI starts with and its startup git context, not a Bash command's environment.
+- **The wording check reads UTF-8.** `skill` wording in a UTF-16 file would pass validation.
+- **Stray files.** A file directly in `evals/<skill>/fixtures/`, such as a Finder `.DS_Store`, or an empty fixtures directory, changes `evals_sha256` locally but not in a clean checkout. Runs then refuse to share an iteration; they never wrongly share one.
