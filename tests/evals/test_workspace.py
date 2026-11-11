@@ -14,13 +14,17 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from skills_tooling.evals import results, workspace
+from skills_tooling.evals import fixture, results, workspace
 from skills_tooling.evals.adapter import PythonCall
 from skills_tooling.evals.claude_code import ClaudeCode
+from skills_tooling.evals.codex import Codex, pinned_executable
+from tests.evals.test_fixture import FIRST, load
 from tests.evals.test_runner import TOKEN, fake_root
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
+
+    from skills_tooling.evals.adapter import Adapter, TrialPaths
 
 ROOT = Path(__file__).parents[2]
 # The real command with run_suite replaced by one trial, so nothing but the agent is faked.
@@ -252,6 +256,126 @@ def test_baseline_inventory_is_only_git(tmp_path: Path) -> None:
     assert workspace.inventory_problems(trial.workspace, ".claude/skills", None) == [
         "unexpected in workspace: .claude"
     ]
+
+
+CLAUDE = ClaudeCode(ROOT / "node_modules/.bin/claude")
+
+
+def fixture_trial(
+    tmp_path: Path, change: Callable[[Path], object] | None = None
+) -> tuple[TrialPaths, workspace.FixtureFiles]:
+    """A trial with small-tally built in, and the working directory the build wrote."""
+    trial = workspace.create_trial(tmp_path / "trials", "run", "case")
+    return trial, fixture.build(load(tmp_path, "small-tally", change), trial)
+
+
+def with_docs(directory: Path) -> None:
+    """Give small-tally's working directory a subdirectory."""
+    (directory / "trees/average-wip/docs").mkdir()
+    (directory / "trees/average-wip/docs/usage.txt").write_text("tally numbers.txt\n")
+
+
+@pytest.mark.parametrize(
+    "adapter", [CLAUDE, Codex(pinned_executable(ROOT)), None], ids=["claude", "codex", "baseline"]
+)
+def test_a_fixture_passes_the_inventory_with_the_skill_installed_or_not(
+    tmp_path: Path, adapter: Adapter | None
+) -> None:
+    trial, files = fixture_trial(tmp_path, with_docs)
+    skill = None
+    if adapter is not None:
+        adapter.install_skill(ROOT / "skills/cowsay", trial.workspace)
+        skill = "cowsay"
+    skills_dir = adapter.skills_dir if adapter is not None else ".claude/skills"
+    assert workspace.inventory_problems(trial.workspace, skills_dir, skill, files) == []
+
+
+def test_a_file_planted_beside_a_fixture_fails_the_inventory(tmp_path: Path) -> None:
+    trial, files = fixture_trial(tmp_path, with_docs)
+    (trial.workspace / "expected.txt").write_text("the expected output\n")
+    (trial.workspace / "docs/answer.txt").write_text("the expected output\n")
+    (trial.workspace / "empty").mkdir()
+    assert workspace.inventory_problems(trial.workspace, ".claude/skills", None, files) == [
+        "unexpected in workspace: docs/answer.txt",
+        "unexpected in workspace: empty",
+        "unexpected in workspace: expected.txt",
+    ]
+
+
+def replace_with_link(path: Path) -> None:
+    """The same bytes, moved out of the workspace and linked back in."""
+    outside = path.parents[1] / path.name
+    path.rename(outside)
+    path.symlink_to(outside)
+
+
+@pytest.mark.parametrize(
+    ("change", "problem"),
+    [
+        (lambda ws: (ws / "tally.py").write_text("print(0)\n"), "changed in workspace: tally.py"),
+        (lambda ws: (ws / "README.md").chmod(0o755), "changed in workspace: README.md"),
+        (lambda ws: (ws / "tally.py").chmod(0o644), "changed in workspace: tally.py"),
+        (lambda ws: (ws / "notes.txt").unlink(), "missing from workspace: notes.txt"),
+        (lambda ws: replace_with_link(ws / "numbers.txt"), "changed in workspace: numbers.txt"),
+    ],
+    ids=["bytes", "made-executable", "made-not-executable", "deleted", "now-a-link"],
+)
+def test_a_changed_or_missing_fixture_file_fails_the_inventory(
+    tmp_path: Path, change: Callable[[Path], object], problem: str
+) -> None:
+    trial, files = fixture_trial(tmp_path)
+    try:
+        change(trial.workspace)
+        found = workspace.inventory_problems(trial.workspace, ".claude/skills", None, files)
+    finally:
+        for name, mode in (("README.md", 0o644), ("tally.py", 0o755)):
+            (trial.workspace / name).chmod(mode)
+    assert found == [problem]
+
+
+@pytest.mark.parametrize(
+    "adapter", [CLAUDE, Codex(pinned_executable(ROOT))], ids=["claude", "codex"]
+)
+def test_a_fixture_trial_whose_skill_shows_in_git_status_fails_the_preflight(
+    tmp_path: Path, adapter: Adapter
+) -> None:
+    trial, files = fixture_trial(tmp_path)
+    adapter.install_skill(ROOT / "skills/cowsay", trial.workspace)
+    (trial.workspace / ".git/info/exclude").write_text("")
+    [problem] = workspace.inventory_problems(trial.workspace, adapter.skills_dir, "cowsay", files)
+    assert problem.startswith(
+        "git status lists paths under .claude/ or .agents/, which must be hidden: "
+        f"?? {adapter.skills_dir}/cowsay/"
+    )
+
+
+def test_the_git_status_check_leaves_the_index_as_the_build_left_it(tmp_path: Path) -> None:
+    trial, files = fixture_trial(tmp_path)
+    CLAUDE.install_skill(ROOT / "skills/cowsay", trial.workspace)
+    (trial.workspace / ".git/info/exclude").write_text("")
+    # The same bytes with a new mtime: a git status free to take the index lock
+    # would refresh the entry and write the index.
+    os.utime(trial.workspace / "README.md", (FIRST + 60, FIRST + 60))
+    index = trial.workspace / ".git/index"
+    before = index.read_bytes(), index.stat().st_mtime_ns
+    assert workspace.inventory_problems(trial.workspace, ".claude/skills", "cowsay", files)
+    assert (index.read_bytes(), index.stat().st_mtime_ns) == before
+
+
+def test_a_git_status_that_fails_fails_the_preflight(tmp_path: Path) -> None:
+    trial, files = fixture_trial(tmp_path)
+    (trial.workspace / ".git/index").write_bytes(b"not an index")
+    [problem] = workspace.inventory_problems(trial.workspace, ".claude/skills", None, files)
+    assert problem.startswith("git status failed in the workspace: ")
+
+
+def test_without_a_fixture_the_skill_shows_in_git_status_and_passes_as_today(
+    tmp_path: Path,
+) -> None:
+    trial = workspace.create_trial(tmp_path, "run", "case")
+    CLAUDE.install_skill(ROOT / "skills/cowsay", trial.workspace)
+    assert workspace.git("status", "--porcelain", cwd=trial.workspace).stdout == "?? .claude/\n"
+    assert workspace.inventory_problems(trial.workspace, ".claude/skills", "cowsay") == []
 
 
 def test_normal_exit_ends_background_descendants(tmp_path: Path) -> None:

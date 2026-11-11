@@ -1,5 +1,6 @@
 """Building a git fixture into a trial's workspace: the same commits every time, in both arms."""
 
+import hashlib
 import json
 import shutil
 import stat
@@ -198,6 +199,25 @@ def test_an_unedited_crlf_file_is_clean_and_stored_byte_for_byte(tmp_path: Path)
     trial = built(tmp_path, load(tmp_path, "clean-branch", add_crlf))
     assert agent_git(trial, "status", "--porcelain") == b""
     assert agent_git(trial, "cat-file", "blob", "HEAD:windows.txt") == crlf
+
+
+def test_the_build_returns_the_working_directory_it_wrote_from_the_fixture(
+    tmp_path: Path,
+) -> None:
+    loaded = load(tmp_path, "small-tally")
+    trial = workspace.create_trial(tmp_path / "trials", "run", "case")
+    files = fixture.build(loaded, trial)
+    tree = GIT_FIXTURES / "small-tally/trees/average-wip"
+    assert files == {
+        name: (hashlib.sha256((tree / name).read_bytes()).hexdigest(), mode)
+        for name, mode in [
+            ("README.md", 0o100644),
+            ("notes.txt", 0o100644),
+            ("numbers.txt", 0o100644),
+            ("tally.py", 0o100755),
+            ("test_tally.py", 0o100644),
+        ]
+    }
 
 
 def test_a_repository_that_is_not_sha1_is_refused(tmp_path: Path) -> None:

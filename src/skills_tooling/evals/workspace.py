@@ -4,6 +4,7 @@ See docs/explanation/eval-isolation.md for what this isolates and what it does n
 """
 
 import contextlib
+import hashlib
 import os
 import shlex
 import shutil
@@ -13,7 +14,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from skills_tooling.evals.adapter import PythonCall, TrialPaths
@@ -21,6 +22,10 @@ from skills_tooling.evals.adapter import PythonCall, TrialPaths
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
     from types import FrameType
+
+# A fixture's working directory as the build wrote it: {path: (sha256, git mode)}.
+# A regular file's st_mode is its git mode, 0o100644 or 0o100755.
+type FixtureFiles = Mapping[str, tuple[str, int]]
 
 GRACE_SECONDS = 2.0
 # Signals that end a run. SIGKILL cannot be caught; that limit is documented.
@@ -37,6 +42,9 @@ GIT_ENV = {
     "GIT_COMMITTER_EMAIL": "eval@example.invalid",
 }
 SYSTEM_PATH = "/usr/bin:/bin"
+# The top directories either adapter installs a skill under, which a fixture
+# trial's .git/info/exclude hides from git.
+HIDDEN_PARTS = {(".claude",), (".agents",)}
 RECORD_END = "\x1e"
 FIELD_END = "\x1f"
 
@@ -292,13 +300,43 @@ def isolation_problems(trial: TrialPaths, repo_root: Path) -> list[str]:
     return problems
 
 
-def inventory_problems(workspace: Path, skills_dir: str, skill: str | None) -> list[str]:
-    """The workspace may hold its .git and the installed skill, and nothing else.
+def unchanged(path: Path, expected: tuple[str, int] | None) -> bool:
+    """Whether path is still the fixture file expected: its bytes and mode, and not a link.
+
+    A file that cannot be opened counts as changed. A link is never followed,
+    and anything but a regular file fails the mode before a byte is read.
+    """
+    if expected is None:
+        return False
+    sha256, mode = expected
+    try:
+        # O_NONBLOCK: a pipe opens at once, and then fails the mode.
+        opened = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return False
+    with os.fdopen(opened, "rb") as file:
+        if os.fstat(file.fileno()).st_mode != mode:
+            return False
+        try:
+            return hashlib.file_digest(file, "sha256").hexdigest() == sha256
+        except OSError:
+            return False
+
+
+def inventory_problems(
+    workspace: Path, skills_dir: str, skill: str | None, expected: FixtureFiles | None = None
+) -> list[str]:
+    """The workspace may hold its .git, the installed skill and the fixture as built, nothing else.
 
     Anything more could carry expected outputs, other cases, or a nested skills
-    directory the agent would discover mid-run.
+    directory the agent would discover mid-run. With a fixture, every file the
+    build wrote must still be there with its bytes and mode.
     """
     allowed = [*Path(skills_dir).parts, skill] if skill is not None else []
+    files = expected or {}
+    # The directories that hold a fixture file, which the walk enters.
+    holding = {str(parent) for path in files for parent in PurePosixPath(path).parents}
+    seen: set[str] = set()
     problems: list[str] = []
 
     def walk(directory: Path, remaining: list[str]) -> None:
@@ -309,10 +347,55 @@ def inventory_problems(workspace: Path, skills_dir: str, skill: str | None) -> l
                 if len(remaining) > 1:
                     walk(entry, remaining[1:])
                 continue
-            problems.append(f"unexpected in workspace: {entry.relative_to(workspace)}")
+            relative = entry.relative_to(workspace).as_posix()
+            if relative in files:
+                seen.add(relative)
+                if not unchanged(entry, files[relative]):
+                    problems.append(f"changed in workspace: {relative}")
+            elif relative in holding and not entry.is_symlink() and entry.is_dir():
+                walk(entry, [])
+            else:
+                problems.append(f"unexpected in workspace: {relative}")
 
     walk(workspace, allowed)
+    problems += [f"missing from workspace: {path}" for path in sorted(files.keys() - seen)]
+    if expected is not None:
+        problems += _status_problems(workspace)
     return problems
+
+
+def _status_problems(workspace: Path) -> list[str]:
+    """Whether git status lists the installed skill, which a fixture's .git/info/exclude hides.
+
+    A fixture trial's agent sees git status, and Claude Code puts it in its
+    system prompt, so a skill listed there names the arm. Not run without a
+    fixture: an empty workspace has no exclude, and lists `?? .claude/` today.
+    """
+    # No optional lock, so the check leaves the index as the build left it, in both arms.
+    status = git(
+        "status",
+        "--porcelain",
+        "-z",
+        "--untracked-files=all",
+        cwd=workspace,
+        env={"GIT_OPTIONAL_LOCKS": "0"},
+    )
+    if status.returncode != 0:
+        return [f"git status failed in the workspace: {status.stderr.strip()}"]
+    # -z: each entry is "XY <path>", unquoted, and a rename or copy's source follows it.
+    entries = iter(status.stdout.split("\0"))
+    listed = []
+    for entry in entries:
+        named = [entry[3:]]
+        if {"R", "C"} & set(entry[:2]):
+            named.append(next(entries, ""))
+        if any(PurePosixPath(path).parts[:1] in HIDDEN_PARTS for path in named if path):
+            listed.append(entry)
+    if not listed:
+        return []
+    more = f" and {len(listed) - 1} more" if len(listed) > 1 else ""
+    shown = f"{listed[0]}{more}"
+    return [f"git status lists paths under .claude/ or .agents/, which must be hidden: {shown}"]
 
 
 def child_path(trial: TrialPaths) -> str:

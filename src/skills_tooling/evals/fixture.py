@@ -5,6 +5,7 @@ branch, index and working directory, and one full snapshot of the project per
 tree under trees/<tree>/. The schema is in docs/reference/evals.md.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -433,12 +434,14 @@ def _write_tree(fixture: Fixture, tree: str, trial: TrialPaths) -> str:
         index.unlink(missing_ok=True)
 
 
-def build(fixture: Fixture, trial: TrialPaths) -> None:
+def build(fixture: Fixture, trial: TrialPaths) -> workspace.FixtureFiles:
     """Give a fresh trial workspace the fixture's history, index and working directory.
 
     Plumbing only, with a fixed identity and dates, so a fixture's commits are
     the same in every trial, run and machine. Nothing but the fixture's files
     and .git is written to the workspace, and nothing is left in trial.tmp.
+    Returns the working directory as written, from the fixture's own bytes:
+    the preflight and the grader compare the workspace with it.
     """
     work = trial.workspace
     object_format = _git(work, "rev-parse", "--show-object-format")
@@ -464,14 +467,18 @@ def build(fixture: Fixture, trial: TrialPaths) -> None:
     _git(work, *NO_REFLOG, "update-ref", f"refs/heads/{fixture.branch}", tips[-1])
     _git(work, *NO_REFLOG, "symbolic-ref", "HEAD", f"refs/heads/{fixture.branch}")
     _git(work, "read-tree", tree_id(fixture.index_tree))
+    written: dict[str, tuple[str, int]] = {}
     for path, source in fixture.files(fixture.working_tree).items():
         target = work / path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(source.read_bytes())
+        data = source.read_bytes()
+        target.write_bytes(data)
         target.chmod(fixture.mode(path) & 0o777)
         os.utime(target, (FIRST_COMMIT, FIRST_COMMIT))
+        written[path] = (hashlib.sha256(data).hexdigest(), fixture.mode(path))
     # The index takes each file's stat data now, so a later `git status` has
     # nothing to write. -q: a file that differs from the index is not an error.
     _git(work, "update-index", "-q", "--refresh")
     (work / ".git/info").mkdir(exist_ok=True)
     (work / ".git/info/exclude").write_text(EXCLUDE)
+    return written
