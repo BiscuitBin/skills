@@ -55,7 +55,7 @@ Each was confirmed against the code and marked out of scope: real, but nothing i
 - **Ticket 01:** `review.py` does not snapshot `.git/hooks` or `.git/config` (L12). An `other` implementer with an unrecognised model goes to Codex first, and the third-family allow-list is a heuristic. `codex exec` blocks on an open stdin, so a hand run needs `</dev/null`.
 - **Ticket 03:** Codex icon resources are not validated. Unicode rendering is not terminal-cell aware.
 - **Ticket 04:** A new shipped skill's inventory and Claude's `agents/*.md` convention need care in future authoring.
-- **Ticket 05:** Input-file staging stays deferred, and the schema rejects it.
+- **Ticket 05:** Input files are staged as git fixtures since ticket 16: a case names one with `fixture`, and `files` is accepted only as `[]`. Still deferred: a remote, or any GitHub state, in a fixture (ticket 23), and showing the grader a fixture file the agent deleted, which needs a new line in the grader prompt and so a new `grader_prompt_sha256`.
 - **Tickets 06 and 11:** `review.py` treats Codex's first-run home setup as a worktree change, so the first review in a fresh worktree can exit 4. It did not recur in ticket 12's worktree, where Codex was already logged in and had run.
 - **Ticket 06:** A masked read of a canary skill shows only through Codex's event. A read with `2>&1` is not counted by the text rule.
 - **Ticket 06, new in ticket 12:** `sed -n 1p README.md skills/cowsay/SKILL.md` exits 0 and prints only the first file's line, yet still counts as a read of the skill, because output from a multi-file read cannot be attributed.
@@ -65,3 +65,4 @@ Each was confirmed against the code and marked out of scope: real, but nothing i
 - **Ticket 09:** Compute pooled values once, and share the matrix and history formatting.
 - **Ticket 11:** Claude Code's docs advise against setting `version` in both manifests. The repo does so on purpose (ADR 0010).
 - **Ticket 13:** Unplaced reads pair by printed name and must open with the frontmatter. Codex's denial test is a keyword heuristic. Reads that fail `outcome_is_the_read` no longer trigger through the event.
+- **Ticket 16:** Cowsay's skill arm still shows `?? .claude/` in Claude Code's startup Git context, and its baseline arm does not. Only a fixture trial gets the `.git/info/exclude` that hides the installed skill, and the preflight's `git status` check. Giving every trial both would close this arm difference, which predates ticket 16, but it changes what every cowsay trial's agent sees, and no report label would mark that change.
