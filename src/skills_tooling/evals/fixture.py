@@ -307,14 +307,15 @@ def _walk(directory: Path, where: str, problems: list[str]) -> dict[str, dict[st
 
 
 def _ignored(root: Path, directory: Path, where: str) -> list[str]:
-    """Files the repository ignores, which are on the author's disk but in no checkout.
+    """Files Git ignores, which are on the author's disk but in no checkout.
 
-    Only when root is a repository's top level. Anywhere else, such as a test's
-    temporary root inside this repository's ignored .tools/, no repository holds
-    the suite, so no file of it is left out of a checkout.
+    The repository's ignore files and the author's global one both keep a file
+    out of the author's commits. Only when root is a repository's top level.
+    Anywhere else, such as a test's temporary root inside this repository's
+    ignored .tools/, no repository holds the suite, so no file of it is left
+    out of a checkout.
     """
-    toplevel = workspace.git("rev-parse", "--show-toplevel", cwd=root)
-    if toplevel.returncode != 0 or Path(toplevel.stdout.strip()).resolve() != root.resolve():
+    if not workspace.is_toplevel(root):
         return []
     paths = sorted(
         path.relative_to(root).as_posix()
@@ -323,11 +324,13 @@ def _ignored(root: Path, directory: Path, where: str) -> list[str]:
     )
     if not paths:
         return []
-    checked = workspace.git("check-ignore", "--no-index", "--", *paths, cwd=root)
+    checked = workspace.git(
+        *workspace.global_excludes(), "check-ignore", "--no-index", "--", *paths, cwd=root
+    )
     if checked.returncode not in (0, 1):
         return [f"{where}: git check-ignore failed: {checked.stderr.strip()}"]
     return [
-        f"{where}: {path.removeprefix(where + '/')}: the repository ignores it, "
+        f"{where}: {path.removeprefix(where + '/')}: Git ignores it, "
         "so a checkout would not have it"
         for path in checked.stdout.splitlines()
     ]

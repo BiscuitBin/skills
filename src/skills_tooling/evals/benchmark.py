@@ -5,17 +5,15 @@ references. Every exclusion is counted and shown, never folded in as a 0.
 """
 
 import hashlib
-import os
 import statistics
-import subprocess
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeIs
 
 from skills_tooling.evals import fixture, workspace
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
+    from pathlib import Path
 
 # Below this many values a sample stddev is undefined, so it is null, never 0.
 MIN_STDDEV_N = 2
@@ -521,35 +519,15 @@ def git_state(root: Path) -> dict[str, Any]:
     A root inside some other repository, such as a copy under a dotfiles
     checkout, would otherwise record that repository's commit.
     """
-    toplevel = workspace.git("rev-parse", "--show-toplevel", cwd=root)
-    if toplevel.returncode != 0 or Path(toplevel.stdout.strip()).resolve() != root.resolve():
+    if not workspace.is_toplevel(root):
         return {"git_commit": None, "git_dirty": None}
     head = workspace.git("rev-parse", "HEAD", cwd=root)
-    excludes = _global_excludes()
-    ignore = ("-c", f"core.excludesFile={excludes}") if excludes is not None else ()
-    status = workspace.git(*ignore, "status", "--porcelain", cwd=root)
+    # Without the user's global ignore file, a file only it ignores would make the tree dirty.
+    status = workspace.git(*workspace.global_excludes(), "status", "--porcelain", cwd=root)
     return {
         "git_commit": head.stdout.strip() if head.returncode == 0 else None,
         "git_dirty": bool(status.stdout.strip()) if status.returncode == 0 else None,
     }
-
-
-def _global_excludes() -> Path | None:
-    """The user's global ignore file, which the harness's isolated git calls never read.
-
-    Without it, a file only the user's own git ignores would make the tree dirty.
-    """
-    configured = subprocess.run(
-        ["git", "config", "--global", "--path", "core.excludesFile"],  # noqa: S607 -- as workspace.git
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if found := configured.stdout.strip():
-        path = Path(found)
-    else:
-        path = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "git/ignore"
-    return path if path.is_file() else None
 
 
 def evals_sha256(root: Path, skill: str) -> str:

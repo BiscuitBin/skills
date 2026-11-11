@@ -886,7 +886,32 @@ def git_root(root: Path) -> Path:
 def test_a_path_the_repository_ignores_is_rejected(tmp_path: Path, path: str) -> None:
     root = git_root(tmp_path / "repo")
     problems = fixture_problems(root, lambda d: plant(d / path))
-    expected = f"fixtures/f: {path}: the repository ignores it, so a checkout would not have it"
+    expected = f"fixtures/f: {path}: Git ignores it, so a checkout would not have it"
+    assert any(expected in problem for problem in problems), problems
+
+
+@pytest.mark.parametrize("configured", [False, True], ids=["xdg", "core-excludesfile"])
+def test_a_path_the_authors_global_ignore_file_ignores_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, configured: bool
+) -> None:
+    # The harness's own git calls skip the author's config, but the author's own
+    # git leaves the file out of every commit, so no checkout would have it.
+    root = git_root(tmp_path / "repo")
+    config = tmp_path / "gitconfig"
+    if configured:
+        ignore = tmp_path / "my-ignore"
+        config.write_text(f"[core]\n\texcludesFile = {ignore}\n")
+    else:
+        ignore = tmp_path / "xdg/git/ignore"
+        ignore.parent.mkdir(parents=True)
+        config.write_text("")
+    ignore.write_text("local.json\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    problems = fixture_problems(root, in_tree("local.json"))
+    expected = (
+        "fixtures/f: trees/start/local.json: Git ignores it, so a checkout would not have it"
+    )
     assert any(expected in problem for problem in problems), problems
 
 

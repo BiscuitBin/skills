@@ -65,6 +65,31 @@ def git(
     )
 
 
+def is_toplevel(root: Path) -> bool:
+    """Whether root is a repository's top level, not a directory inside some other repository."""
+    toplevel = git("rev-parse", "--show-toplevel", cwd=root)
+    return toplevel.returncode == 0 and Path(toplevel.stdout.strip()).resolve() == root.resolve()
+
+
+def global_excludes() -> tuple[str, ...]:
+    """Options that make git() read the user's global ignore file; none if there is none.
+
+    git() reads no user config, but the user's own git leaves out what that file
+    ignores: such a file is in no commit and no checkout, and is not a change.
+    """
+    configured = subprocess.run(
+        ["git", "config", "--global", "--path", "core.excludesFile"],  # noqa: S607 -- as git()
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if found := configured.stdout.strip():
+        path = Path(found)
+    else:
+        path = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "git/ignore"
+    return ("-c", f"core.excludesFile={path}") if path.is_file() else ()
+
+
 def create_trial(base: Path, run_id: str, case_id: str) -> TrialPaths:
     """Create <base>/<run-id>/<case-id>/ with a fresh git workspace and empty homes."""
     root = (base / run_id / case_id).resolve()
