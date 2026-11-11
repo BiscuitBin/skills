@@ -237,6 +237,8 @@ No second round: the only frozen change rewords one clause of E2 and keeps its s
 5. **ADR 0008.** It says everything in the repository is under `LICENSE`. With an upstream notice beside a skill, does it need a sentence? The decision left this to the design review, which did not raise it. Not blocking; settle before `NOTICE.md` lands at GREEN.
 6. **Overrides.** Any implementer decision above. Two rest on a reading of this ticket: Matt Pocock's notice ships with ticket 19, though "each upstream's" notice can be read as all three at 18; and this repository's own notice stays out of `NOTICE.md`.
 
+#### Design as approved
+
 **Design as approved:** `ai_tmp/design-18.md` (gitignored), as reviewed at this checkpoint, with the fixes above. The implementer decisions in it still await the maintainer at Hand-off 1. These bullets carry what exists only in that file:
 
 - **Freeze.** `evals_sha256` covers `evals.json` and the fixture directory. The rubric does not change from the RED run to GREEN, so any change (P4, an E4 clause, E3's wording) lands before RED, after `just format` and `just validate-evals`. RED runs from `216a3c7` or later.
