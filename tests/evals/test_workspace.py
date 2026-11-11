@@ -310,6 +310,11 @@ def replace_with_link(path: Path) -> None:
     path.symlink_to(outside)
 
 
+def replace_with_directory(path: Path) -> None:
+    path.unlink()
+    path.mkdir()
+
+
 @pytest.mark.parametrize(
     ("change", "problem"),
     [
@@ -318,8 +323,9 @@ def replace_with_link(path: Path) -> None:
         (lambda ws: (ws / "tally.py").chmod(0o644), "changed in workspace: tally.py"),
         (lambda ws: (ws / "notes.txt").unlink(), "missing from workspace: notes.txt"),
         (lambda ws: replace_with_link(ws / "numbers.txt"), "changed in workspace: numbers.txt"),
+        (lambda ws: replace_with_directory(ws / "notes.txt"), "changed in workspace: notes.txt"),
     ],
-    ids=["bytes", "made-executable", "made-not-executable", "deleted", "now-a-link"],
+    ids=["bytes", "made-executable", "made-not-executable", "deleted", "now-a-link", "now-a-dir"],
 )
 def test_a_changed_or_missing_fixture_file_fails_the_inventory(
     tmp_path: Path, change: Callable[[Path], object], problem: str

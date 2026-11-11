@@ -316,13 +316,16 @@ def unchanged(path: Path, expected: tuple[str, int] | None) -> bool:
         opened = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
         return False
-    with os.fdopen(opened, "rb") as file:
-        if os.fstat(file.fileno()).st_mode != mode:
+    try:
+        # On the raw descriptor: a directory opens, but cannot be wrapped as a file.
+        if os.fstat(opened).st_mode != mode:
             return False
-        try:
+        with os.fdopen(opened, "rb", closefd=False) as file:
             return hashlib.file_digest(file, "sha256").hexdigest() == sha256
-        except OSError:
-            return False
+    except OSError:
+        return False
+    finally:
+        os.close(opened)
 
 
 def inventory_problems(
