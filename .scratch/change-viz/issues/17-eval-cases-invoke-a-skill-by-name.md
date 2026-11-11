@@ -72,3 +72,26 @@ Use the `cross-model-review` dev skill.
 
 - **Design checkpoint:** after the spike and before building, write up the spike's answers, the schema field, how each adapter builds the skill arm's prompt, and the trigger evidence on each agent, and get them reviewed. Can a trial pass `skill_triggered` without the skill's text reaching the model? Can the prefix reach the baseline arm or the grader?
 - **Implementation checkpoint:** before marking done, review the full diff against these acceptance criteria. Pay particular attention to triggers that rest on the prompt text alone, to anything that tells the grader which arm it is reading, and to cowsay's results changing.
+
+## Spike answers
+
+Run on 2026-11-10 against the pinned Claude Code 2.1.309 and Codex 0.163.0, through the adapters, against the local fake APIs (`tests/evals/fake_anthropic.py`, `fake_openai.py`). The throwaway skill set `disable-model-invocation: true` in `SKILL.md` and `policy.allow_implicit_invocation: false` in `agents/openai.yaml`, and had a `.claude-plugin/plugin.json`, as `just new-skill` writes. The recordings become the `fake-by-name*` fixtures under `tests/fixtures/evals/{claude,codex}/` when step 4's parser tests land; until then they are in `ai_tmp/spike-17/` (gitignored). **The stop condition is not met:** both CLIs load a by-name-only skill headlessly.
+
+**Claude Code.**
+
+- **`claude -p "/<name> <request>"` loads the skill**, with no plugin prefix. The first request's first user message holds two text blocks: `<command-message><name></command-message>` `<command-name>/<name></command-name>` `<command-args><request></command-args>`, then `Base directory for this skill: <workspace>/.claude/skills/<name>`, the `SKILL.md` body without its frontmatter, and `ARGUMENTS: <request>`.
+- **The stream-json transcript shows none of it.** The events are `system/init`, `assistant`, `rate_limit_event` and `result`. There is no `user` event, `--include-hook-events` adds nothing, and the debug log says nothing about the expansion. So the hypothesis that the trigger would show in the stream was wrong.
+- **Where the evidence is.** With `--no-session-persistence` dropped, the session file `<home>/.claude/projects/<cwd slug>/<session>.jsonl` holds the `<command-name>` user record and then a `user` record with `isMeta: true` whose text is the `Base directory for this skill: …` block: the injection itself. The fake-API request bodies with and without persistence are identical apart from the per-home random `device_id` in `metadata.user_id`, so persistence does not change what the model sees. `--input-format stream-json --replay-user-messages` (the prompt over stdin) replays only the `<command-name>` text, not the body.
+- **What the stream does show.** `init.skills` and `init.slash_commands` both list the skill in the skill arm. `init.plugin_warnings` reports the installed copy's `.claude-plugin/` as a project-scope plugin directory skipped as untrusted.
+- **Plain request:** the skill is in neither the `Skill` tool's listing nor anywhere else in the request, by name or description, so the model is not told it exists. A model-initiated `Skill` call is refused with an `is_error` result (`Skill <name> cannot be used with Skill tool due to disable-model-invocation…`), which the parser records as invoked, not triggered. A `Read` of the installed `SKILL.md` succeeds and is not a trigger under today's rule.
+- **Baseline, prefixed prompt:** the CLI adds a reminder, "The user's message starts with the slash command /<name>, but no command with that name is available in this session, so it did not run…", and sends the raw text on.
+- With session persistence on, none of the plain request, the refused call, the `Read`, the baseline and a Bash `printf` of the `Base directory for this skill: <workspace>/…` line wrote an `isMeta` record. The printed line appears only inside a `tool_result`.
+
+**Codex.**
+
+- **`$<plugin>:<skill> <request>` loads the skill** and logs `codex.skill_invocation … skill.invocation_type=explicit`. The prefix is the `name` in `.claude-plugin/plugin.json` and the suffix the skill's name: with the plugin renamed `brief-kit`, `$brief-kit:branch-brief` loads and both `$branch-brief:branch-brief` and `$branch-brief:brief-kit` load nothing. Codex injects the whole `SKILL.md`, frontmatter included, as a second user message `<skill><name><plugin>:<skill></name><path>…/SKILL.md</path>…`.
+- Without `plugin.json`, the bare `$<name>` loads it and the prefixed form loads nothing.
+- **Plain request:** the skill is not listed to the model, by name or description, and no event is logged. A `cat .agents/skills/<name>/SKILL.md` the model runs anyway is a trigger under today's rule, and Codex logs `implicit` for it, so a quiet case fails when the agent reads the skill.
+- **Baseline, prefixed prompt:** passed through as text, with no event and no error.
+
+**How much the baseline marking matters.** On both agents a prefixed prompt in the baseline tells the model a named tool or command was asked for and is missing: Claude Code says so in a reminder, and Codex passes the `$…` text through. A baseline sent the prefix would be measured on a different request, which is the case the marking avoids.
