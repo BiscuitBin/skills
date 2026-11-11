@@ -361,7 +361,7 @@ Then read `eval-results/<run-id>/`: the quiet case's transcripts, each kept work
 
 ### RED run (Hand-off 1, 2026-11-11)
 
-The maintainer ran both commands under **Next** from `b28cd28`. That is later than `3d3dc4b`, and `evals/change-viz/` and `skills/change-viz/` are unchanged between the two. Each run got a reader and a skeptic: `ai_tmp/red/claude.md` with `claude-verify.md`, and `ai_tmp/red/codex.md` with `codex-verify.md`. Each final message is saved verbatim beside them as `ai_tmp/red/<agent>-<case>-<arm>.md`. Where a skeptic refuted its reader, this record follows the skeptic. No refutation changes a verdict. No acceptance box is ticked: each still waits for GREEN or for the implementation checkpoint.
+The maintainer ran both commands under **Next** from `b28cd28`. That is later than `3d3dc4b`, and `evals/change-viz/` and `skills/change-viz/` are unchanged between the two. Each run got a reader and a skeptic: `ai_tmp/red/claude-red-read.md` with `claude-red-verify.md` (renamed from `claude.md`, which Claude Code on a case-insensitive disk loads as a nested `CLAUDE.md`), and `ai_tmp/red/codex.md` with `codex-verify.md`. Each final message is saved verbatim beside them as `ai_tmp/red/<agent>-<case>-<arm>.md`. Where a skeptic refuted its reader, this record follows the skeptic. No refutation changes a verdict. No acceptance box is ticked: each still waits for GREEN or for the implementation checkpoint.
 
 | | Claude Code | Codex |
 | --- | --- | --- |
