@@ -256,6 +256,19 @@ def _score(
     }
 
 
+def _prompt(adapter: Adapter, case: Case, installed: Path | None, *, baseline: bool) -> str:
+    """What the agent is sent: the bare request, invoked by name in a by_name case's skill arm.
+
+    The baseline arm, which has no skill to invoke, and the grader get the bare request.
+    """
+    if not case.by_name or baseline:
+        return case.prompt
+    if installed is None:
+        msg = f"{adapter.name} installed nothing to invoke by name"
+        raise RuntimeError(msg)
+    return adapter.by_name_prompt(installed, case.prompt)
+
+
 def _attempt(
     settings: RunSettings,
     planned: Planned,
@@ -278,15 +291,16 @@ def _attempt(
     homes = adapter.prepare_homes(trial)
     if case.fixture is not None:
         homes = replace(homes, env={**homes.env, **fixture.AGENT_GIT_ENV})
-    adapter.install_skill(
+    installed = adapter.install_skill(
         None if baseline else settings.root / "skills" / settings.skill, trial.workspace
     )
     problems = preflight(adapter, trial, homes, settings.root, skill, expected=built)
     if problems:
         reason = "preflight failed: " + "; ".join(problems)
         return _not_scored(case, planned.arm, reason, problems), None, built
+    prompt = _prompt(adapter, case, installed, baseline=baseline)
     raw = adapter.run(
-        case.prompt,
+        prompt,
         trial,
         homes,
         model=settings.model,
@@ -315,6 +329,7 @@ def _attempt(
         "cli_version": trace.cli_version,
         # The model the agent reports running, which a --model alias resolves to.
         "model": trace.model,
+        "prompt": prompt,
         **scored,
         # Listed after `scored`, so the real result replaces _not_scored's null.
         "contamination": {
@@ -387,6 +402,9 @@ def run_trial(
         "started_at": _now(),
         "cli_version": None,
         "model": None,
+        # The exact string the agent was sent. Null, like cli_version, when the
+        # trial stopped before its run was recorded, as a failed preflight does.
+        "prompt": None,
         "transcript": None,
         "secret_found": None,
         "grading": None,

@@ -12,8 +12,10 @@ from skills_tooling.evals import runner, workspace
 from skills_tooling.evals.assertions import expected_script_output
 from skills_tooling.evals.claude_code import ClaudeCode
 from skills_tooling.evals.contamination import NeverAppear
+from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import RunSettings, run_suite
 from tests.evals.fake_anthropic import Turn, serve, text, tool
+from tests.evals.test_grader import fake_grader
 
 if TYPE_CHECKING:
     import pytest
@@ -227,6 +229,8 @@ def test_a_failed_preflight_skips_the_agent(tmp_path: Path) -> None:
     [trial] = results(root)["trials"]
     assert trial["status"] == "infra_error"
     assert "gitignored" in trial["status_reason"]
+    # The agent was sent nothing.
+    assert trial["prompt"] is None
 
 
 def git_context(request: Request) -> str:
@@ -278,6 +282,82 @@ def test_a_fixture_trial_starts_with_the_same_git_context_in_both_arms(tmp_path:
     assert (
         f"Recent commits:\n{SMALL_TALLY_HEAD[:7]} Print the average after the total\n" in context
     )
+
+
+def user_texts(body: str) -> list[str]:
+    """The text blocks of the first user message in a request's body."""
+    content = json.loads(body)["messages"][0]["content"]
+    return [b["text"] for b in content if b.get("type") == "text"]
+
+
+BY_NAME_CASE: dict[str, Any] = {
+    **CASES[2],
+    "id": "behaviour-by-name",
+    "by_name": True,
+    "expectations": ["A cow appears."],
+}
+
+
+def test_a_by_name_case_invokes_the_skill_in_the_skill_arm_only(tmp_path: Path) -> None:
+    sent: dict[str, str] = {}
+    starts: dict[str, int] = {}
+
+    class Recording(ClaudeCode):
+        def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401
+            key = trial.root.relative_to(trial.root.parents[1]).as_posix()
+            sent[key], starts[key] = prompt, len(server.requests)
+            return super().run(prompt, trial, homes, **kwargs)
+
+    verdicts = {"A cow appears.": {"passed": True, "evidence": "A cow.", "quote": "(oo)"}}
+    fake = fake_grader(tmp_path / "grader", verdicts=verdicts)
+    grader = GraderSettings(
+        executable=fake.executable,
+        model="claude-opus-5-5",
+        credentials={"CLAUDE_CODE_OAUTH_TOKEN": TOKEN},
+    )
+    root = fake_root(tmp_path, [BY_NAME_CASE, CASES[1]])
+    with serve(GOOD) as server:
+        adapter = Recording(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+        run_suite(settings(root, server.url, adapter=adapter, grader=grader, baseline=True))
+        first = {key: server.requests[at].body for key, at in starts.items()}
+    trials = {f"{t['case']}/{t['arm']}-{t['trial']}": t for t in results(root)["trials"]}
+    for trial in trials.values():
+        assert (trial["status"], trial["contamination"]["passed"]) == ("ok", True), trial
+    # The adapter's syntax in the skill arm only; every trial records what it was sent.
+    expected = {
+        "behaviour-by-name/skill-1": "/cowsay Have a cow say: Ship it, team!",
+        "behaviour-by-name/baseline-1": "Have a cow say: Ship it, team!",
+        "no-trigger-facts/skill-1": "Tell me three facts about cows.",
+    }
+    assert sent == expected
+    assert {key: trial["prompt"] for key, trial in trials.items()} == expected
+    skill_arm = user_texts(first["behaviour-by-name/skill-1"])
+    assert any("<command-name>/cowsay</command-name>" in block for block in skill_arm)
+    # The bare request, with no command for the CLI to report missing.
+    baseline_arm = user_texts(first["behaviour-by-name/baseline-1"])
+    assert baseline_arm[-1] == "Have a cow say: Ship it, team!"
+    assert not [block for block in baseline_arm if "/cowsay" in block]
+    # The grader is sent the bare request in both arms.
+    prompts = fake.prompts()
+    assert len(prompts) == 2
+    for prompt in prompts:
+        assert "<task>Have a cow say: Ship it, team!</task>" in prompt
+
+
+def test_a_by_name_case_with_no_installed_copy_to_name_fails_closed(tmp_path: Path) -> None:
+    class Unnamed(ClaudeCode):
+        def install_skill(self, skill_dir: Path | None, workspace: Path) -> Path | None:
+            super().install_skill(skill_dir, workspace)
+            return None
+
+    root = fake_root(tmp_path, [BY_NAME_CASE])
+    with serve(GOOD) as server:
+        adapter = Unnamed(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+        assert run_suite(settings(root, server.url, adapter=adapter, grading_skipped=True)) == 1
+        assert server.requests == []
+    [trial] = results(root)["trials"]
+    assert (trial["status"], trial["prompt"]) == ("infra_error", None)
+    assert "installed nothing to invoke by name" in trial["status_reason"]
 
 
 def run_cli(*args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
