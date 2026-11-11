@@ -8,7 +8,7 @@ import shlex
 import shutil
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from string import Template
 from typing import TYPE_CHECKING, Any
@@ -284,6 +284,30 @@ def test_the_disclosure_check_flags_material_that_names_the_arm(
     material: str, matches: list[str]
 ) -> None:
     assert disclosure_matches(material, SKILL_FILES) == matches
+
+
+@pytest.mark.parametrize(
+    ("material", "by_name", "unmarked"),
+    [
+        ("As you asked with /cowsay, here is the cow.", ["/cowsay"], []),
+        ("Invoked as `$cowsay:cowsay`, the cow says moo.", ["$cowsay:cowsay"], []),
+        ("Next time try $COWSAY.", ["$COWSAY"], []),
+        ("/cowsay drew it, as $cowsay:cowsay would.", ["$cowsay:cowsay", "/cowsay"], []),
+        (
+            "I ran python3 scripts/cowsay.py -- 'Ship it, team!'",
+            ["scripts/cowsay.py"],
+            ["scripts/cowsay.py"],
+        ),
+        ("Saved to ~/cowsay and docs/cowsay.md under $HOME.", [], []),
+        (CLEAN_COW, [], []),
+    ],
+)
+def test_in_a_by_name_case_the_disclosure_check_flags_an_invocation_of_the_skill(
+    material: str, by_name: list[str], unmarked: list[str]
+) -> None:
+    assert disclosure_matches(material, SKILL_FILES, invocation_of="cowsay") == by_name
+    # An unmarked case's prompt may hold an invocation, so its echo is not flagged.
+    assert disclosure_matches(material, SKILL_FILES) == unmarked
 
 
 def agent_trial(tmp_path: Path, key: str = "behaviour-ship-it/skill-1") -> TrialPaths:
@@ -1170,6 +1194,30 @@ def test_a_grading_records_whether_its_material_named_the_arm(
     )
     assert (grading["arm_disclosed"], grading["disclosure_matches"]) == (bool(matches), matches)
     assert grading["grader"]["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    ("echo", "by_name", "matches"),
+    [
+        ("As /cowsay asked, here it is.", True, ["/cowsay"]),
+        ("As $cowsay:cowsay asked, here it is.", True, ["$cowsay:cowsay"]),
+        ("As you asked, here it is.", True, []),
+        ("As $cowsay:cowsay asked, here it is.", False, []),
+    ],
+    ids=["slash", "dollar", "no-name", "unmarked"],
+)
+def test_an_echoed_invocation_in_a_by_name_case_is_graded_unchanged_and_flagged(
+    tmp_path: Path, echo: str, *, by_name: bool, matches: list[str]
+) -> None:
+    final = f"{echo}\n{FINAL}"
+    fake = fake_grader(tmp_path)
+    case = replace(ship_it(), by_name=by_name)
+    grading = run_grade(tmp_path, fake, case=case, trace=a_trace(final))
+    assert (grading["arm_disclosed"], grading["disclosure_matches"]) == (bool(matches), matches)
+    [prompt] = fake.prompts()
+    # The bare request is the task, and the agent's own echo is not redacted.
+    assert f"<task>{SHIP_IT}</task>" in prompt
+    assert f"## Final message\n\n{final}\n" in prompt
 
 
 def test_the_grader_runs_without_tools_and_sees_only_the_task_and_the_material(

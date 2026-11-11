@@ -373,15 +373,22 @@ def invocation_mentions(text: str, skill: str) -> list[str]:
     return [match.group(0) for match in pattern.finditer(text)]
 
 
-def disclosure_matches(material: str, skill_files: Iterable[str]) -> list[str]:
+def disclosure_matches(
+    material: str, skill_files: Iterable[str], *, invocation_of: str | None = None
+) -> list[str]:
     """The distinct strings in the material that can tell the grader the arm.
 
     The leak runs both ways: "I used the skill" and "no skill is installed"
-    both match. skill_files are paths relative to skills/<skill>/.
+    both match. skill_files are paths relative to skills/<skill>/. In a
+    by_name case, invocation_of is the skill, and an echo of its invocation,
+    which only the skill arm was sent, matches too. An unmarked case's prompt
+    may hold one, so it passes None.
     """
     lowered = material.lower()
     found = {"skill"} if SKILL_WORD.search(material) else set()
     found |= {path for path in (*skill_files, *DISCLOSED_DIRS) if path.lower() in lowered}
+    if invocation_of is not None:
+        found |= set(invocation_mentions(material, invocation_of))
     return sorted(found)
 
 
@@ -593,7 +600,14 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
         for path in skill_dir.rglob("*")
         if path.is_file() and "__pycache__" not in path.relative_to(skill_dir).parts
     )
-    matches = sorted({m for _, material in groups for m in disclosure_matches(material, files)})
+    invocation_of = skill if case.by_name else None
+    matches = sorted(
+        {
+            m
+            for _, material in groups
+            for m in disclosure_matches(material, files, invocation_of=invocation_of)
+        }
+    )
     return _grading(
         settings,
         expectations=expectations,
