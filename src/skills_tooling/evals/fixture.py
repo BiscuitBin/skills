@@ -44,7 +44,8 @@ RESERVED = {
 }
 # What makes Codex report a failed command as denied by its sandbox, and the
 # trial an infra_error (docs/reference/evals.md, Codex). A failing command
-# mostly prints the project's own text, so no file or path may hold one.
+# mostly prints the project's own text, so no file, path, branch or commit
+# message may hold one.
 DENIAL_KEYWORDS = (
     "operation not permitted",
     "permission denied",
@@ -181,6 +182,7 @@ def _commits(
                 "with no blank line and no leading or trailing whitespace"
             )
         problems += _skill_wording(str(message), "the message", at)
+        problems += _denial(str(message), "the message", at)
         found.append(Commit(str(tree), str(message)))
     return tuple(found)
 
@@ -201,7 +203,9 @@ def _branch(branch: object, root: Path, where: str) -> list[str]:
     folded = branch.lower()
     if folded == "main" or folded.startswith("main/"):
         return [f"{where}: branch {branch!r} clashes with main, which every fixture has"]
-    return _skill_wording(branch, f"branch {branch!r}", where)
+    return _skill_wording(branch, f"branch {branch!r}", where) + _denial(
+        branch, f"branch {branch!r}", where
+    )
 
 
 def case_clashes(paths: Iterable[str]) -> list[tuple[str, str]]:

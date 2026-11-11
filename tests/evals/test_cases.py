@@ -805,6 +805,28 @@ def test_a_sandbox_denial_keyword_in_a_path_is_rejected(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        (
+            {"branch": "sandbox-cleanup"},
+            "fixture.json: branch 'sandbox-cleanup' holds the sandbox denial keyword 'sandbox'",
+        ),
+        (
+            {"main": [commit(message="Fix Permission Denied on read")]},
+            "main[0]: the message holds the sandbox denial keyword 'permission denied'",
+        ),
+    ],
+    ids=["branch", "message"],
+)
+def test_a_sandbox_denial_keyword_in_the_branch_or_a_message_is_rejected(
+    tmp_path: Path, spec: dict[str, object], expected: str
+) -> None:
+    # git log prints the messages and git status the branch, as part of a failing command's output.
+    problems = fixture_problems(tmp_path, spec=spec)
+    assert any(expected in problem for problem in problems), problems
+
+
+@pytest.mark.parametrize(
     ("name", "text", "line"),
     [
         (".gitignore", b"!/.claude/\n", 1),
