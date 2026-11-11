@@ -158,15 +158,16 @@ No acceptance box is ticked yet. The commits already meet the scaffold criterion
   - `ai_tmp/apply-18/patterns.py` now runs all four patterns and asserts that P4 equals the block under question 2. It gives 0 differences on 30 inputs. Its unbolded `Risk: Low.` control now expects P4 to fail, and a copy with `**Risk: Low.**` passes all four.
   - `ai_tmp/apply-18/p4_probe.py` now also asserts that P4 equals the fourth `output_matches` in `evals.json`. It gives 0 differences on 31 inputs.
   - Some P4 expected values were read from the pattern by hand: HumanLayer's template, Matt Pocock's `SKILL.md` and the inline controls. `rg -U --pcre2` gave each of them.
-  - `just check` was not rerun.
+  - `just check` passed at `227eb93`: 1202 passed, 4 skipped (two case-folding tests on macOS, two CI-only canaries).
 - **After f3 (2026-11-11, question 7):**
   - `evals.json`'s P4 is the committed P4 with f3's one substitution from `ai_tmp/triage-pre-red.md`, and it equals f3's line in `ai_tmp/triage-pre-red/probe.out`.
   - `just format`, then `just validate-evals`: "2 eval suites valid." `evals_sha256` for `change-viz` is now `78828f74f0a72581d29d915ba3e3cfb1ccfcde1701c1622dc3d83d53ba5726d2`; it was `c49b1f3fc64d1fc057715cf37e06b300689e47d5e154e726262879df01b26fd6` at `227eb93`.
   - `ai_tmp/apply-18/patterns.py` asserts that P4 equals the block under question 2, which now shows the narrowed pattern. It gives 0 differences on 31 inputs. Its new row, a why section that is only a `**Risk:` line, passes P1 to P3 and fails P4.
   - `ai_tmp/apply-18/p4_probe.py` asserts that P4 is the triage's P4 with f3 applied, and equals the fourth `output_matches` in `evals.json`. It now also runs the 17 rows of the pre-RED triage's `probe.sh`, and runs every input through P4 before f3 as well. It gives 0 differences on 48 inputs, so Python `re` gives the PCRE2 f3 column on every row. f3 changes two results, both from pass to fail: a why section that is only a `**Risk:` line, and a `**Risk:` line before the sentence. Every other result is unchanged.
   - `ai_tmp/triage-pre-red/p4_timing.py` now reads P4 before f3 from `227eb93` and asserts that f3 is the committed P4 (output in `p4_timing-f3.out`). Before f3: 0.096 s, 0.867 s and 9.459 s at 12, 36 and 120 KB. After: 0.000 s, 0.001 s and 0.003 s.
-  - `just check` was not rerun.
-- **Not run:** `just eval … --dry-run` and the live runs (the apply brief barred `just eval`), Ubuntu CI (not read here; the branch is pushed, so CI runs), and the marketplace install of `change-viz` (`claude plugin install change-viz@biscuitbin-skills`, `/change-viz:change-viz`), because the marketplace round trip installs cowsay only.
+  - `just check` passed at `3d3dc4b`: 1202 passed, 4 skipped (the same four).
+- **Runner probe (2026-11-11, before RED):** the committed suite ran through `run_suite` with the pinned CLIs against the fake APIs (both agents, both arms, plus a Claude quiet-case trial that reads `SKILL.md`). Every plumbing check passed: Claude's trigger comes from the session record, Codex's prompt is `$change-viz:change-viz …` with an explicit event, the baseline and every grader request carry the bare request, the inventory and contamination pass in both arms, and the quiet case fails only on the confirmed read. `just eval change-viz --agent <claude|codex> --baseline --dry-run` needs no token and plans 3 trials per agent. Scripts in `ai_tmp/probe-red/`.
+- **Not run:** the live runs, Ubuntu CI (`ci.yml` runs on pull requests and on pushes to `main` only, so the pushed branch started no run), and the marketplace install of `change-viz` (`claude plugin install change-viz@biscuitbin-skills`, `/change-viz:change-viz`), because the marketplace round trip installs cowsay only.
 
 #### Implementer decisions (2026-11-11)
 
