@@ -16,7 +16,17 @@ from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import run_suite
 from tests.evals.fake_openai import message, serve, shell
 from tests.evals.test_grader import fake_grader
-from tests.evals.test_runner import CASES, COW, fake_root, settings
+from tests.evals.test_runner import (
+    AGENT_GIT_ENV,
+    AVERAGE,
+    CASES,
+    COW,
+    FIXTURE_CASE,
+    fake_root,
+    fixture_root,
+    results,
+    settings,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -442,3 +452,74 @@ def test_a_token_refreshed_before_the_run_fails_is_still_swept(tmp_path: Path) -
     [trial] = data["trials"]
     assert trial["status"] == "infra_error"
     assert trial["secret_found"] == {"files": ["workspace/copied.txt"], "deleted": True}
+
+
+def fixture_trials(
+    tmp_path: Path, turns: list[Any], *, prompt: str = AVERAGE, baseline: bool = True
+) -> tuple[dict[str, dict[str, Any]], dict[str, Trace]]:
+    """The fixture case run through the runner: each arm's trial record and trace."""
+    traces: dict[str, Trace] = {}
+
+    class Recording(Codex):
+        def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401
+            raw = super().run(prompt, trial, homes, **kwargs)
+            traces[trial.root.name.partition("-")[0]] = self.parse(raw)
+            return raw
+
+    root = fixture_root(tmp_path, [{**FIXTURE_CASE, "prompt": prompt}])
+    with serve(turns, api_key=KEY) as server:
+        adapter = Recording(pinned_executable(ROOT), api_base_url=server.url)
+        run_suite(
+            settings(
+                root,
+                server.url,
+                adapter=adapter,
+                model=adapter.default_model,
+                credentials={"auth.json": AUTH},
+                baseline=baseline,
+                grading_skipped=True,
+            )
+        )
+    return {trial["arm"]: trial for trial in results(root)["trials"]}, traces
+
+
+def test_git_reads_in_a_fixture_trial_are_not_denied_and_the_skill_is_still_found(
+    tmp_path: Path,
+) -> None:
+    turns = [
+        shell("git status --porcelain", "call_1"),
+        shell("git diff --stat", "call_2"),
+        shell("env | grep '^GIT_'", "call_3"),
+        message("The average is 2.5."),
+    ]
+    # An explicit mention, which Codex expands only for a skill it found.
+    by_arm, traces = fixture_trials(tmp_path, turns, prompt=f"$cowsay:cowsay {AVERAGE}")
+    assert set(by_arm) == set(traces) == {"skill", "baseline"}
+    for arm, trial in by_arm.items():
+        trace = traces[arm]
+        assert (trial["status"], trial["contamination"]["passed"]) == ("ok", True), trial
+        # Codex's sandbox keeps .git read-only; reading Git needs no write to it.
+        assert not [line for line in trace.debug_lines if "outcome=denied" in line]
+        status, diff, env = trace.commands
+        # The fixture's own edits, and no ?? .agents/ in the skill arm.
+        assert (status.ok, status.output) == (True, "M  README.md\n M tally.py\n?? notes.txt\n")
+        assert (diff.ok, diff.output) == (
+            True,
+            " tally.py | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n",
+        )
+        # Every one of the fixture trial's git variables reaches the agent's commands.
+        assert {f"{k}={v}" for k, v in AGENT_GIT_ENV.items()} <= set(env.output.splitlines())
+    # The exclude hides the skill from Git, not from Codex.
+    assert (by_arm["skill"]["trigger"]["actual"], by_arm["baseline"]["trigger"]["actual"]) == (
+        True,
+        False,
+    )
+
+
+def test_a_git_write_in_a_fixture_trial_is_denied_and_not_scored(tmp_path: Path) -> None:
+    # The limit the docs state: a flow that writes to Git cannot be scored on Codex.
+    turns = [shell("git add notes.txt", "call_1"), message("The average is 2.5.")]
+    by_arm, _traces = fixture_trials(tmp_path, turns, baseline=False)
+    trial = by_arm["skill"]
+    assert trial["status"] == "infra_error"
+    assert "denied by its sandbox" in trial["status_reason"]

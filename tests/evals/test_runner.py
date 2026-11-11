@@ -87,11 +87,12 @@ AGENT_GIT_ENV = {
 SMALL_TALLY_HEAD = "c63fc294563293a6dbacf229d040cc4dafc59f58"
 # The baseline's Skill call fails (nothing is installed), and the agent answers anyway.
 SKILL = tool("Skill", {"skill": "cowsay"}, "toolu_1")
+FIXTURE_CASES = [FIXTURE_CASE, CASES[1]]
 
 
-def fixture_root(tmp_path: Path) -> Path:
-    """A root whose suite holds the fixture case, cowsay's no-trigger case and small-tally."""
-    root = fake_root(tmp_path, [FIXTURE_CASE, CASES[1]])
+def fixture_root(tmp_path: Path, cases: list[dict[str, Any]] = FIXTURE_CASES) -> Path:
+    """A root with small-tally, whose suite holds the cases, by default FIXTURE_CASES."""
+    root = fake_root(tmp_path, cases)
     shutil.copytree(
         ROOT / "tests/fixtures/evals/git/small-tally", root / "evals/cowsay/fixtures/small-tally"
     )
