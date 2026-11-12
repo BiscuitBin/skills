@@ -605,10 +605,15 @@ def test_git_reads_in_a_fixture_trial_are_not_denied_and_the_skill_is_still_foun
     )
 
 
-# Codex checks a command for a sandbox denial as soon as it exits, and logs
-# sandbox_outcome only for one that exits within 150 ms of starting. The sleep
-# makes the write outlast that window on any machine, as a slow git does.
-@pytest.mark.parametrize("add", ["git add notes.txt", "sleep 0.5; git add notes.txt"])
+# Codex logs its violation line for every denied command, but sandbox_outcome
+# only for one that exits within 150 ms of starting. The sleep makes the write
+# outlast that window on any machine, as a slow git does. The plain add usually
+# exits within it, but a loaded machine can push it past, so the test does not
+# require either path for it.
+SLOW_ADD = "sleep 0.5; git add notes.txt"
+
+
+@pytest.mark.parametrize("add", ["git add notes.txt", SLOW_ADD])
 def test_a_git_write_in_a_fixture_trial_is_denied_and_not_scored(tmp_path: Path, add: str) -> None:
     # The limit the docs state: a flow that writes to Git cannot be scored on Codex.
     turns = [
@@ -625,3 +630,12 @@ def test_a_git_write_in_a_fixture_trial_is_denied_and_not_scored(tmp_path: Path,
     # The sandbox blocked the write: notes.txt is still untracked.
     [status] = [c for c in arm.trace.commands if c.command == "git status --porcelain"]
     assert "?? notes.txt" in status.output.splitlines(), evidence
+    lines = arm.trace.debug_lines
+    assert len([line for line in lines if line.startswith("sandbox_violation ")]) == 1, evidence
+    if add == SLOW_ADD:
+        # Past the window the violation line is the only signal: no denied
+        # sandbox_outcome, and the denied add is an ordinary failed command.
+        assert not [line for line in lines if "outcome=denied" in line], evidence
+        assert [(c.command, c.ok) for c in arm.trace.commands if c.command == add] == [
+            (add, False)
+        ], evidence

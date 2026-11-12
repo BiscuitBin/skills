@@ -464,8 +464,10 @@ def kept_lines(stderr: str, echoed: Collection[str] = ()) -> tuple[str, ...]:
             kept.append(f"skill_invocation {_fields(line, INVOCATION_FIELDS)}")
         elif telemetry and starts and SANDBOX_OUTCOME.search(line):
             kept.append(f"sandbox_outcome {_fields(line, SANDBOX_FIELDS)}")
-        elif not telemetry and starts and VIOLATION.search(line):
-            kept.append(f"sandbox_violation {_fields(line, VIOLATION_FIELDS)}")
+        elif not telemetry and starts and (violation := VIOLATION.search(line)):
+            # The path comes last and unquoted, so its text could repeat a field.
+            fixed = line[violation.start() :].partition(" path=")[0]
+            kept.append(f"sandbox_violation {_fields(fixed, VIOLATION_FIELDS)}")
         elif not telemetry and (match := FAILED_LOAD.search(line)):
             kept.append(match.group(1))
     return tuple(kept)

@@ -517,6 +517,15 @@ def test_only_codexs_own_filesystem_violations_are_kept() -> None:
     assert kept_lines(f"{VIOLATION}\n", echoed_lines([printed])) == ()
 
 
+def test_a_violations_path_cannot_replace_its_backend_or_reason() -> None:
+    # Codex writes the path last and unquoted, and takes it from the command's
+    # output: "/w/a backend=forged reason=x/index.lock: Operation not permitted" names it.
+    forged = VIOLATION.replace("path=unknown", "path=/w/a backend=forged reason=x/index.lock")
+    assert kept_lines(f"{forged}\n") == (
+        "sandbox_violation resource=filesystem backend=seatbelt reason=operation_not_permitted",
+    )
+
+
 def test_a_read_after_pwd_must_print_more_than_pwd(tmp_path: Path) -> None:
     def replace_read(event: dict[str, Any]) -> dict[str, Any]:
         item = event.get("item", {})
