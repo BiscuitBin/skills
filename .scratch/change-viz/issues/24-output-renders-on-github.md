@@ -37,6 +37,8 @@ Recalled by the planning agent, not checked. Each line is **to verify** against 
 - Whether Mermaid renders inside a collapsed `<details>` block is not known.
 - Whether any API or offline tool reports what a comment will render, Mermaid errors included, is not known. The planning agent's recollection is that Mermaid renders in the browser, so an API that returns HTML would not show a diagram error.
 
+**From ticket 18's Claude GREEN run (2026-11-12):** the skill arm put a pseudocode diff sketch with `+` marks in a `text` fence, though `references/views.md` gives a diff sketch the `diff` fence; whether GitHub colours those marks only in a `diff` fence is on the "to verify" list above.
+
 ## Acceptance criteria
 
 - [ ] Every line of the "to verify" list above is checked against GitHub's documentation or a real render, and marked confirmed, corrected or dropped, with the source. The list in this ticket is updated to match.

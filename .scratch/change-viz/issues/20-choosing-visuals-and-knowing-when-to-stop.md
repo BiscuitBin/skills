@@ -32,6 +32,7 @@ As of 2026-11-10.
 - **Budget:** the grader reads at most 20 KB of the final message.
 - **A pattern can cap length and forbid a construct.** `output_matches` is Python's `re.search`, so an anchored pattern with a bounded repeat limits the whole message, and a negative lookahead at the start rejects a message that holds a given fence. That is how this ticket's "does not" outcomes are checked.
 - **From ticket 18's GREEN (2026-11-11):** `skills/change-viz/SKILL.md` says "Put every visual in a fenced block" and builds the outline from visuals "each in a fenced block", so a table cannot be a visual there. A ticket that adds an outcome or claim table edits both lines.
+- **From ticket 18's Claude GREEN run (2026-11-12):** the skill arm put a pseudocode diff sketch with `+` marks in a `text` fence, though `references/views.md` gives a diff sketch the `diff` fence and the run read it, and its first two note bullets ran to about five sentences each, where ticket 18 sets no limit on a bullet's length.
 
 ## Acceptance criteria
 

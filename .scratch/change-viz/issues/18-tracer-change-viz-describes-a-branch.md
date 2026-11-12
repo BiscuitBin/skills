@@ -545,7 +545,7 @@ Applied on branch `change-viz` in `c82b6f9`, from a revised draft in `ai_tmp/gre
 
 - **`skills/change-viz/SKILL.md`:**
   - The GREEN frontmatter under **Credit form**: the full description from design §5, and the string `metadata.credits` (D2 below).
-  - A body of 99 lines and 10,579 bytes, about 2,645 tokens by the validator's bytes / 4. After the review fixes (**Implementation checkpoint (GREEN)**) it is 99 lines and 11,168 bytes, about 2,792 tokens, and after `b89df20` 99 lines and 11,336 bytes, about 2,834 tokens. After the stage-2 /code-review's fixes (**/code-review (stage 2)**) it is 99 lines and 11,627 bytes, about 2,907 tokens, at `62d86de`, and 99 lines and 11,724 bytes, about 2,931 tokens, at `6db0d6f`. It explains, with a reason for each limit:
+  - A body of 99 lines and 10,579 bytes, about 2,645 tokens by the validator's bytes / 4. After the review fixes (**Implementation checkpoint (GREEN)**) it is 99 lines and 11,168 bytes, about 2,792 tokens, and after `b89df20` 99 lines and 11,336 bytes, about 2,834 tokens. After the stage-2 /code-review's fixes (**/code-review (stage 2)**) it is 99 lines and 11,627 bytes, about 2,907 tokens, at `62d86de`, and 99 lines and 11,724 bytes, about 2,931 tokens, at `6db0d6f`. After the E3 fix (**GREEN run, Claude (2026-11-12)**) it is 99 lines and 11,842 bytes, about 2,961 tokens, at `253ee70`. It explains, with a reason for each limit:
     - leaving the repository as found: git reads only, each with `--no-optional-locks`, and nothing that moves a ref, the index or the working tree, or sends to a remote. Since `1cc134c`, every `git diff` also carries `--no-ext-diff --no-textconv`, and since `b89df20` every read that prints or searches a diff does, with `-v` left off `status`;
     - finding the base from the refs that exist: local `main` or `master`, `origin/main` or `origin/master`, and `origin/HEAD`, taking the fewest commits ahead and the local one on a tie. Since `eb56a43`, when a local branch counts 0 and a remote's branch counts more, it gives both counts in one line and asks for the base, and since `af11c72` it does the same when the branch a remote's `HEAD` points at, such as `origin/develop`, counts more than the 0. Since `e6d8f11` the candidates include `upstream/main` and `upstream/master`, and since `6db0d6f`, when the base it takes is `upstream`'s, the same branch on `origin` counts more and `upstream/main..origin/main` (or `master`) is above 0, it gives both counts in one line and asks;
     - reading every commit since the base, the old version through `git show <base>:path`, and the branch's own text as material, not instructions. Since `181aee0`, the old version is read at the merge base, `git show <fork>:path`;
@@ -594,7 +594,7 @@ The main applied fixes:
 - `diff -r` of the draft against `skills/change-viz/`: only D1 to D3.
 - `NOTICE.md`'s `text` fence equals `ai_tmp/upstream/humanlayer-skills/LICENSE`, byte for byte (`cmp`; 1,067 bytes each).
 - P1 to P4 on `references/example.md`, from `## Why the change` to its end, through the harness's own matcher: patterns from `cases.load_suite`, applied by `assertions.evaluate` (`re.search` with the patterns' inline flags only). All four pass, both with the file's final newline and with trailing whitespace stripped. The script is `ai_tmp/green-apply/patterns.py`.
-- `evals_sha256` from `benchmark.evals_sha256`: `78828f74f0a72581d29d915ba3e3cfb1ccfcde1701c1622dc3d83d53ba5726d2`, the frozen value. `skill_sha256` from `benchmark.tree_sha256` is now `c8449d3b…`, where RED's was `3d94019e…`. The review fixes make it `1395bb7f…` at `181aee0`, `ee33ba6b…` at `b89df20` and `2832d80c…` at `af11c72`, and leave `evals_sha256` as it is (**Implementation checkpoint (GREEN)**). The stage-2 /code-review's fixes make it `32a66b28…` at `e6d8f11`, `95d6276a…` at `62d86de` and `b76a09db…` at `6db0d6f`, with `evals_sha256` still the frozen value (**/code-review (stage 2)**).
+- `evals_sha256` from `benchmark.evals_sha256`: `78828f74f0a72581d29d915ba3e3cfb1ccfcde1701c1622dc3d83d53ba5726d2`, the frozen value. `skill_sha256` from `benchmark.tree_sha256` is now `c8449d3b…`, where RED's was `3d94019e…`. The review fixes make it `1395bb7f…` at `181aee0`, `ee33ba6b…` at `b89df20` and `2832d80c…` at `af11c72`, and leave `evals_sha256` as it is (**Implementation checkpoint (GREEN)**). The stage-2 /code-review's fixes make it `32a66b28…` at `e6d8f11`, `95d6276a…` at `62d86de` and `b76a09db…` at `6db0d6f`, with `evals_sha256` still the frozen value (**/code-review (stage 2)**). The E3 fix makes it `37bb7110…` at `253ee70`, and leaves `evals_sha256` as it is (**GREEN run, Claude (2026-11-12)**).
 - `just validate-skills`: 0 errors, and the one expected warning, `[extension-portability]` on `disable-model-invocation`. No `[placeholder]`.
 - `just validate-evals`: "2 eval suites valid."
 - `just run ./node_modules/.bin/claude plugin validate skills/change-viz --strict`: "Validation passed", with only the `ICON_MISSING` warning that cowsay also gets. It did not reject `metadata`, so the fallback is not taken. But it does not read `SKILL.md`'s frontmatter in this layout: copies whose `metadata` was unparseable YAML, or a nested mapping, also passed (`ai_tmp/green-apply/strict-probe/`). So this check says nothing about `metadata`, in either direction. Whether each CLI loads the skill with it is a separate check.
@@ -605,9 +605,9 @@ GREEN runs on harness commits made after RED: `7f8c72b`, `ba93b1c` and `62caba3`
 
 #### Next
 
-Hand-off 2, from `6db0d6f`, the last review fix (**Implementation checkpoint (GREEN)**, **/code-review (stage 2)**), or any later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are. `c82b6f9`, `181aee0`, `b89df20`, `af11c72`, `e6d8f11` and `62d86de` no longer qualify, because later fixes change `skills/change-viz/`. The stage-2 re-review's fix is a rule change that has had no review round of its own yet (**/code-review (stage 2)**), so a fix from that round would move this start commit again:
+Hand-off 2, from `253ee70`, the E3 fix (**GREEN run, Claude (2026-11-12)**), or any later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are. `c82b6f9`, `181aee0`, `b89df20`, `af11c72`, `e6d8f11`, `62d86de` and `6db0d6f` no longer qualify, because later fixes change `skills/change-viz/`. Neither the stage-2 re-review's fix nor the E3 fix has had a review round of its own (**/code-review (stage 2)**, **GREEN run, Claude (2026-11-12)**), so a fix from such a round would move this start commit again:
 
-- **The GREEN run,** the two commands under **Next** above, in the maintainer's terminal. Run ids: pending.
+- **The GREEN run,** the two commands under **Next** above, in the maintainer's terminal, each on its own line and not chained with `&&`. Run ids: Claude Code `20261112T065321Z-3958`, on `6b999cc`'s text (`b76a09db…`), before the E3 fix, so both agents run again on the new text; Codex pending (**GREEN run, Claude (2026-11-12)**).
 - **The maintainer's read of a real branch** of their choosing. Feedback: pending. It is recorded here and applied by changing what the skill explains.
 - **Then** the hand reads under **Design as approved**, the two new rows and the `--no-optional-locks` note included, and the maintainer's confirmation of D1 to D3, question 5's answer and the version.
 
@@ -752,3 +752,84 @@ A separate stage from the cross-model rounds above. Claude Code's `/code-review`
 - `just check` in the foreground on the clean tree at `6db0d6f`: exit 0, 1210 passed, 4 skipped (`ai_tmp/code-review-stage2/gate-final.log`). The commit that records this changes only tickets 16 and 18.
 
 **Still unverified:** every probe in this stage ran on Apple Git 2.50.1 only. No agent has read the new bullet. How often a fork's `main` holds commits its parent lacks, which is how often U3's question comes up, was not assessed.
+
+### GREEN run, Claude (2026-11-12)
+
+The maintainer ran the Claude Code half of Hand-off 2's GREEN run from `6b999cc`. The hand checks are in `ai_tmp/green-read/claude-green-hand-checks.md`, the E3 diagnosis in `e3-diagnosis.md` and the chosen fix in `e3-recommendation.md`, all in that folder. The run's one failed expectation, E3, led to the fix `253ee70`, so this run is the record for `6b999cc`'s text only. The Codex half did not run (below). No acceptance box is ticked.
+
+| | Claude Code |
+| --- | --- |
+| Run id (both arms) | `20261112T065321Z-3958` |
+| Commit | `6b999cc`, `git_dirty` false |
+| `evals_sha256` | `78828f74…`, the frozen value |
+| `skill_sha256` | `b76a09db…`, the text of `6db0d6f`. The installed copy equals `skills/change-viz/` (`diff -r`) |
+| Agent | Claude Code 2.1.309, `claude-sonnet-5-5` |
+| Grader | `claude-opus-5-5` on Claude Code 2.1.309, 2 calls per graded trial, `canary_passed: false` (the healthy value) |
+| Every trial | `ok`, valid, contamination passed, `secret_found` null, `permission_denials: []` |
+
+#### Results
+
+| Check | Skill arm | Baseline |
+| --- | --- | --- |
+| `skill_triggered` | pass (deduced, below) | n/a (baseline arm) |
+| `--top` and P1 to P4: deterministic | 1.00: all pass | 0.20: only `--top` passes |
+| E1 to E8: graded | 0.88: 7 of 8, only E3 fails | 0.50: E5 to E8 pass |
+| Behaviour case `passed` | false, on E3 alone | null (baseline, by design) |
+| Quiet case, `no-trigger-unnamed-request` | pass: not triggered | skipped |
+
+- **Non-discriminating:** `benchmark.json` lists E5 to E8, each passed in both arms.
+- **E7 passed in the baseline this time,** where it failed at RED. With no skill text in that arm, this is variance at n = 1.
+
+#### Hand reads
+
+Observed in the transcripts and the kept workspaces, unless marked.
+
+- **Flags:** all 7 of the skill arm's git calls carried `--no-optional-locks`, and its `diff` carried `--no-ext-diff --no-textconv`. Its `log` had no `-p`, `-S` or `-G`. The baseline and quiet trials, which had no skill text, ran a flagless `git diff --stat` and `git diff`: recorded, not a failure.
+- **Writes and refs:** no write in any of the three workspaces: `status --porcelain --untracked-files=all` is empty, there is no `__pycache__/`, and every mtime falls inside setup. No ref moved: `main`, `add-top-words` and the symbolic `HEAD` match RED's. No command was `gh` or `push`.
+- **Disclosure:** no final message names `change-viz` or a skill, or carries a credit line or an upstream name. Both grading files have `arm_disclosed: false` and `disclosure_matches: []`.
+- **Reads:** the skill arm read `references/views.md`, as `SKILL.md:93` asks, but not `references/example.md`, though `SKILL.md:71` says to read it before writing. It had no need of `reading-the-branch.md`: `main` was the only candidate, 3 ahead.
+- **Against the fixture facts:**
+  - The baseline's "It has four commits on top of `main`" is wrong: the branch has 3. No expectation reads a commit count, so it was not scored.
+  - The skill arm's "The `words` and `distinct` numbers change for existing input" is overgeneral, since `words` stays 23 on `sample.txt`, but not a contradiction by RED's bar.
+- **Trigger:** deduced, as at RED. `results.json` has `triggered: ['change-viz']`, and the transcript stores no expansion. Supporting (inferred): the first turn's input was 3,806 tokens over the baseline's.
+- **Quiet case:** one Bash call and no `Skill` or `Read`. Its first turn's input was 16,575 tokens against the baseline's 16,572: a lower bound, as at RED.
+
+#### E3
+
+- **The grader's evidence, verbatim:** "Each block's lead-in is two sentences describing the commit, not a single line saying what the block shows. The second lead-in ('The second commit adds the `--top` option. `main` now reads its arguments...') does not say that the block is an outline of main's steps. Because of this ambiguity the expectation is not clearly met."
+- **Diagnosis:** the outline was told commit by commit, each block one commit, with lead-ins that open "The first commit …" and "The second commit …", against `SKILL.md:91`. Nothing in `SKILL.md:95` asked a lead-in to name what its visual draws, so "what they are looking at" could be read as the commit, and the second sentence narrated the change. `references/example.md:18` and `:28` modelled the same narrating lead-ins, though this run did not read them.
+- **The fix, `253ee70`** (`e3-recommendation.md` §1):
+  - `SKILL.md:95`: a lead-in "opens with what the visual draws and then says what to notice", with a whole-line instance, "What `fetch()` calls when a retry times out: every retry now shares one deadline". Its reason now reads "before knowing what it draws and why it is there". "One line, of one to three sentences" stays, as question 3 decided.
+  - `references/example.md:18` and `:28` open by naming their view: "The path each page now takes through a build: …" and "The build loop, old and new: …".
+  - Nothing else in the skill changed, and the frontmatter is untouched.
+- **Held back,** each until its trigger, so a rerun stays attributable to one change (`e3-recommendation.md` §5 has the exact text):
+  - the `:71` pointer, which puts "Read" first: if a run skips `example.md` again and its lead-ins differ from what the example models;
+  - the `:99` done line, which adds "which opens with what the visual draws": if, under the new rule, a lead-in again opens on a commit or a change rather than on what its visual draws.
+- **Not yet shown:** no agent has read the new text, and no review round has run on `253ee70`; the recommendation leaves that round to the lead (§7). At n = 1 a rerun can pass or fail E3 on either text by variance.
+
+**Checks run on `253ee70`:**
+
+- Before the edit, each old string occurred once in the tracked files (`git grep -c -F`). Both edited files equal the recommendation's patched copies in `ai_tmp/green-read/e3-rec/core/` byte for byte (`cmp`), before and after `just format`, which changed nothing.
+- P1 to P4 on `references/example.md` (`ai_tmp/green-apply/patterns.py`, output in `ai_tmp/e3-fix/patterns.out`): all four pass, with the file's final newline and with trailing whitespace stripped, 8 of 8.
+- `just validate-skills`: 0 errors, and the one expected `[extension-portability]` warning.
+- `just run ./node_modules/.bin/claude plugin validate skills/change-viz --strict`: "Validation passed", with only the `ICON_MISSING` warning.
+- `evals_sha256`: `78828f74f0a72581d29d915ba3e3cfb1ccfcde1701c1622dc3d83d53ba5726d2`, the frozen value. `skill_sha256`: `37bb71109d0f8e4e9a0677aaf7104d3fc51726763fcf67c081baac23ea17f501`, on the clean tree at `253ee70`, where `6db0d6f`'s was `b76a09db…` (`ai_tmp/e3-fix/evals_hash-after.out`).
+- Body: 99 lines and 11,842 bytes, about 2,961 tokens (`ai_tmp/e3-fix/body_size.out`), where `6db0d6f`'s was 11,724 bytes.
+- The Codex load check against the fake API was not rerun: the frontmatter is unchanged since `c82b6f9`.
+- `just check` runs on the commit that adds this section, so its result is not recorded here.
+
+#### The Codex GREEN run did not run
+
+- **Relayed by the lead, not observed:** the two commands were chained with `&&`.
+- **Observed:** `just eval` exits 1 unless every skill-arm trial passes and every baseline trial is valid (`runner.py:578`, `:642`). Run `3958`'s behaviour case failed on E3, so the Codex command never started, and `eval-results/` holds no Codex GREEN run.
+- The next hand-off gives each command its own line, so one agent's failure cannot skip the other.
+
+#### Carried over
+
+- **`+` marks inside a `text` fence:** block 2 was a pseudocode diff sketch fenced `text`, though `views.md:12` gives a diff sketch, pseudocode included, the `diff` fence, and the run read `views.md`. The rule exists and was read, so this ticket changes nothing. It is handed to ticket 20 (view choice) and ticket 24 (fences on GitHub), in each one's **What is known**.
+- **Long notes:** the skill arm's first two note bullets each run to about five sentences. This ticket sets no limit on a bullet's length. Handed to ticket 20 (length), in its **What is known**.
+
+#### Next
+
+- The GREEN run again, on both agents, from `253ee70` or a later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are, with each command on its own line (**GREEN**, **Next**).
+- The maintainer's read of a real branch: still pending.
