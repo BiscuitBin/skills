@@ -15,7 +15,7 @@ Each one-line answer here also says that uncommitted changes to the project's fi
 - **No candidate exists.** There is no default branch to compare with. Say so in one line, list the local branches (`git --no-optional-locks for-each-ref --format='%(refname:short)' refs/heads`), and ask which one is the base. A guessed base describes the wrong commits.
 - **The current branch is the default branch.** It cannot be its own base. A remote's default branch, such as `origin/main`, is still a candidate, and the description then covers the commits not yet pushed. With no remote there is no base: say so in one line and ask for one.
 - **`HEAD` is detached.** `rev-parse --abbrev-ref HEAD` prints `HEAD`. Find the base as usual, and say in a note that the description is of a detached `HEAD` at its short commit id, since there is no branch name to give.
-- **Nothing is ahead.** The count is 0, so there are no commits to describe. Say so in one line that names the branch and the base, and stop. Three headings over an empty change send the reader looking for something that is not there.
+- **Nothing is ahead.** The count is 0, so there are no commits to describe. Say so in one line that names the branch and the base, and stop. Three headings over an empty change send the reader looking for something that is not there. But if the 0 is a local branch's, such as `main`, and a remote's branch, such as `origin/main`, counts more, the commits are in the local copy, often through a merge not yet pushed, and a pull request would still carry them. Then say so in one line with both counts, and ask which base to describe against: either one alone is a guess at what the reader is about to merge.
 
 ## A large branch
 
