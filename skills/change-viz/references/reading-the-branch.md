@@ -4,7 +4,7 @@ The cases that finding the base leaves open, and how to read a large branch. Eve
 
 ## The candidates in full
 
-- Local `main` and `master`, and `origin/main` and `origin/master`, when they exist.
+- Local `main` and `master`, and the same two on `origin` and `upstream`, when they exist.
 - The branch that `git --no-optional-locks config --get init.defaultBranch` names, when a branch of that name exists here. It is the default this machine gives new repositories, which is often what a repository with no remote uses. `git --no-optional-locks rev-parse --verify --quiet <name>` prints a commit only when that branch exists, so it tells you whether the name is real here without an error message.
 - For each remote that `git --no-optional-locks remote` lists, the branch its `HEAD` points at: `git --no-optional-locks symbolic-ref --quiet --short refs/remotes/origin/HEAD` prints `origin/main`, for example. A clone has one. A repository made with `git init` has none, and the command then prints nothing and exits 1.
 
