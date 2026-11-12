@@ -691,7 +691,7 @@ A second cross-model review, of round 1's fixes and their records, before the GR
 - **The new text, worked by hand on the probe's counts** (the triage's table): Cases 1 and 5 now ask. Case 5 is an empty branch cut from `origin/main`'s tip where the default is `develop`, and a pull request to `develop` would carry 2. Cases 2 and 4 still stop. Case 7 is not a 0, so it is unchanged. Round 1's other rows are unchanged.
 - **Cost:** Case 3, a stale `origin/HEAD`, and Case 6, describing `main` itself where the default is `develop`, now ask where they stopped.
 - **Inferred, not a Git fact:** the new reason's "where a pull request goes unless told otherwise" rests on hosting services, such as GitHub's default base branch.
-- **`SKILL.md` is unchanged:** its step 3 already sends every 0 to **Nothing is ahead**.
+- **`SKILL.md` is unchanged:** the paragraph after its step 3, under **1. Find the base**, already sends every count of 0 to `references/reading-the-branch.md`.
 - **E8:** still passes, inferred and not run. The fixture has no remote and its branch counts 3 against `main`, so the bullet is never reached.
 
 **Checks run after `af11c72`:**
