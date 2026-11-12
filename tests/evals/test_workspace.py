@@ -178,6 +178,54 @@ def test_constructed_path_runs_python3_and_git_and_logs_python(tmp_path: Path) -
     assert call.exit_code == 0
 
 
+def trial_git(trial: TrialPaths, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
+    """git as the agent runs it: the trial's PATH and an empty environment besides."""
+    return subprocess.run(
+        ["git", *args],  # noqa: S607 -- the trial's PATH finds its git
+        cwd=trial.workspace,
+        env={"PATH": workspace.child_path(trial), "HOME": os.devnull, **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_the_trials_git_does_not_go_through_xcrun_on_each_call(tmp_path: Path) -> None:
+    # On macOS /usr/bin/git is xcrun's shim, which looks up the developer
+    # directory each time it runs, and with Xcode selected can start xcodebuild,
+    # which inside Codex's sandbox prints warnings into git's output. The trial's git
+    # is looked up once, outside the trial, so the shim's input in the agent's
+    # environment changes nothing. Linux has no shim, and ignores the variable.
+    trial = workspace.create_trial(tmp_path, "run", "case")
+    version = trial_git(trial, "--version", DEVELOPER_DIR=str(tmp_path / "missing"))
+    assert (version.returncode, version.stderr) == (0, ""), version
+
+
+def test_the_trials_git_finds_its_own_helpers(tmp_path: Path) -> None:
+    # Apple's git finds its helpers relative to the path it was started by, so
+    # a link to it from the trial's bin/ would point git at a missing directory.
+    trial = workspace.create_trial(tmp_path, "run", "case")
+    exec_path = trial_git(trial, "--exec-path")
+    assert exec_path.returncode == 0, exec_path
+    assert Path(exec_path.stdout.strip()).is_dir(), exec_path
+
+
+def test_the_trials_git_falls_back_to_the_systems_when_xcrun_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    failing = tmp_path / "xcrun"
+    failing.write_text("#!/bin/sh\nexit 1\n")
+    failing.chmod(0o755)
+    monkeypatch.setattr(workspace, "XCRUN", str(failing))
+    workspace.system_git.cache_clear()
+    try:
+        trial = workspace.create_trial(tmp_path, "run", "case")
+        assert workspace.system_git() == shutil.which("git", path=workspace.SYSTEM_PATH)
+        assert trial_git(trial, "--version").returncode == 0
+    finally:
+        workspace.system_git.cache_clear()
+
+
 def test_python_wrapper_passes_on_and_logs_the_exit_status(tmp_path: Path) -> None:
     trial = workspace.create_trial(tmp_path, "run", "case")
     env = {"PATH": workspace.child_path(trial)}

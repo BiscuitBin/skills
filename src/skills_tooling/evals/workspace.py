@@ -4,6 +4,7 @@ See docs/explanation/eval-isolation.md for what this isolates and what it does n
 """
 
 import contextlib
+import functools
 import hashlib
 import os
 import shlex
@@ -44,6 +45,7 @@ GIT_ENV = {
     "GIT_COMMITTER_EMAIL": "eval@example.invalid",
 }
 SYSTEM_PATH = "/usr/bin:/bin"
+XCRUN = "/usr/bin/xcrun"
 # The top directories either adapter installs a skill under, which a fixture
 # trial's .git/info/exclude hides from git.
 HIDDEN_PARTS = {(".claude",), (".agents",)}
@@ -133,9 +135,43 @@ def _write_bin(trial: TrialPaths) -> None:
         path = trial.bin / name
         path.write_text(wrapper)
         path.chmod(0o755)
+    git = system_git()
+    if git is not None:
+        # Not a link: Apple's git finds its helpers relative to the path it was started by.
+        path = trial.bin / "git"
+        path.write_text(f'#!/bin/sh\nexec {shlex.quote(git)} "$@"\n')
+        path.chmod(0o755)
+
+
+@functools.cache
+def system_git() -> str | None:
+    """The git a trial runs: the system's, and on macOS the one xcrun's shim would start.
+
+    /usr/bin/git on macOS is xcrun's shim, which looks up the developer
+    directory each time it runs. With Xcode selected it can start xcodebuild,
+    which inside Codex's sandbox prints warnings into git's output and adds
+    half a second, long enough to change how Codex reports a denied command.
+    So the lookup runs once, here, with the system PATH and no DEVELOPER_DIR,
+    as the shim would see a trial's environment. If it fails, the shim it is.
+    """
     found = shutil.which("git", path=SYSTEM_PATH)
-    if found is not None:
-        (trial.bin / "git").symlink_to(found)
+    if found is None or sys.platform != "darwin":
+        return found
+    try:
+        lookup = subprocess.run(  # noqa: S603 -- a fixed command
+            [XCRUN, "--find", "git"],
+            env={"PATH": SYSTEM_PATH, "HOME": os.devnull},
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except OSError, subprocess.TimeoutExpired:
+        return found
+    real = lookup.stdout.strip()
+    if lookup.returncode != 0 or not Path(real).is_absolute() or not os.access(real, os.X_OK):
+        return found
+    return real
 
 
 @dataclass

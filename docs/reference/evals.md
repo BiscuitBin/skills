@@ -270,7 +270,7 @@ Each trial gets `.eval-workspaces/<run-id>/<case-id>/<arm>-<n>/` (for example `b
 - `workspace/`, a fresh `git init --initial-branch=main` that is its own git root, gitignored, and outside `skills/` and `dev-skills/`. It holds `.git/`, the installed skill and, in a [fixture](#fixtures) trial, the fixture's working files, nothing else.
 - `home/`, the user home and the agent home.
 - `tmp/`, the agent's temporary directory, transcript and debug log.
-- `bin/`, holding `python3` and `python`, wrappers that run the harness's pinned interpreter, pass on a signal they receive as SIGTERM, and then log each call with its exit status, and `git`.
+- `bin/`, holding `python3` and `python`, wrappers that run the harness's pinned interpreter, pass on a signal they receive as SIGTERM, and then log each call with its exit status, and `git`, a wrapper that runs the system's Git. On macOS `/usr/bin/git` is xcrun's shim, which looks up the selected developer directory each time it runs; with Xcode selected it can start `xcodebuild` (on the macOS CI runner, for each trial's first Git call), which inside Codex's sandbox prints two warnings into Git's output and adds about half a second. So on macOS `git` runs the Git that `xcrun --find git` names, looked up once per run, outside any trial, with `PATH=/usr/bin:/bin` and no `DEVELOPER_DIR`, as the shim would see a trial's environment. If the lookup fails, it runs `/usr/bin/git`. It is a wrapper, not a link, because Apple's Git finds its helpers relative to the path it was started by.
 
 The preflight checks all of this before the agent starts, and fails closed. A baseline trial installs nothing, so its workspace may hold only `.git/` and its fixture's files.
 
