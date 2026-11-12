@@ -163,7 +163,7 @@ Commits `6a08917..4a295e8`, then the review fixes `9ab646d` and `bed4ae0`.
 - The /code-review fixes: each new test failed first for the stated reason, finding 1's with the host's identity in place of Robin Hale and the others with `DID NOT RAISE CaseError`. After the last fix, `test_cases.py`, `test_fixture.py`, `test_benchmark.py`, `test_workspace.py`, `test_grader.py` and `test_dispatch.py` gave 523 passed, 2 skipped (the case-clash skips). For finding 1, `test_fixture.py`, `test_runner.py`, `test_trials_and_baselines.py`, `test_codex_adapter.py` and `test_claude_adapter.py`, with the pinned CLIs and fake APIs, gave 94 passed. Cowsay is unchanged: `git diff 5bf7fe0..a083291 -- evals/` is empty, its `evals_sha256` pin passes and `grader.py` was not touched.
 - Before the cross-model review, `just check` passed on `4a295e8`: 1084 passed, 4 skipped (`ai_tmp/verify-16-check.log`). Each criterion was checked against the code and the tests that pin it (`ai_tmp/impl-16-progress.md`, **Verify**).
 - Each review fix was red first: the five new `__pycache__` cases loaded, and the new `now-a-dir` case raised `IsADirectoryError`.
-- Not run: Ubuntu CI, because nothing was pushed, so the two canaries and the case-clash test have not run. No live eval, which this ticket does not need.
+- Not run: Ubuntu CI, because nothing was pushed, so the two canaries and the case-clash test have not run. No live eval, which this ticket does not need. (All three have since run on Ubuntu CI: **CI on Linux and macOS**, below.)
 
 #### Cross-model review
 
@@ -203,7 +203,7 @@ The review reported no finding on `5bf7fe0..a083291`, so this round has no table
 **Follow-ups:**
 
 - The descriptor close in `unchanged` has no test of its own. A fix that only caught `OSError` around `fdopen` would also pass the `now-a-dir` case.
-- The nested-negation test asserts an exact problem list that depends on how Git re-includes ignored paths, seen only with Apple Git 2.50.1. Ubuntu CI is its first Linux run, and the `now-a-dir` case's.
+- Closed by Ubuntu CI: the nested-negation test asserts an exact problem list that depends on how Git re-includes ignored paths, seen at first only with Apple Git 2.50.1. It passed on Ubuntu 24.04's Git in every CI run, as did the `now-a-dir` case (**CI on Linux and macOS**, below).
 - Closed here: the design and the Maintainer decisions now say `git clean -n -d -x`, as the docs do. The progress note's claim that the repository ignore check rejects `__pycache__` is superseded by finding 1's rule, as the note says. `just check` has run on the fix commits (above).
 - No cross-model review finding was out of scope.
 - /code-review finding 5 is a known residual, already filed in `.scratch/foundation/follow-ups.md:58` (Ticket 05). So is finding 6's empty `fixtures/` half, under **Stray files** in Residual risk below.
@@ -216,25 +216,100 @@ The review reported no finding on `5bf7fe0..a083291`, so this round has no table
 
 **Residual risk:**
 
-- **Linux is unrun.** Ubuntu CI has not run, because nothing was pushed. It is the first run of dash, Codex's bwrap or Landlock sandbox on `.git` (the `git add` denial, and the eight variables reaching its commands), the on-disk case-clash test, and `GIT_ATTR_NOSYSTEM` on a non-Apple Git.
+- **Linux has run, in CI only.** Ubuntu 24.04 passed on every push of PR #19 (**CI on Linux and macOS**, below), so the tests that cover what this line listed as unrun have run there: the `sh` wrappers under dash, Codex's Linux sandbox on `.git` (both `git add` variants denied, and the eight variables reaching its commands), the on-disk case-clash test, the two canaries, and `GIT_ATTR_NOSYSTEM` on a non-Apple Git. One Ubuntu version on one runner image ran it, and no live eval has run on Linux.
 - **Deleted fixture files are not shown to the grader.** A case that judges a deletion needs a `needs_transcript` expectation.
 - **Cowsay's skill arm still shows `?? .claude/`** in Claude Code's startup git status, as before this ticket. The follow-up is in `.scratch/foundation/follow-ups.md`.
 - **The Git views boundary.** `git status --ignored`, `git ls-files --others` without `--exclude-standard` and `git clean -n -d -x` still list the skill in the skill arm, as `ls -a` does.
 - **The secret-sweep criterion is met by inspection.** The sweep and teardown are unchanged code, and no test plants a secret in a fixture file.
-- **A Git write cannot be scored on Codex.** `git add` in a fixture trial is denied and the trial is `infra_error`. That was first observed on macOS only. Since `7f8c72b` it is checked on macOS and Ubuntu CI, for a `git add` that fails within Codex's 150 ms window and for one that fails after it (**macOS CI**, below).
+- **A Git write cannot be scored on Codex.** `git add` in a fixture trial is denied and the trial is `infra_error`. That was first observed on macOS only. Since `7f8c72b` it is checked on macOS and Ubuntu CI for a plain `git add` and for one after a half-second `sleep`, which fails past Codex's 150 ms window. Since `62caba3` the test also checks that the slow one leaves the late path's signals. The plain one usually fails within the window, but nothing requires it, so the early path's signals are not asserted in a live trial; their parsing is checked against output recorded in an earlier CI run (**CI on Linux and macOS**, below).
 - **The eight variables were seen reaching Codex's commands only.** For Claude Code, the check is the environment the CLI starts with and its startup git context, not a Bash command's environment.
 - **The wording check reads UTF-8.** `skill` wording in a UTF-16 file would pass validation.
 - **Stray files.** A file directly in `evals/<skill>/fixtures/`, such as a Finder `.DS_Store`, or an empty fixtures directory, changes `evals_sha256` locally but not in a clean checkout. Runs then refuse to share an iteration; they never wrongly share one.
 
-### macOS CI
+### CI on Linux and macOS (PR #19, 2026-11-11)
 
-PR #19's first CI run (43102888731, at `b28cd28`) passed on Ubuntu and failed two of this ticket's Codex tests on macOS 15 (`ai_tmp/red/ci.md`). Diagnosis: `ai_tmp/ci-macos/diagnosis.md`, with each CI round under **Rounds** there.
+PR #19's CI runs are this ticket's first on Linux and on a hosted Mac. Diagnosis: `ai_tmp/ci-macos/diagnosis.md`, with each round under **Rounds** there. The saved job logs are in `ai_tmp/ci-macos/` and `ai_tmp/ci-macos2/`.
 
-- **The causes.** A trial's `git` was a link to `/usr/bin/git`, Apple's xcrun shim. The runner has Xcode 16.4 selected, so the shim started `xcodebuild` inside Codex's sandbox. It printed two lines into `git status`'s output, and it took at least 409 ms. Codex logs `codex.sandbox_outcome` only for a command that fails within 150 ms of starting, so the slow `git add` was still blocked, but came back as an ordinary failed command, and the trial was scored.
-- **Failure messages.** Both tests print, on failure, each command's exit code and full output as the event stream has it, Codex's sandbox lines, and what the trial's `git` is.
-- **Detection** (`codex.py`): the adapter also keeps Codex's own `recorded sandbox violation: resource=filesystem` warning, which Codex logs for every denial, and counts the larger of the two counts. A `sleep 0.5; git add notes.txt` variant of the write test was red first on this Mac (`ok`), as were the parser tests for a violation-only denial. The write test now also checks that `notes.txt` is still untracked. `evals.md` and `eval-isolation.md` say which denials leave a `command_execution` item, and that the status no longer depends on it. CI round 1 (`7f8c72b`, run 43125628822): both write variants were `infra_error` with one denial on macOS, where git was still the slow shim, and on Ubuntu, where the sleep took the write past the window. The read test still failed on macOS, now showing the two `xcodebuild` lines in `git status`'s output and `bin/git` linked to `/usr/bin/git`.
-- **The trial's git** (`workspace.py`): `bin/git` is now a two-line `sh` wrapper that runs `system_git()`, the Git `xcrun --find git` names on macOS, looked up once per process outside any trial with `PATH=/usr/bin:/bin` and no `DEVELOPER_DIR`, and `/usr/bin/git` where that fails or on Linux. A wrapper, not a link, because Apple's Git finds its helpers relative to the path it was started by. This Mac has no Xcode.app, so the end-to-end check is CI's. Locally, `test_workspace.py` checks the mechanism: the trial's git works with a `DEVELOPER_DIR` that does not exist in the agent's environment (red first, with `xcrun: error: missing DEVELOPER_DIR path`), its `--exec-path` is a directory, and it falls back when xcrun fails. Both arms and both agents get the same `bin/git`, and nothing under `evals/` or `grader.py` changed, so cowsay's pins hold.
-- **CI round 2** (`ba93b1c`, run 43127141798): both OSes pass, macOS with 1209 passed and 4 skipped, Ubuntu with 1212 passed and 1 skipped. On macOS the read test got `git status`'s exact output, and the `DEVELOPER_DIR` test passed, so the runner's `bin/git` did not go through the shim. Not observed: which Git `xcrun --find git` named there (the image README makes Xcode 16.4 the default).
-- **Local gate:** `just check` at `ba93b1c` passed, exit 0: 1209 passed, 4 skipped (`ai_tmp/gate-ci.log`).
-- **Not done:** no cross-model review of `7f8c72b` and `ba93b1c`.
-- **Residual risk:** the 150 ms window and the violation line's text are Codex 0.163.0 internals. The `sleep` variant re-checks them on every run, so a Codex bump that changes either fails the test rather than scoring a denied write. The harness's own Git calls still go through `/usr/bin/git`, outside the sandbox. On a Mac with Xcode selected they may be slow, but nothing they print reaches the agent.
+**The first run** (43102888731, at `b28cd28`):
+
+- Ubuntu 24.04 passed: 1205 passed, 1 skipped. The skip is `test_validator.py`'s case-insensitive file system test, so the on-disk case-clash test and both CI-only canaries ran.
+- macOS 15 failed two of this ticket's Codex tests, with 2 failed, 1200 passed and 4 skipped (`ai_tmp/red/ci.md`):
+  - the Git-read test, whose `git status` output began with two `xcodebuild` lines;
+  - the Git-write test, whose trial was scored `ok` rather than `infra_error`.
+- Run 43106897147, at `0d691ac`, which changed only tickets 17 and 18, gave the same results on both OSes.
+
+**Root causes.**
+
+- **Failure 1, observed.** A trial's `git` was a link to `/usr/bin/git`, Apple's xcrun shim. The runner image makes Xcode 16.4 the default, so the shim started `xcodebuild` inside Codex's sandbox, and it printed two lines into the command's output.
+  - Round 1 showed them on the trial's first Git call only, with `bin/git` linked to `/usr/bin/git`.
+  - The first run's two lines were 409 ms apart and round 1's 571 ms, so those calls ran at least that long.
+  - Round 2's wrapper removed them.
+- **Failure 2, established.** Codex 0.163.0 logs `codex.sandbox_outcome outcome=denied` only for a command that exits within 150 ms of starting (`EARLY_EXIT_GRACE_PERIOD` in its `core/src/unified_exec/process.rs`). A denial found later comes back as an ordinary failed command, and the adapter counted only `sandbox_outcome`, so such a trial was scored.
+  - Read in Codex's source.
+  - Reproduced on this Mac: a `sleep 0.5; git add notes.txt`, or a plain `git add` through a `bin/git` slowed by half a second, was blocked (`?? notes.txt` after it) but scored `ok`.
+- **Failure 2 on the runner, a strongly supported inference.** That the first run's `git add` was blocked and came back through that late path because the shim made it slow is inferred, not observed. That run captured only the status `ok`, and the 409 ms is the read test's `git status`, in another trial. The support:
+  - the slowed `bin/git` reproduces the symptom exactly;
+  - in round 1 the detection fix alone made the macOS write test `infra_error`, with one denial, while `bin/git` was still the shim.
+
+**The fixes.**
+
+- `7f8c72b`, detection (`codex.py`):
+  - The adapter also keeps Codex's own `recorded sandbox violation: resource=filesystem` warning, which Codex logs for every command its denial test flags, however long the command ran.
+  - It counts the larger of that count and the `sandbox_outcome=denied` count, so a fast denial that logs both counts once.
+  - Both fixture tests now print, on failure, each command's exit code and full output, Codex's sandbox lines, and what `bin/git` is.
+  - The write test gained the `sleep` variant and a follow-up `git status --porcelain` that checks `notes.txt` is still untracked.
+  - The `sleep` variant and the parser tests for a violation-only denial were red first on this Mac.
+- `ba93b1c`, the trial's Git (`workspace.py`):
+  - `bin/git` is a two-line `sh` wrapper, `exec '<git>' "$@"`. A wrapper, not a link, because Apple's Git finds its helpers relative to the path it was started by.
+  - `<git>` comes from `system_git()`, looked up once per process outside any trial. On macOS it is what `xcrun --find git` names, run with `PATH=/usr/bin:/bin`, `HOME=/dev/null` and no `DEVELOPER_DIR`; where that fails, and on Linux, it is `/usr/bin/git`.
+  - This Mac has no Xcode.app, so `test_workspace.py` checks the mechanism: the trial's Git works with a `DEVELOPER_DIR` that does not exist (red first, with `xcrun: error: missing DEVELOPER_DIR path`), its `--exec-path` is a directory, and it falls back when xcrun fails.
+  - Every trial gets the same `bin/git`, in both arms and for both agents. Nothing under `evals/` or in `grader.py` changed, so cowsay's pins hold.
+- `f5a18e3` and `5a9fc74`: this ticket and the eval docs only.
+- `62caba3`: the cross-model review's fixes 1 and 2 (below).
+- Docs: `docs/reference/evals.md` (the kept stderr lines, the run status, the Git-write limit and what `bin/git` is) and `docs/explanation/eval-isolation.md` (the Git-write limit and **Which Git the agent runs**).
+
+**Each CI run**, with pytest's counts:
+
+| Run | Commit | macos-15 | ubuntu-24.04 |
+| --- | --- | --- | --- |
+| 43102888731 | `b28cd28` | fail: 2 failed, 1200 passed, 4 skipped | pass: 1205 passed, 1 skipped |
+| 43106897147 | `0d691ac` | fail: the same 2 failed, 1200 passed, 4 skipped | pass: 1205 passed, 1 skipped |
+| 43125628822 | `7f8c72b` (with `a2ce09f`) | fail: 1 failed (the read test), 1205 passed, 4 skipped | pass: 1209 passed, 1 skipped |
+| 43127141798 | `ba93b1c` | pass: 1209 passed, 4 skipped | pass: 1212 passed, 1 skipped |
+| 43128875480 | `5a9fc74` (with `f5a18e3`) | pass: 1209 passed, 4 skipped | pass: 1212 passed, 1 skipped |
+| 43132610911 | `62caba3` | pass: 1210 passed, 4 skipped | pass: 1213 passed, 1 skipped |
+
+What the runs showed:
+
+- **Round 1** (`7f8c72b`): both write variants were `infra_error`, "Codex reported 1 command(s) as denied by its sandbox", on both OSes. The read test still failed on macOS and printed the two `xcodebuild` lines; `git diff`, the trial's second Git call, had none.
+- **Round 2** (`ba93b1c`): the read test's exact output passed on macOS, and so did the `DEVELOPER_DIR` test, which the fallback to the shim would have failed. So the runner's `bin/git` did not go through the shim.
+- **Round 4** (`62caba3`): the `sleep` variant's late-path checks passed on both OSes: one violation line, no denied `sandbox_outcome`, and the `git add` as a failed command. That is the first direct check that Codex logs the violation line on Linux's late path; round 1 showed only the count. The plain variant's single violation line passed on both too.
+- PR #19's checks all pass at `62caba3`, CodeQL included. No job was cancelled or rerun, and no commit skipped its hooks.
+
+**Local gate:** `just check` at `62caba3`, in the foreground: exit 0, 1210 passed, 4 skipped (`ai_tmp/gate-ci2.log`). The skips are the two runs of the on-disk case-clash test, because macOS folds case, and the two CI-only canaries. Before the review, `just check` gave 1209 passed and 4 skipped at both `ba93b1c` and `5a9fc74` (`ai_tmp/gate-ci.log`). The commit that adds this section changes only this ticket.
+
+#### Cross-model review
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`), per the commits' trailers. The review script recorded no implementer model.
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `a2ce09f..5a9fc74` (`7f8c72b`, `ba93b1c`, `f5a18e3` and `5a9fc74`), reviewed commit `5a9fc74`, against this ticket's acceptance criteria, with the diagnosis and the CI rounds. Brief: `ai_tmp/brief-ci-macos.md`.
+- **Findings:** `ai_tmp/review-20261112T010025Z-codex.md` · **Triage:** `ai_tmp/triage-ci-macos.md`
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | low | A violation line's `path`, which Codex writes last and unquoted from the command's output, can hold `backend=` or `reason=` after a space and replace those kept fields | valid (low): only the kept diagnostic fields; the denial count and the status are unchanged. Reproduced with a line in Codex's format whose path holds both | fixed in `62caba3`: `kept_lines` reads the fields from the violation match up to the first space followed by `path=`. `test_codex_parser.py::test_a_violations_path_cannot_replace_its_backend_or_reason` failed first, keeping `backend=forged`. `evals.md` says the fields come from before `path=` |
+| 2 | low | The write test checks the outcome but not which signal gave it, so the docs and this ticket claimed more about both paths than it shows | valid (low) | fixed in `62caba3`: both variants assert one `sandbox_violation` line, and the `sleep` variant also asserts no denied `sandbox_outcome` and a failed command for the `git add`. The plain `git add` can take either path, so nothing asserts the early path for it, and `evals.md` and the test's comment say so. Not red first, because the code already worked; applied to the plain variant on this Mac, where it took the early path, the late-path checks failed, so they tell the paths apart. CI round 4 passed them on both OSes. This ticket's wording is fixed in the commit that adds this section |
+| 3 | low | These notes stated as observed that the first run's `git add` was blocked and came back through Codex's late path | valid (low) | fixed in the commit that adds this section: **Root causes** marks it a strongly supported inference and gives the support |
+
+No second round: fix 1 narrows which text one kept line's fields are read from, and the match rule, the count and the status are unchanged. Fix 2 adds assertions and qualifies wording, and fix 3 is wording. No mechanism, data format or shared contract changed.
+
+**Follow-ups:** none; no finding was out of scope.
+
+**Still unverified:**
+
+- Which Git `xcrun --find git` named on the runner. That it was not the shim is observed; that it was Xcode 16.4's comes from the image README.
+- That the first run's `git add` took the late path (**Root causes**).
+- Which path the plain `git add` took in any CI run: the test requires neither, and a passing test prints nothing.
+- The 150 ms window and the violation line's text are Codex 0.163.0 internals. Since `62caba3` the `sleep` variant fails if a Codex bump drops the line, changes its start (`recorded sandbox violation: resource=filesystem`) or widens the window past half a second. A change to the `backend` or `reason` names would not fail it. A change only to the early path's lines would show only in the parser tests' recorded output, not in a live trial.
+- The harness's own `workspace.git()` still runs `/usr/bin/git`, the shim on macOS, outside the sandbox. On a Mac with Xcode selected it may be slow, but nothing it prints reaches the agent.
+- This Mac has no Xcode.app, so a Mac with Xcode selected has been checked only on the CI runner.
