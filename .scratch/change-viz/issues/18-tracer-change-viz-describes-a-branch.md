@@ -605,7 +605,7 @@ GREEN runs on harness commits made after RED: `7f8c72b`, `ba93b1c` and `62caba3`
 
 #### Next
 
-Hand-off 2, from `253ee70`, the E3 fix (**GREEN run, Claude (2026-11-12)**), or any later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are. `c82b6f9`, `181aee0`, `b89df20`, `af11c72`, `e6d8f11`, `62d86de` and `6db0d6f` no longer qualify, because later fixes change `skills/change-viz/`. Neither the stage-2 re-review's fix nor the E3 fix has had a review round of its own (**/code-review (stage 2)**, **GREEN run, Claude (2026-11-12)**), so a fix from such a round would move this start commit again:
+Hand-off 2, from `253ee70`, the E3 fix (**GREEN run, Claude (2026-11-12)**), or any later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are. `c82b6f9`, `181aee0`, `b89df20`, `af11c72`, `e6d8f11`, `62d86de` and `6db0d6f` no longer qualify, because later fixes change `skills/change-viz/`. The E3 fix's review round found nothing to change (**Review of the E3 fix**, under **GREEN run, Claude (2026-11-12)**). The stage-2 re-review's fix has had no round of its own (**/code-review (stage 2)**), so a fix from such a round would move this start commit again:
 
 - **The GREEN run,** the two commands under **Next** above, in the maintainer's terminal, each on its own line and not chained with `&&`. Run ids: Claude Code `20261112T065321Z-3958`, on `6b999cc`'s text (`b76a09db…`), before the E3 fix, so both agents run again on the new text; Codex pending (**GREEN run, Claude (2026-11-12)**).
 - **The maintainer's read of a real branch** of their choosing. Feedback: pending. It is recorded here and applied by changing what the skill explains.
@@ -805,7 +805,7 @@ Observed in the transcripts and the kept workspaces, unless marked.
 - **Held back,** each until its trigger, so a rerun stays attributable to one change (`e3-recommendation.md` §5 has the exact text):
   - the `:71` pointer, which puts "Read" first: if a run skips `example.md` again and its lead-ins differ from what the example models;
   - the `:99` done line, which adds "which opens with what the visual draws": if, under the new rule, a lead-in again opens on a commit or a change rather than on what its visual draws.
-- **Not yet shown:** no agent has read the new text, and no review round has run on `253ee70`; the recommendation leaves that round to the lead (§7). At n = 1 a rerun can pass or fail E3 on either text by variance.
+- **Not yet shown:** no agent has read the new text. The review round the recommendation left to the lead (§7) found nothing (**Review of the E3 fix**, below), which does not show that the fix works. At n = 1 a rerun can pass or fail E3 on either text by variance.
 
 **Checks run on `253ee70`:**
 
@@ -817,6 +817,22 @@ Observed in the transcripts and the kept workspaces, unless marked.
 - Body: 99 lines and 11,842 bytes, about 2,961 tokens (`ai_tmp/e3-fix/body_size.out`), where `6db0d6f`'s was 11,724 bytes.
 - The Codex load check against the fake API was not rerun: the frontmatter is unchanged since `c82b6f9`.
 - `just check` runs on the commit that adds this section, so its result is not recorded here.
+
+#### Review of the E3 fix
+
+A cross-model round on `253ee70` and its records, before the GREEN run again.
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`), per the commits' trailers. The review script recorded no implementer model.
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no), exit 0 on the first run, with no rejected run
+- **Reviewed:** `6b999cc..78d2a21` (`253ee70` and `78d2a21`), reviewed commit `78d2a21`. The brief carried `SKILL.md:51-99`, `references/example.md` and the whole diff, each equal to `78d2a21` byte for byte by the triage's comparison. It asked four questions: whether the change addresses the cause, lead-ins that narrate the commits, for branches in general and not only for the fixture or the rubric's wording; whether the new instance or the example's lead-ins invite a pattern that fails E1, E2 or E4, or crowds tickets 20 to 24; whether the rule's reason is given, short, in one home and consistent with "one line, of one to three sentences"; and whether these records are accurate. Brief: `ai_tmp/brief-e3-fix.md`.
+- **Findings:** `ai_tmp/review-20261112T081504Z-codex.md` · **Triage:** `ai_tmp/triage-e3-fix.md`
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| – | – | No numbered finding. The review's whole text is "No actionable findings in `6b999cc..78d2a21`; the fix’s effectiveness remains unverified pending both agents’ reruns, as the records explicitly acknowledge." | The remark is true, and already recorded: **E3**'s "Not yet shown" and **Next** say both agents run again on the new text | None. No skill or eval file changed, so Hand-off 2 still starts from `253ee70`, and `skill_sha256` stays `37bb7110…` |
+
+- **How much it shows:** the review took about 83 seconds, by its run files' times, on a brief of 88,118 bytes, and answered none of the four questions. The brief allows a one-line "nothing found". The triage found no Codex session transcript under `.tools/agent-homes/codex/`, so what the reviewer read is not recorded.
+- **Checks,** read by the triage and not rerun, since nothing changed: P1 to P4 pass 8 of 8 (`ai_tmp/e3-fix/patterns.out`), and the body size and both hashes are as recorded above. `just check` after `78d2a21` was committed, by the log's time: 1210 passed, 4 skipped (`ai_tmp/e3-fix/gate.log`).
 
 #### The Codex GREEN run did not run
 
