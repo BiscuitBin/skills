@@ -225,3 +225,11 @@ The review reported no finding on `5bf7fe0..a083291`, so this round has no table
 - **The eight variables were seen reaching Codex's commands only.** For Claude Code, the check is the environment the CLI starts with and its startup git context, not a Bash command's environment.
 - **The wording check reads UTF-8.** `skill` wording in a UTF-16 file would pass validation.
 - **Stray files.** A file directly in `evals/<skill>/fixtures/`, such as a Finder `.DS_Store`, or an empty fixtures directory, changes `evals_sha256` locally but not in a clean checkout. Runs then refuse to share an iteration; they never wrongly share one.
+
+### macOS CI
+
+PR #19's first CI run (43102888731, at `b28cd28`) passed on Ubuntu and failed two of this ticket's Codex tests on macOS 15 (`ai_tmp/red/ci.md`). Diagnosis: `ai_tmp/ci-macos/diagnosis.md`, with each CI round under **Rounds** there.
+
+- **The causes.** A trial's `git` was a link to `/usr/bin/git`, Apple's xcrun shim. The runner has Xcode 16.4 selected, so the shim started `xcodebuild` inside Codex's sandbox. It printed two lines into `git status`'s output, and it took at least 409 ms. Codex logs `codex.sandbox_outcome` only for a command that fails within 150 ms of starting, so the slow `git add` was still blocked, but came back as an ordinary failed command, and the trial was scored.
+- **Failure messages.** Both tests print, on failure, each command's exit code and full output as the event stream has it, Codex's sandbox lines, and what the trial's `git` is.
+- **Detection** (`codex.py`): the adapter also keeps Codex's own `recorded sandbox violation: resource=filesystem` warning, which Codex logs for every denial, and counts the larger of the two counts. A `sleep 0.5; git add notes.txt` variant of the write test was red first on this Mac (`ok`), as were the parser tests for a violation-only denial. The write test now also checks that `notes.txt` is still untracked. `evals.md` and `eval-isolation.md` say which denials leave a `command_execution` item, and that the status no longer depends on it.

@@ -495,16 +495,52 @@ def test_a_token_refreshed_before_the_run_fails_is_still_swept(tmp_path: Path) -
     assert trial["secret_found"] == {"files": ["workspace/copied.txt"], "deleted": True}
 
 
+@dataclass
+class Arm:
+    """One arm's fixture trial: its record in results.json, its trace, and what Codex reported."""
+
+    record: dict[str, Any]
+    trace: Trace
+    reported: dict[str, Any]
+
+    def evidence(self) -> str:
+        """For a failed assertion: each command's exit code and full output, and the denials."""
+        reason = self.record.get("status_reason")
+        return json.dumps({"status_reason": reason, **self.reported}, indent=2)
+
+
+def reported(raw: RawRun, trial: TrialPaths) -> dict[str, Any]:
+    """Each command as the event stream has it, Codex's sandbox lines, and the trial's git."""
+    events = [json.loads(line) for line in raw.transcript.read_text().splitlines() if line.strip()]
+    items = [e["item"] for e in events if e.get("type") == "item.completed" and "item" in e]
+    fields = ("command", "status", "exit_code", "aggregated_output")
+    git = trial.bin / "git"
+    return {
+        # A command Codex denied within its early-exit window has no item.
+        "commands": [
+            {f: item.get(f) for f in fields}
+            for item in items
+            if item.get("type") == "command_execution"
+        ],
+        "sandbox_lines": [line for line in raw.debug_lines if line.startswith("sandbox_")],
+        "stderr_violations": [
+            line for line in raw.stderr.splitlines() if "recorded sandbox violation" in line
+        ],
+        "bin/git": str(git.readlink()) if git.is_symlink() else git.read_text(),
+    }
+
+
 def fixture_trials(
     tmp_path: Path, turns: list[Any], *, prompt: str = AVERAGE, baseline: bool = True
-) -> tuple[dict[str, dict[str, Any]], dict[str, Trace]]:
-    """The fixture case run through the runner: each arm's trial record and trace."""
-    traces: dict[str, Trace] = {}
+) -> dict[str, Arm]:
+    """The fixture case run through the runner, by arm."""
+    traces: dict[str, tuple[Trace, dict[str, Any]]] = {}
 
     class Recording(Codex):
         def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401
             raw = super().run(prompt, trial, homes, **kwargs)
-            traces[trial.root.name.partition("-")[0]] = self.parse(raw)
+            # Read before teardown removes the trial's tmp/ and bin/.
+            traces[trial.root.name.partition("-")[0]] = (self.parse(raw), reported(raw, trial))
             return raw
 
     root = fixture_root(tmp_path, [{**FIXTURE_CASE, "prompt": prompt}])
@@ -521,7 +557,9 @@ def fixture_trials(
                 grading_skipped=True,
             )
         )
-    return {trial["arm"]: trial for trial in results(root)["trials"]}, traces
+    by_arm = {trial["arm"]: trial for trial in results(root)["trials"]}
+    assert set(by_arm) == set(traces), (set(by_arm), set(traces))
+    return {arm: Arm(record, *traces[arm]) for arm, record in by_arm.items()}
 
 
 def test_git_reads_in_a_fixture_trial_are_not_denied_and_the_skill_is_still_found(
@@ -534,33 +572,56 @@ def test_git_reads_in_a_fixture_trial_are_not_denied_and_the_skill_is_still_foun
         message("The average is 2.5."),
     ]
     # An explicit mention, which Codex expands only for a skill it found.
-    by_arm, traces = fixture_trials(tmp_path, turns, prompt=f"$cowsay:cowsay {AVERAGE}")
-    assert set(by_arm) == set(traces) == {"skill", "baseline"}
-    for arm, trial in by_arm.items():
-        trace = traces[arm]
-        assert (trial["status"], trial["contamination"]["passed"]) == ("ok", True), trial
+    arms = fixture_trials(tmp_path, turns, prompt=f"$cowsay:cowsay {AVERAGE}")
+    assert set(arms) == {"skill", "baseline"}
+    for arm in arms.values():
+        evidence = arm.evidence()
+        assert (arm.record["status"], arm.record["contamination"]["passed"]) == ("ok", True), (
+            evidence
+        )
         # Codex's sandbox keeps .git read-only; reading Git needs no write to it.
-        assert not [line for line in trace.debug_lines if "outcome=denied" in line]
-        status, diff, env = trace.commands
+        assert not [line for line in arm.trace.debug_lines if "outcome=denied" in line], evidence
+        status, diff, env = arm.trace.commands
         # The fixture's own edits, and no ?? .agents/ in the skill arm.
-        assert (status.ok, status.output) == (True, "M  README.md\n M tally.py\n?? notes.txt\n")
+        assert (status.ok, status.output) == (
+            True,
+            "M  README.md\n M tally.py\n?? notes.txt\n",
+        ), evidence
         assert (diff.ok, diff.output) == (
             True,
             " tally.py | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n",
-        )
+        ), evidence
         # Every one of the fixture trial's git variables reaches the agent's commands.
-        assert {f"{k}={v}" for k, v in AGENT_GIT_ENV.items()} <= set(env.output.splitlines())
+        assert {f"{k}={v}" for k, v in AGENT_GIT_ENV.items()} <= set(env.output.splitlines()), (
+            evidence
+        )
     # The exclude hides the skill from Git, not from Codex.
-    assert (by_arm["skill"]["trigger"]["actual"], by_arm["baseline"]["trigger"]["actual"]) == (
+    assert (
+        arms["skill"].record["trigger"]["actual"],
+        arms["baseline"].record["trigger"]["actual"],
+    ) == (
         True,
         False,
     )
 
 
-def test_a_git_write_in_a_fixture_trial_is_denied_and_not_scored(tmp_path: Path) -> None:
+# Codex checks a command for a sandbox denial as soon as it exits, and logs
+# sandbox_outcome only for one that exits within 150 ms of starting. The sleep
+# makes the write outlast that window on any machine, as a slow git does.
+@pytest.mark.parametrize("add", ["git add notes.txt", "sleep 0.5; git add notes.txt"])
+def test_a_git_write_in_a_fixture_trial_is_denied_and_not_scored(tmp_path: Path, add: str) -> None:
     # The limit the docs state: a flow that writes to Git cannot be scored on Codex.
-    turns = [shell("git add notes.txt", "call_1"), message("The average is 2.5.")]
-    by_arm, _traces = fixture_trials(tmp_path, turns, baseline=False)
-    trial = by_arm["skill"]
-    assert trial["status"] == "infra_error"
-    assert "denied by its sandbox" in trial["status_reason"]
+    turns = [
+        shell(add, "call_1"),
+        shell("git status --porcelain", "call_2"),
+        message("The average is 2.5."),
+    ]
+    arm = fixture_trials(tmp_path, turns, baseline=False)["skill"]
+    evidence = arm.evidence()
+    assert arm.record["status"] == "infra_error", evidence
+    assert arm.record["status_reason"].startswith(
+        "Codex reported 1 command(s) as denied by its sandbox"
+    ), evidence
+    # The sandbox blocked the write: notes.txt is still untracked.
+    [status] = [c for c in arm.trace.commands if c.command == "git status --porcelain"]
+    assert "?? notes.txt" in status.output.splitlines(), evidence

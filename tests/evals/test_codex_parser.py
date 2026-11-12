@@ -452,6 +452,7 @@ DENIED_STDERR = (
 def test_a_sandbox_outcome_is_kept_without_the_tool_result() -> None:
     assert kept_lines(DENIED_STDERR) == (
         "skill_invocation skill.name=cowsay:cowsay skill.scope=repo skill.invocation_type=implicit",
+        "sandbox_violation resource=filesystem backend=linux_sandbox reason=operation_not_permitted",
         (
             "sandbox_outcome tool_name=exec_command"
             " call_id=exec-b1cc59f7-b745-4e6e-ad6c-93975f6de99c outcome=denied"
@@ -477,6 +478,43 @@ def test_a_sandbox_denied_run_is_an_infrastructure_error() -> None:
     assert trace.skills_invoked == ["cowsay"]
     # The event still shows Codex listed the skill.
     assert trace.listed_skills == ["cowsay"]
+
+
+# Codex logs this line for every command its sandbox denies, but logs
+# sandbox_outcome only for one that exits within 150 ms of starting. From the
+# pinned CLI on macOS, running `sleep 0.5; git add notes.txt` in a fixture trial.
+VIOLATION = (
+    "2026-11-11T23:50:35.157913Z  WARN codex_sandboxing::violation: recorded sandbox violation:"
+    " resource=filesystem backend=seatbelt reason=operation_not_permitted path=unknown"
+)
+SLOW_ADD = (
+    "sleep 0.5; git add notes.txt",
+    128,
+    "fatal: Unable to create '/w/.git/index.lock': Operation not permitted\n",
+)
+
+
+def test_a_denial_logged_only_as_a_violation_is_an_infrastructure_error(tmp_path: Path) -> None:
+    lines = log("fake-should-trigger") + kept_lines(f"{VIOLATION}\n")
+    trace = parse_stream(raw_run(transcript(tmp_path, SLOW_ADD), lines))
+    assert trace.status == "infra_error"
+    assert trace.status_reason.startswith("Codex reported 1 command(s) as denied by its sandbox")
+    # Past the window, the event stream has the denied command, as failed.
+    assert [(c.command, c.ok) for c in trace.commands] == [(SLOW_ADD[0], False)]
+
+
+def test_a_denial_logged_both_ways_counts_once(tmp_path: Path) -> None:
+    # DENIED_STDERR holds one denied command's violation line and its sandbox_outcome.
+    trace = parse_stream(raw_run(transcript(tmp_path), kept_lines(DENIED_STDERR)))
+    assert trace.status_reason.startswith("Codex reported 1 command(s) as denied by its sandbox")
+
+
+def test_only_codexs_own_filesystem_violations_are_kept() -> None:
+    network = VIOLATION.replace("resource=filesystem", "resource=network")
+    printed = {"type": "item.completed", "item": {"aggregated_output": f"{VIOLATION}\n"}}
+    assert kept_lines(f"{network}\n") == ()
+    # A tool that prints the line does not make a denial.
+    assert kept_lines(f"{VIOLATION}\n", echoed_lines([printed])) == ()
 
 
 def test_a_read_after_pwd_must_print_more_than_pwd(tmp_path: Path) -> None:

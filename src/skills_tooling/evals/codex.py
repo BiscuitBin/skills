@@ -69,6 +69,12 @@ NATIVE = {
 STARTS = re.compile(r'event\.name="codex\.conversation_starts"')
 INVOCATION = re.compile(r'event\.name="codex\.skill_invocation"')
 SANDBOX_OUTCOME = re.compile(r'event\.name="codex\.sandbox_outcome"')
+# Codex's own log line for a command its sandbox denied. It comes from the same
+# check as sandbox_outcome=denied, but Codex logs that event only for a command
+# that exits within 150 ms of starting, and this line for every one.
+VIOLATION = re.compile(
+    r"codex_sandboxing::violation: recorded sandbox violation: resource=filesystem "
+)
 FIELD = re.compile(r'(?<![\w.])([\w.]+)=("(?:[^"\\]|\\.)*"|\S+)')
 FAILED_LOAD = re.compile(r"(failed to load skill .*)$", re.IGNORECASE)
 # A log record starts with a timestamp; lines without one continue the record above.
@@ -77,6 +83,8 @@ TELEMETRY = "codex_otel"
 STARTS_FIELDS = ("app.version", "model")
 INVOCATION_FIELDS = ("skill.name", "skill.scope", "skill.invocation_type")
 SANDBOX_FIELDS = ("tool_name", "call_id", "outcome")
+# Not path, which Codex takes from the command's output.
+VIOLATION_FIELDS = ("resource", "backend", "reason")
 # Codex wraps each command as `<shell> -c '<command>'`, or -lc for a login shell.
 SHELLS = {"bash", "zsh", "sh"}
 # auth.json fields that are not secret. Short strings are not secret either:
@@ -445,8 +453,8 @@ def _records(stderr: str, echoed: Collection[str]) -> Iterator[tuple[bool, bool,
 def kept_lines(stderr: str, echoed: Collection[str] = ()) -> tuple[str, ...]:
     """The stderr lines the trace reads, reduced to the fields it needs.
 
-    A failed skill load counts only from Codex's own log, never from a
-    telemetry record, which can carry any text a tool printed.
+    A failed skill load and a sandbox violation count only from Codex's own
+    log, never from a telemetry record, which can carry any text a tool printed.
     """
     kept = []
     for telemetry, starts, line in _records(stderr, echoed):
@@ -456,6 +464,8 @@ def kept_lines(stderr: str, echoed: Collection[str] = ()) -> tuple[str, ...]:
             kept.append(f"skill_invocation {_fields(line, INVOCATION_FIELDS)}")
         elif telemetry and starts and SANDBOX_OUTCOME.search(line):
             kept.append(f"sandbox_outcome {_fields(line, SANDBOX_FIELDS)}")
+        elif not telemetry and starts and VIOLATION.search(line):
+            kept.append(f"sandbox_violation {_fields(line, VIOLATION_FIELDS)}")
         elif not telemetry and (match := FAILED_LOAD.search(line)):
             kept.append(match.group(1))
     return tuple(kept)
@@ -562,13 +572,10 @@ def parse_stream(raw: RawRun) -> Trace:
                 if unplaced and (name := frontmatter_name(output, pwd_lines(command))):
                     unplaced_names.add(name)
     starts = ""
-    denied = 0
     for line in raw.debug_lines:
         fields = dict(FIELD.findall(line))
         if line.startswith("conversation_starts ") and not starts:
             starts = line
-        elif line.startswith("sandbox_outcome "):
-            denied += fields.get("outcome") == "denied"
         elif line.startswith("skill_invocation "):
             # The name may carry a plugin prefix: cowsay:cowsay.
             skill = fields.get("skill.name", "").rsplit(":", 1)[-1]
@@ -583,7 +590,7 @@ def parse_stream(raw: RawRun) -> Trace:
     started = dict(FIELD.findall(starts))
     last = events[-1] if events else {}
     completed = clean and last.get("type") == "turn.completed"
-    reason = _status_reason(raw, completed=completed, last=last, denied=denied)
+    reason = _status_reason(raw, completed=completed, last=last, denied=_denials(raw.debug_lines))
     return Trace(
         # A read and Codex's event for it are one trigger.
         skills_triggered=list(dict.fromkeys(triggered)),
@@ -605,6 +612,23 @@ def parse_stream(raw: RawRun) -> Trace:
     )
 
 
+def _denials(lines: Collection[str]) -> int:
+    """How many commands Codex reported as denied by its sandbox.
+
+    A command denied within Codex's 150 ms window logs both a denied
+    sandbox_outcome and a violation, and one denied later only the violation,
+    so the count is the larger of the two, not their sum.
+    """
+    outcomes = sum(
+        1
+        for line in lines
+        if line.startswith("sandbox_outcome ")
+        and dict(FIELD.findall(line)).get("outcome") == "denied"
+    )
+    violations = sum(line.startswith("sandbox_violation ") for line in lines)
+    return max(outcomes, violations)
+
+
 def _status_reason(  # noqa: PLR0911 -- one return per status, checked in order
     raw: RawRun, *, completed: bool, last: Mapping[str, Any], denied: int
 ) -> str:
@@ -616,12 +640,13 @@ def _status_reason(  # noqa: PLR0911 -- one return per status, checked in order
     if failed:
         return "; ".join(failed)[:300]
     if denied:
-        # A denied command leaves no command_execution item, so the trace
-        # cannot show what the agent ran. Codex's test is a heuristic: a failed
-        # command whose output names a permission error counts too.
+        # A command denied within Codex's 150 ms window leaves no
+        # command_execution item, so the trace cannot show what the agent ran.
+        # Codex's test is a heuristic: a failed command whose output names a
+        # permission error counts too.
         return (
-            f"Codex reported {denied} command(s) as denied by its sandbox, which the"
-            " event stream omits; see docs/reference/evals.md"
+            f"Codex reported {denied} command(s) as denied by its sandbox;"
+            " see docs/reference/evals.md"
         )
     if last.get("type") == "turn.failed":
         error = last.get("error")
