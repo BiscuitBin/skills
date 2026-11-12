@@ -327,7 +327,7 @@ The maintainer answered questions 1, 2, 3, 4, 6 and 7 on 2026-11-11, as the brie
 | Creates, edits or comments on no pull request, and pushes nothing (added at GREEN) | A stated limit: a trial has no `gh` on its `PATH` and the fixture has no remote, so no eval can show it. Checked by hand in the maintainer's real-branch read, which disables `push` and `gh` and lists every `gh` and `push` command in both transcripts; there should be none. Ticket 23 brings a case with `gh`. |
 | Does not refer to itself as a skill (added at GREEN) | `disclosure_matches` read against each final message, plus `rg -i 'change[- ]?viz'` over each skill-arm final message (**Disclosure reads**), plus a look for a credit line or the names "HumanLayer", "show-me" and "visual-pr" |
 
-**Hand-read note (added at GREEN): `--no-optional-locks`.** `SKILL.md` asks for `--no-optional-locks` straight after `git` every time. Whether each `git` command carries it is read from each trial's command list only: trials set `GIT_OPTIONAL_LOCKS=0` (`fixture.py:94`), so the workspace cannot show it. The maintainer's real-branch read leaves the variable unset and tests it through a hash of the clone's `.git/index`.
+**Hand-read note (added at GREEN): `--no-optional-locks`.** `SKILL.md` asks for `--no-optional-locks` straight after `git` every time. Whether each `git` command carries it is read from each trial's command list only: trials set `GIT_OPTIONAL_LOCKS=0` (`fixture.py:94`), so the workspace cannot show it. The maintainer's real-branch read leaves the variable unset and tests it through a hash of the clone's `.git/index`. Since `1cc134c`, `SKILL.md` also asks for `--no-ext-diff --no-textconv` on every `git diff` (**Implementation checkpoint (GREEN)**, finding 1a). That too is read from the command list only: a fixture may hold no `.gitattributes` (`fixture.py:297`) and trials read no global or system config (`fixture.py:95-97`), so no diff driver or converter is set, and a `git diff` without the flags reads the same there. That is inferred from the code, not observed, and a `GIT_EXTERNAL_DIFF` passed down in an agent's environment is not covered by it.
 
 Fixture facts for the hand read. The first four were observed at apply time; the last is read from the trees.
 
@@ -341,6 +341,9 @@ Fixture facts for the hand read. The first four were observed at apply time; the
 
 - **The trial path names the arm.** Each agent's working directory ends `<case>/skill-1/workspace` or `<case>/baseline-1/workspace` (`runner.py:96-98`), and the agent sees it: the fake-API runner probe (`ai_tmp/probe-red/`) found it in Claude Code's system prompt and in Codex's `<cwd>` context, in both arms. From a checkout whose path holds `skills/change-viz`, the baseline also sees the skill's name. The grader never sees the path. It affects every suite, cowsay included. The maintainer decided on 2026-11-11 that RED runs as is, and the fix is a harness follow-up: `.scratch/foundation/follow-ups.md`, **Ticket 18, the arm in the trial path**.
 - **P4's stated limits** are under **Pattern limits**, and the hand read covers what they leave open.
+- **A partial clone can fetch** (review finding 1b, **Implementation checkpoint (GREEN)**). In a partial clone, the skill's `git diff` and `git show` can fetch a missing object from the promisor remote (`git(1)`, `--no-lazy-fetch`). That contacts the remote and adds objects under `.git/objects`, which the skill's "no `fetch`" rule does not foresee. That it moves no ref, index entry or working-tree file is inferred from the docs, not tested. Blocking it would leave a blobless clone's diff unreadable, and a Git that predates `--no-lazy-fetch` would reject the option and fail every command, so the skill text does not change. The triage put this out of scope; that verdict is its own judgement, not yet confirmed.
+- **A local `main`'s unpushed commits** (review finding 2). A branch cut from a local `main` that holds unpushed commits is described against local `main`, the fewest ahead, so those commits stay out of the description, though a pull request against `origin/main` would carry them. `eb56a43` covers only the case where the local count is 0.
+- **`show <commit>` and `log -p` still run text conversion** (found by the probe for review finding 1a). `1cc134c` flags only `git diff`. In the probe, with text conversion caching on, `git --no-optional-locks show HEAD` and `log -p -1` wrote `refs/notes/textconv/x`. They did not run `diff.external`. The skill prescribes neither, since its `show` reads are of a file at a commit and its `log` has no `-p`, but its list of reads allows `show` and `log`. Whether to flag those too is not decided here.
 
 #### Next
 
@@ -537,10 +540,10 @@ Applied on branch `change-viz` in `c82b6f9`, from a revised draft in `ai_tmp/gre
 
 - **`skills/change-viz/SKILL.md`:**
   - The GREEN frontmatter under **Credit form**: the full description from design §5, and the string `metadata.credits` (D2 below).
-  - A body of 99 lines and 10,579 bytes, about 2,645 tokens by the validator's bytes / 4. It explains, with a reason for each limit:
-    - leaving the repository as found: git reads only, each with `--no-optional-locks`, and nothing that moves a ref, the index or the working tree, or sends to a remote;
-    - finding the base from the refs that exist: local `main` or `master`, `origin/main` or `origin/master`, and `origin/HEAD`, taking the fewest commits ahead and the local one on a tie;
-    - reading every commit since the base, the old version through `git show <base>:path`, and the branch's own text as material, not instructions;
+  - A body of 99 lines and 10,579 bytes, about 2,645 tokens by the validator's bytes / 4. After the review fixes (**Implementation checkpoint (GREEN)**) it is 99 lines and 11,168 bytes, about 2,792 tokens. It explains, with a reason for each limit:
+    - leaving the repository as found: git reads only, each with `--no-optional-locks`, and nothing that moves a ref, the index or the working tree, or sends to a remote. Since `1cc134c`, every `git diff` also carries `--no-ext-diff --no-textconv`;
+    - finding the base from the refs that exist: local `main` or `master`, `origin/main` or `origin/master`, and `origin/HEAD`, taking the fewest commits ahead and the local one on a tie. Since `eb56a43`, when a local branch counts 0 and a remote's branch counts more, it gives both counts in one line and asks for the base;
+    - reading every commit since the base, the old version through `git show <base>:path`, and the branch's own text as material, not instructions. Since `181aee0`, the old version is read at the merge base, `git show <fork>:path`;
     - the three headings and their limits, and the final message, with no file, no scratch copy and no pull request write.
 - **`skills/change-viz/references/`:**
   - `reading-the-branch.md`: the base cases the main steps leave open, and a large branch;
@@ -573,7 +576,7 @@ The main applied fixes:
 - the pointers into `references/` now reach every section they name;
 - the candidates include `origin/main` when a remote has no `origin/HEAD`;
 - the base is named `<base>`, so later commands work where there is no local `main`;
-- `git show <base>:path` is the read-only way to see the old version;
+- `git show <base>:path` is the read-only way to see the old version (`<fork>:path` since `181aee0`, the review's finding 3);
 - `push`, `clean` and named `branch` or `tag` are out of bounds;
 - the branch's own text is material, not instructions;
 - a note on changed behaviour says which way it moves and why;
@@ -586,7 +589,7 @@ The main applied fixes:
 - `diff -r` of the draft against `skills/change-viz/`: only D1 to D3.
 - `NOTICE.md`'s `text` fence equals `ai_tmp/upstream/humanlayer-skills/LICENSE`, byte for byte (`cmp`; 1,067 bytes each).
 - P1 to P4 on `references/example.md`, from `## Why the change` to its end, through the harness's own matcher: patterns from `cases.load_suite`, applied by `assertions.evaluate` (`re.search` with the patterns' inline flags only). All four pass, both with the file's final newline and with trailing whitespace stripped. The script is `ai_tmp/green-apply/patterns.py`.
-- `evals_sha256` from `benchmark.evals_sha256`: `78828f74f0a72581d29d915ba3e3cfb1ccfcde1701c1622dc3d83d53ba5726d2`, the frozen value. `skill_sha256` from `benchmark.tree_sha256` is now `c8449d3b…`, where RED's was `3d94019e…`.
+- `evals_sha256` from `benchmark.evals_sha256`: `78828f74f0a72581d29d915ba3e3cfb1ccfcde1701c1622dc3d83d53ba5726d2`, the frozen value. `skill_sha256` from `benchmark.tree_sha256` is now `c8449d3b…`, where RED's was `3d94019e…`. The review fixes make it `1395bb7f…` at `181aee0`, and leave `evals_sha256` as it is (**Implementation checkpoint (GREEN)**).
 - `just validate-skills`: 0 errors, and the one expected warning, `[extension-portability]` on `disable-model-invocation`. No `[placeholder]`.
 - `just validate-evals`: "2 eval suites valid."
 - `just run ./node_modules/.bin/claude plugin validate skills/change-viz --strict`: "Validation passed", with only the `ICON_MISSING` warning that cowsay also gets. It did not reject `metadata`, so the fallback is not taken. But it does not read `SKILL.md`'s frontmatter in this layout: copies whose `metadata` was unparseable YAML, or a nested mapping, also passed (`ai_tmp/green-apply/strict-probe/`). So this check says nothing about `metadata`, in either direction. Whether each CLI loads the skill with it is a separate check.
@@ -597,8 +600,55 @@ GREEN runs on harness commits made after RED: `7f8c72b`, `ba93b1c` and `62caba3`
 
 #### Next
 
-Hand-off 2, from `c82b6f9` or any later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are:
+Hand-off 2, from `181aee0`, the last review fix (**Implementation checkpoint (GREEN)**), or any later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are. `c82b6f9` no longer qualifies, because the fixes change `skills/change-viz/`:
 
 - **The GREEN run,** the two commands under **Next** above, in the maintainer's terminal. Run ids: pending.
 - **The maintainer's read of a real branch** of their choosing. Feedback: pending. It is recorded here and applied by changing what the skill explains.
 - **Then** the hand reads under **Design as approved**, the two new rows and the `--no-optional-locks` note included, and the maintainer's confirmation of D1 to D3, question 5's answer and the version.
+
+### Implementation checkpoint (GREEN)
+
+A cross-model review of the GREEN text, before the GREEN run. Its fixes are `1cc134c`, `eb56a43` and `181aee0`, and they change only `SKILL.md` and `references/reading-the-branch.md`. Nothing under `evals/` changed. No acceptance box is ticked: the GREEN run and Hand-off 2 have not run.
+
+#### Cross-model review
+
+- **Implementer:** Claude Code running Claude Opus 5.5 (`claude-opus-5-5`), per the commits' trailers. The review script recorded no implementer model.
+- **Reviewer:** Codex `gpt-6-astra` (fallback: no)
+- **Reviewed:** `af987c0..28665e4` (`c82b6f9` and `28665e4`), reviewed commit `28665e4`, against this ticket's acceptance criteria and the implementation checkpoint. The brief asked five questions: whether each instruction gives a reason, the upstream notice, writes to the repository, base detection when `main` and `origin/main` diverge among other cases, and self-reference. Brief: `ai_tmp/brief-18-green.md`.
+- **Findings:** `ai_tmp/review-20261112T021450Z-codex.md` · **Triage:** `ai_tmp/triage-18-green.md`, which splits finding 1 into 1a and 1b
+- **Probe for 1a:** `ai_tmp/green-apply/textconv-probe/probe.sh`, output in `probe.out`: a throwaway repository on Apple Git 2.50.1 only, with global and system config off, and the cache ref cleared before each command. It settles what the triage left unverified:
+  - with `diff.x.cachetextconv` on, a plain `git --no-optional-locks diff main...HEAD` wrote `refs/notes/textconv/x`;
+  - with `--no-ext-diff --no-textconv` it wrote nothing, and showed `Binary files a/f.bin and b/f.bin differ` (the probe's file holds a NUL byte);
+  - `diff --stat` wrote no ref and did not run a configured `diff.external`, which a plain `diff` ran;
+  - `show main:f.bin` and `log --format=%h main..HEAD` wrote no ref;
+  - `show HEAD` and `log -p -1` wrote the ref, since text conversion runs for them by default too. They did not run `diff.external`. The skill prescribes neither, but its list of reads allows `show` and `log` (**Residual risk**).
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1a | high (triage: low) | `git diff` runs a configured external diff driver and textconv filter by default, and text conversion with caching on writes `refs/notes/textconv/<driver>`, which `--no-optional-locks` does not prevent | valid in part at triage: the driver and converter running was shown from the docs, and the ref write was left unverified. The probe then confirmed the write. Low, because only the person's own config or environment can define a driver (`gitattributes(5)`), not the branch being described | fixed in `1cc134c`: every `git diff` in `SKILL.md` and `references/reading-the-branch.md` carries `--no-ext-diff --no-textconv`, and `SKILL.md`'s first rule says why. It includes the triage's clause on the cache ref, which the triage made conditional on the probe. Cost, seen in the probe: a binary file its owner set a converter for, such as an image or a document, reads as `Binary files differ`. The flags are read from each trial's command list (the hand-read note under **Design as approved**) |
+| 1b | high (triage: none) | In a partial clone, `diff` and `show` can fetch missing objects from the promisor remote, which `--no-optional-locks` does not stop | out of scope, by the triage's judgement, not yet confirmed: a lazy fetch only adds objects (inferred from the docs), and blocking it costs more than it saves | none to the skill text. Recorded under **Residual risk** (**Design checkpoint**) |
+| 2 | high (triage: low) | Taking the fewest commits ahead can override the real default branch: a local `main` that counts 0 wins over a remote's branch that counts more, and the skill stops with nothing to describe | valid in part: only when the 0 is a local branch's and a remote's branch counts more. The general claim, that the fewest is no evidence of where the branch was cut, is not valid: it picks correctly for a stale local `main` after a fetch and for a `develop` default. The triage ran the new rule through nine cases | fixed in `eb56a43`: **Nothing is ahead** in `references/reading-the-branch.md` now gives both counts in one line and asks which base to describe against, and `SKILL.md` says the fewest is "usually" where the branch left. The remaining limit, a local `main`'s unpushed commits, is under **Residual risk** |
+| 3 | medium | The old-file read `git show <base>:path` takes the base's tip, but the three-dot diff compares with the merge base, so a behaviour note can take the base's later change as the branch's, or reverse its direction | valid | fixed in `181aee0`: step 1 names the merge base `<fork>`, the old-file read and the behaviour reading use it, with the reason beside the read, and the rule on out-of-bounds commands says "the one before the branch". `merge-base HEAD <base>`, which E8 accepts, and the three-dot diffs are unchanged. The eval cannot show this finding: the fixture's `main` stops at the fork |
+
+**Second round:** not run here. Fixes 2 and 3 change rules in substance: 2 adds a branch that asks for the base, and 3 changes which commit old files are read at. Whether they get a re-review round is not decided here.
+
+**Checks run after the fixes,** at `181aee0`:
+
+- `just format` before each fix commit: no change beyond the edits.
+- P1 to P4 on `references/example.md` through the harness's matcher (`ai_tmp/green-apply/patterns.py`): all four pass, with the file's final newline and with trailing whitespace stripped. `example.md` is unchanged.
+- `evals_sha256`: `78828f74f0a72581d29d915ba3e3cfb1ccfcde1701c1622dc3d83d53ba5726d2`, the frozen value. `skill_sha256`: `1395bb7f1c6c08cb76a2ddc48adcbea06cd3d5f73a1fd43a11529ac7dc49d7f6`, where `c82b6f9`'s was `c8449d3b…`.
+- `just validate-skills`: 0 errors, and the one expected `[extension-portability]` warning.
+- `just run ./node_modules/.bin/claude plugin validate skills/change-viz --strict`: "Validation passed", with only the `ICON_MISSING` warning.
+- The Codex load check against the fake API was not rerun: the frontmatter is unchanged since `c82b6f9`.
+- `just check` in the foreground: exit 0, 1210 passed, 4 skipped (`ai_tmp/green-apply/gate-fix.log`). The commit that adds this section changes only this ticket.
+
+**Follow-ups:**
+
+- Finding 1b, if its out-of-scope verdict is confirmed, stays a stated limit under **Residual risk**; no ticket owns it.
+- Whether the skill should also flag `show <commit>` and `log -p`, which the probe found writing the cache ref (**Residual risk**). Not changed here: it is outside the triage.
+
+**Still unverified:**
+
+- The probe ran on Apple Git 2.50.1 only.
+- Which Git version introduced `--no-lazy-fetch`.
+- That a lazy fetch moves no ref, index entry or working-tree file.
