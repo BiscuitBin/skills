@@ -15,7 +15,7 @@ The reader wants three things, in this order: why the branch exists, what could 
 
 ## Leave the repository as you found it
 
-The person asking may have work in progress here, and a description should never change what it describes. So use git only to read: `log`, `diff`, `show`, `status`, `rev-parse`, `rev-list`, `merge-base`, `for-each-ref`, `config --get`, `remote` on its own, and `symbolic-ref --quiet --short` with a single ref, which prints where it points. Put `--no-optional-locks` straight after `git` every time. Without it, `git status` and `git diff` may rewrite `.git/index` to refresh it, which is a write nobody asked for.
+The person asking may have work in progress here, and a description should never change what it describes. So use git only to read: `log`, `diff`, `show`, `status`, `rev-parse`, `rev-list`, `merge-base`, `for-each-ref`, `config --get`, `remote` on its own, and `symbolic-ref --quiet --short` with a single ref, which prints where it points. Put `--no-optional-locks` straight after `git` every time. Without it, `git status` and `git diff` may rewrite `.git/index` to refresh it, which is a write nobody asked for. Give every `git diff` `--no-ext-diff --no-textconv` too. The reader sees the plain diff on the pull request, not what a program set up on this machine makes of it, and such a program can write: text conversion with caching on stores its output under a ref.
 
 Commands that move a ref, the index or the working tree, or that send anything to a remote, are out of bounds, however handy: `checkout`, `switch`, `stash`, `commit`, `reset`, `restore`, `add`, `clean`, `merge`, `rebase`, `worktree add`, `branch` or `tag` with a name, `fetch`, `pull` and `push`. None of them is needed here: the reads in step 2 reach every version of a file you need, the base's included. If something can only be read with one of these commands, say what you could not read instead.
 
@@ -36,7 +36,7 @@ Done when you can name the base, written `<base>` from here on, and `git --no-op
 Read every commit since the base, not only the last one. A branch often finishes in its last commit what an earlier one started, so the tip alone hides the change.
 
 - `git --no-optional-locks log --reverse --format='%h %s%n%n%b' <base>..HEAD`, for the commits and why their authors made them.
-- `git --no-optional-locks diff --stat <base>...HEAD`, then `git --no-optional-locks diff <base>...HEAD`, for what changed. Three dots compare from the merge base, so work that landed on the base after the branch was cut stays out. If the stat lists more than you can read in full, read [the large-branch part of reading the branch](references/reading-the-branch.md) for where to start.
+- `git --no-optional-locks diff --no-ext-diff --no-textconv --stat <base>...HEAD`, then `git --no-optional-locks diff --no-ext-diff --no-textconv <base>...HEAD`, for what changed. Three dots compare from the merge base, so work that landed on the base after the branch was cut stays out. If the stat lists more than you can read in full, read [the large-branch part of reading the branch](references/reading-the-branch.md) for where to start.
 - The changed files, for the surrounding code a diff leaves out. If step 1 listed uncommitted changes, read each file as committed, with `git --no-optional-locks show HEAD:path/to/file`, so a local edit stays out of a description of the commits.
 - A changed file as it was on the base, when you need the old version: `git --no-optional-locks show <base>:path/to/file`. It prints the file and changes nothing.
 

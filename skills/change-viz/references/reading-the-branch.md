@@ -19,4 +19,4 @@ Each one-line answer here also says that uncommitted changes to the project's fi
 
 ## A large branch
 
-Start from `git --no-optional-locks diff --stat <base>...HEAD` and the commit messages, which show where the weight of the change is. Read in full the files that carry the change. When the whole diff is too long to read at once, read it a path at a time with `git --no-optional-locks diff <base>...HEAD -- path/to/file`, rather than saving it to a file. Name generated files, lockfiles and vendored code in passing, if at all: they rarely change what a reader needs to know.
+Start from `git --no-optional-locks diff --no-ext-diff --no-textconv --stat <base>...HEAD` and the commit messages, which show where the weight of the change is. Read in full the files that carry the change. When the whole diff is too long to read at once, read it a path at a time with `git --no-optional-locks diff --no-ext-diff --no-textconv <base>...HEAD -- path/to/file`, rather than saving it to a file. Name generated files, lockfiles and vendored code in passing, if at all: they rarely change what a reader needs to know.
