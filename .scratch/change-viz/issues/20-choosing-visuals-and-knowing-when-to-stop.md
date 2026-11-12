@@ -31,6 +31,7 @@ As of 2026-11-10.
 - **What the four pull requests used:** knarr#75 a diff, two Mermaid diagrams, two text sketches and a table. skills#1 three text sketches and three Mermaid diagrams. skills#4 two Mermaid diagrams, two text sketches and a table. rove#11 three Mermaid diagrams, tables, a diff and text sketches. They were written with session evidence, so their length is not a target.
 - **Budget:** the grader reads at most 20 KB of the final message.
 - **A pattern can cap length and forbid a construct.** `output_matches` is Python's `re.search`, so an anchored pattern with a bounded repeat limits the whole message, and a negative lookahead at the start rejects a message that holds a given fence. That is how this ticket's "does not" outcomes are checked.
+- **From ticket 18's GREEN (2026-11-11):** `skills/change-viz/SKILL.md` says "Put every visual in a fenced block" and builds the outline from visuals "each in a fenced block", so a table cannot be a visual there. A ticket that adds an outcome or claim table edits both lines.
 
 ## Acceptance criteria
 

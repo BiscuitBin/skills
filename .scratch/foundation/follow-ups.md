@@ -33,7 +33,7 @@ Each was confirmed against the code and marked out of scope: real, but nothing i
 | T3 | `just install-hooks` run directly from a secondary worktree writes to the shared `.git/hooks`. Only `initialize.sh` guards this. |
 | T4 | Install tests take a new skill's expected files from its own directory, so an accidentally bundled `evals.json` passes. Only cowsay has an independent allowlist. |
 | T6 | `just check` never loads `benchmarks/`, so valid JSON that breaks `eval-report` passes the gate. |
-| D3 | Installed skills carry `license: MIT` but not the licence's copyright and permission notices. |
+| D3 | Installed skills carry `license: MIT` but not the licence's copyright and permission notices. `change-viz` carries its upstream notice, HumanLayer's, in `NOTICE.md`; no installed skill carries this repository's own notice. |
 | K2 | `skill_sha256` does not follow a symlinked directory that installation copies, so two payloads can share a hash. Also ticket 08's O4. |
 | K3 | Codex's discovery canaries use injected or redirected homes, so a location Codex finds independently of `HOME` would not be caught. |
 

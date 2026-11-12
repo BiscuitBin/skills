@@ -16,6 +16,10 @@ _Avoid_: Internal skill, private skill
 A trial's recorded evidence that the agent loaded a skill: on its own because the request matched the skill's description, by name because the prompt invoked it (`/<name>` in Claude Code, `$<plugin>:<name>` in Codex), or by a read of its `SKILL.md` that the trace confirms. Not every load leaves such evidence, and a confirmed read can count without printing the skill's text.
 _Avoid_: Activation, firing
 
+**Change source**:
+What a `change-viz` description covers: the commits on a branch since its base, uncommitted work, or a pull request.
+_Avoid_: Diff target, diff source
+
 ## Evals
 
 **Eval case**:

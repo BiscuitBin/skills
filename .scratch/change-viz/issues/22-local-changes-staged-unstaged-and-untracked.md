@@ -20,6 +20,7 @@ As of 2026-11-10.
 - The skill's outline, and the change source for a branch, come from ticket 18.
 - Not decided by the maintainer: what the skill covers when the request names no change source, and the scope line's wording. Both are for this ticket's design checkpoint.
 - `output_matches` is Python's `re.search`. An anchored pattern with a bounded repeat caps the whole message, and a negative lookahead at the start rejects a message that holds a given heading. That is how the empty case is checked.
+- **From ticket 18's GREEN (2026-11-11):** `change-viz` already answers an empty branch in one line (`skills/change-viz/references/reading-the-branch.md`, "Nothing is ahead"), and notes uncommitted changes in one bullet. So the empty case's skill arm may pass at RED: record it as a guard from ticket 18.
 
 ## Acceptance criteria
 

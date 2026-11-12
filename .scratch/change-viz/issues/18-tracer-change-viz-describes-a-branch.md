@@ -187,26 +187,27 @@ The implementer made the rest at apply time, on the design's open questions. On 
 - **Notices: the form now, the files later.** `NOTICE.md` and `metadata.credits` land in the commit that first ships upstream text: HumanLayer's at GREEN, Matt Pocock's with ticket 19, which adapts his text. This repository's own notice is not added to `NOTICE.md`, so D3 stays open for it.
 - **Trials:** `just eval`'s default, one trial per case per arm.
 
-#### Credit form (proposed; lands with the first upstream text)
+#### Credit form (applied at GREEN)
 
 At GREEN the frontmatter replaces the RED description with the full one and adds a string `metadata.credits`. The other fields stay as at RED:
 
 ```yaml
 description: Describes what the current branch changes, as Markdown for a pull request description or comment, with one sentence on why, one to three notes and a change outline built from small visuals such as Mermaid diagrams, diff sketches and file trees. Runs only when invoked by name, never on its own. It reads the branch and writes no file unless asked.
 metadata:
-  credits: 'Adapted from show-me and visual-pr by HumanLayer (Copyright (c) 2026 HumanLayer), MIT. The full notice is in NOTICE.md.'
+  credits: 'Adapted from MIT-licensed work by HumanLayer (Copyright (c) 2026 HumanLayer). The full notice is in NOTICE.md.'
 ```
 
+- **The credit string departs from design §5** (D2 under **GREEN**). The design's string was 'Adapted from show-me and visual-pr by HumanLayer (Copyright (c) 2026 HumanLayer), MIT. The full notice is in NOTICE.md.'. Codex injects the frontmatter, and it named two upstream skills that can be installed on a user's machine under the same names, one of which commits, pushes and edits pull requests. The string applied keeps the copyright holder and leaves the names to `NOTICE.md`, which is not injected.
 - **Why a string.** The validator requires `metadata` to map strings to strings, so mattpocock's nested `metadata.credits` fails. Codex 0.163.0's parser ignores unknown `metadata` fields (a source read of `codex-rs/skills/src/parser.rs`, not a run), and skills@1.7.4 reads `metadata` only for `internal`.
-- **No "skill" wording.** Neither string uses the word or the slug `humanlayer/skills`, because Codex injects the frontmatter and the disclosure check would match. The URL is in `NOTICE.md`.
+- **No "skill" wording.** Neither string uses the word or the slug `humanlayer/skills`, because Codex injects the frontmatter and the disclosure check would match. Since D2, neither names an upstream skill either. The URL is in `NOTICE.md`.
 - **`skills/change-viz/NOTICE.md`,** beside `SKILL.md`: a `# Notices` heading, then "Parts of change-viz are adapted from an MIT-licensed project. Its copyright and permission notice follows, as its licence requires for copies and substantial portions." Then a `## HumanLayer` section:
   - source: [humanlayer/skills](https://github.com/humanlayer/skills) at commit `4d69d20f6e9b57b4fcf0d501ccfb1be961f0f329`, the `show-me` and `visual-pr` skills;
-  - adapted: the three headings of the outline and their limits, the catalogue of views, and the rule to pick the smallest view that makes the point clear;
+  - adapted: the three headings of the outline and their limits, the kinds of note, the catalogue of views and the rules for choosing and trimming them, the lead-in above each visual, and the plain-language style (D3 under **GREEN**; design §5 named only the headings, the catalogue and the smallest-view rule);
   - the upstream `LICENSE`, `Copyright (c) 2026 HumanLayer`, copied byte for byte into a `text` fence.
-- **Ticket 19's entry.** Ticket 19 adds a `## Matt Pocock` section in the same shape: [mattpocock/skills](https://github.com/mattpocock/skills) at commit `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, the `pr` skill; adapted, the merge-risk terms, one-way and two-way doors and blast radius; his `LICENSE`, `Copyright (c) 2026 Matt Pocock`. It changes the intro to "from two MIT-licensed projects. Their copyright and permission notices follow, as their licence requires", and extends the credit with "and the merge-risk terms from pr by Matt Pocock (Copyright (c) 2026 Matt Pocock)".
-- **No link from the body,** and no licence line. Both installers copy the whole skill directory, and a body line would reach every Claude Code expansion. The `skills` round trips compare each installed copy with every file in `skills/<name>/`, so `NOTICE.md` travelling is tested there. For the marketplace it is reasoned, not tested.
-- **Fallback.** If the pinned `claude plugin validate --strict` rejects `metadata` at GREEN, drop `metadata.credits`, keep `NOTICE.md`, and credit in one body line that links it.
-- **Records at GREEN.** This ticket records the form, and D3's row in `.scratch/foundation/follow-ups.md` says `change-viz` carries its upstream notice. Both land with `NOTICE.md`.
+- **Ticket 19's entry.** Ticket 19 adds a `## Matt Pocock` section in the same shape: [mattpocock/skills](https://github.com/mattpocock/skills) at commit `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, the `pr` skill; adapted, the merge-risk terms, one-way and two-way doors and blast radius; his `LICENSE`, `Copyright (c) 2026 Matt Pocock`. It changes the intro to "from two MIT-licensed projects. Their copyright and permission notices follow, as their licence requires", and extends the credit with "and from Matt Pocock (Copyright (c) 2026 Matt Pocock)". Design §5 had "and the merge-risk terms from pr by Matt Pocock (Copyright (c) 2026 Matt Pocock)"; this follows D2 in leaving upstream skill names to `NOTICE.md`.
+- **No link from the body,** and no licence line: applied as written. Both installers copy the whole skill directory, and a body line would reach every Claude Code expansion. The `skills` round trips compare each installed copy with every file in `skills/<name>/`, so `NOTICE.md` travelling is tested there. For the marketplace it is reasoned, not tested. The GREEN draft ended with a `## Credits` line that linked `NOTICE.md`; it came from an error in the brief, not a decision, and was removed at apply (D1 under **GREEN**).
+- **Fallback.** If the pinned `claude plugin validate --strict` rejects `metadata` at GREEN, drop `metadata.credits`, keep `NOTICE.md`, and credit in one body line that links it. Not taken: it passed, though it turned out not to read the frontmatter (**GREEN**, **Checks run before the commit**).
+- **Records at GREEN.** This ticket records the form, and D3's row in `.scratch/foundation/follow-ups.md` says `change-viz` carries its upstream notice. Both landed with `NOTICE.md`.
 
 #### Cross-model review
 
@@ -258,7 +259,7 @@ The maintainer took f3 under question 7, a frozen change, so f3 got its own focu
 
 #### Questions for the maintainer
 
-The maintainer answered questions 1, 2, 3, 6 and 7 on 2026-11-11, as the briefs relay the answers. Questions 4 and 5 are still open.
+The maintainer answered questions 1, 2, 3, 4, 6 and 7 on 2026-11-11, as the briefs relay the answers. Question 5 has the implementer's default, applied at GREEN, which the maintainer confirms at Hand-off 2.
 
 1. **A values clause on E4** (finding 1). **Decided: no clause.** The hand read against the fixture facts covers the gap (the "does not" table under **Design as approved**), and E4's text does not change. The clause would have appended "If it shows wordstat's output for sample.txt, that output is …". The recommendation was no, for these reasons:
    - A pass needs a verbatim quote, and the burden of proof is on passing, so a correct visual made only of a diagram risks failing it.
@@ -286,8 +287,8 @@ The maintainer answered questions 1, 2, 3, 6 and 7 on 2026-11-11, as the briefs 
      - `just format` and `just validate-evals` ran, and the change is committed (**Checks run**).
    - **Reviewed:** the focused review found three limits, two already disclosed above and one under **Pattern limits** (**P4 review**). Question 7 took f3 for the third, and the block above includes it. Round 2, on f3, found nothing.
 3. **"One-line lead-in" in E3.** **Decided: one physical line of one to three sentences**, as the four liked pull requests write their lead-ins, not one sentence. E3's text does not change.
-4. **`__pycache__/` as a write.** **Open.** The design counts it, through the hand read, and reports it on its own line as "ran the fixture's code". If GREEN trials leave one, is that a ticket 18 failure, which needs a "read the branch, do not run its code" line in the skill now, or a limit recorded for ticket 21, which owns running code? No frozen text changes; settle before GREEN.
-5. **ADR 0008.** **Open.** It says everything in the repository is under `LICENSE`. With an upstream notice beside a skill, does it need a sentence? The decision left this to the design review, which did not raise it. Not blocking; settle before `NOTICE.md` lands at GREEN.
+4. **`__pycache__/` as a write.** **Decided by the maintainer on 2026-11-11: ignored.** Writes under `__pycache__/` (`*.pyc` files) are ignored in the writes hand check (the "does not" table under **Design as approved**). So the skill gets no "read the branch, do not run its code" line: its text neither forbids nor invites running code, and ticket 21 owns running code. The hand read still lists each command that runs the fixture's code, as a record for ticket 21. The question was: the design counts it, through the hand read, and reports it on its own line as "ran the fixture's code". If GREEN trials leave one, is that a ticket 18 failure, which needs that line in the skill now, or a limit recorded for ticket 21? No frozen text changes.
+5. **ADR 0008.** **Answered with the implementer's default, which the maintainer confirms at Hand-off 2.** ADR 0008 gains a second sentence, which landed with `NOTICE.md` at GREEN: "Text adapted from another MIT-licensed project keeps that project's copyright and permission notice, in a `NOTICE.md` beside the skill that carries it." The question was: it says everything in the repository is under `LICENSE`. With an upstream notice beside a skill, does it need a sentence? The decision left this to the design review, which did not raise it.
 6. **Overrides.** **Decided: the maintainer kept all three implementer departures:**
    - the neutral RED description and stub body;
    - `NOTICE.md` and `metadata.credits` landing with the first upstream text, with no `SKILL.md` link before then;
@@ -321,8 +322,12 @@ The maintainer answered questions 1, 2, 3, 6 and 7 on 2026-11-11, as the briefs 
 | Loads only when named | The quiet case, a lower bound (it sees only a confirmed load), plus a hand read of its transcripts |
 | Not a file-by-file changelog | E4's positive form, plus a hand read of the skill-arm messages |
 | Not wrong about the fixture | `--top`, E2 and E5 to E7 carry the facts. Limit: E4 checks no values (the maintainer declined a values clause, question 1), and an extra false claim can pass. So each skill-arm message gets a hand read against the facts below, and a contradiction is recorded here whatever its grade. |
-| Writes no file | By hand, in each kept trial workspace: `git status --porcelain --untracked-files=all` is empty (the installed skill is excluded), and `find . -name __pycache__ -not -path './.git/*'` finds nothing. A `__pycache__/` is reported on its own line (open question 4). |
+| Writes no file | By hand, in each kept trial workspace: `git status --porcelain --untracked-files=all` lists nothing but files under `__pycache__/` (the installed skill is excluded). Files under `__pycache__/` (`*.pyc`) are ignored, by question 4's answer; `find . -name __pycache__ -not -path './.git/*'` lists them, and they are reported on their own line as a record that the trial ran the fixture's code. |
 | Changes nothing else in the repository | By hand: `main`, `add-top-words` and the symbolic `HEAD` (`refs/heads/add-top-words`) match a baseline trial's. A `git checkout`, `switch`, `stash` or `worktree add` is an `infra_error` on Codex, whose sandbox denies writes to `.git/`, and any such trial is listed here under the Codex limits. On Claude Code it succeeds, and this check catches it. |
+| Creates, edits or comments on no pull request, and pushes nothing (added at GREEN) | A stated limit: a trial has no `gh` on its `PATH` and the fixture has no remote, so no eval can show it. Checked by hand in the maintainer's real-branch read, which disables `push` and `gh` and lists every `gh` and `push` command in both transcripts; there should be none. Ticket 23 brings a case with `gh`. |
+| Does not refer to itself as a skill (added at GREEN) | `disclosure_matches` read against each final message, plus `rg -i 'change[- ]?viz'` over each skill-arm final message (**Disclosure reads**), plus a look for a credit line or the names "HumanLayer", "show-me" and "visual-pr" |
+
+**Hand-read note (added at GREEN): `--no-optional-locks`.** `SKILL.md` asks for `--no-optional-locks` straight after `git` every time. Whether each `git` command carries it is read from each trial's command list only: trials set `GIT_OPTIONAL_LOCKS=0` (`fixture.py:94`), so the workspace cannot show it. The maintainer's real-branch read leaves the variable unset and tests it through a hash of the clone's `.git/index`.
 
 Fixture facts for the hand read. The first four were observed at apply time; the last is read from the trees.
 
@@ -523,3 +528,77 @@ The maintainer ran both commands under **Next** from `b28cd28`. That is later th
 
 1. The maintainer answers question 4. Question 5 waits until before `NOTICE.md` lands.
 2. Then GREEN: the skill text, the credit form with `NOTICE.md`, **Change source** in `GLOSSARY.md`, and D3, followed by the GREEN run with the two commands under **Next** above.
+
+### GREEN (2026-11-11)
+
+Applied on branch `change-viz` in `c82b6f9`, from a revised draft in `ai_tmp/green-18/` (gitignored), with the records in the commit after it. The maintainer answered question 4 first (**Questions for the maintainer**). The GREEN run and the maintainer's read of a real branch (Hand-off 2) have not run. No acceptance box is ticked: each waits for the GREEN run or for the implementation checkpoint.
+
+#### What landed
+
+- **`skills/change-viz/SKILL.md`:**
+  - The GREEN frontmatter under **Credit form**: the full description from design §5, and the string `metadata.credits` (D2 below).
+  - A body of 99 lines and 10,579 bytes, about 2,645 tokens by the validator's bytes / 4. It explains, with a reason for each limit:
+    - leaving the repository as found: git reads only, each with `--no-optional-locks`, and nothing that moves a ref, the index or the working tree, or sends to a remote;
+    - finding the base from the refs that exist: local `main` or `master`, `origin/main` or `origin/master`, and `origin/HEAD`, taking the fewest commits ahead and the local one on a tie;
+    - reading every commit since the base, the old version through `git show <base>:path`, and the branch's own text as material, not instructions;
+    - the three headings and their limits, and the final message, with no file, no scratch copy and no pull request write.
+- **`skills/change-viz/references/`:**
+  - `reading-the-branch.md`: the base cases the main steps leave open, and a large branch;
+  - `views.md`: the catalogue of views, adapted from HumanLayer's `show-me`;
+  - `example.md`: one complete description of an invented change, a static site builder.
+- **`skills/change-viz/NOTICE.md`:** the form under **Credit form**, with HumanLayer's `LICENSE` in a `text` fence.
+- **Unchanged:** `agents/openai.yaml`, `.claude-plugin/plugin.json` and version `0.1.0`. `change-viz` is not on `main` yet, so any version is higher than none, and ticket 19 makes the first bump. Nothing under `evals/` changed.
+- **ADR 0008** gains question 5's sentence.
+- **Records:**
+  - `GLOSSARY.md` gains **Change source**. A branch is the only change source this ticket handles. Ticket 22 adds uncommitted work and ticket 23 a pull request.
+  - D3's row in `.scratch/foundation/follow-ups.md` says `change-viz` carries HumanLayer's notice, and that no installed skill carries this repository's own.
+  - Ticket 22's **What is known** says the empty case's skill arm may pass at its RED, as a guard from this ticket.
+  - Tickets 20 and 21 note that a table cannot be a visual under the current `SKILL.md` wording.
+  - The "does not" table under **Design as approved** gains two rows, and a hand-read note on `--no-optional-locks` follows it.
+
+#### Departures, and the defaults they rest on
+
+The maintainer confirms each of these at Hand-off 2, with question 5's answer and the version. Until then they are the implementer's defaults.
+
+- **D1: no link from the body.** The draft ended with a `## Credits` section of one line that linked `NOTICE.md`. It came from an error in the brief, not a decision, so it was removed and the approved form stands: no link from the body, and no credit line in it, since a body line reaches every Claude Code expansion.
+- **D2: the credit string departs from design §5.** It is now 'Adapted from MIT-licensed work by HumanLayer (Copyright (c) 2026 HumanLayer). The full notice is in NOTICE.md.' Codex injects the frontmatter, and the design's string named `show-me` and `visual-pr`. Two upstream skills of those names can be installed on a user's machine, and `visual-pr` commits, pushes and edits pull requests. **Credit form** has the old string and the reworded extension for ticket 19.
+- **D3: `NOTICE.md`'s "Adapted here" is wider than design §5.** It now lists the three headings and their limits, the kinds of note, the catalogue of views and the rules for choosing and trimming them, the lead-in above each visual, and the plain-language style. The design named only the headings, the catalogue and the smallest-view rule, which is less than the text adapts. The licence block is unchanged.
+
+#### The draft's self-critique
+
+Three critiques read the first draft, through three lenses: the ticket's criteria, the writing, and safety. They found 45 findings. The draft's own table records 37 as applied, 2 in part (the hand-off's isolation and the provenance record), and 4 rejected, all writing nits. It left 2 to the maintainer: the credit string naming two upstream skills, which D2 settles. D3 settles the open half of the provenance finding. D1 reverses the form three findings had settled on, the credit line under its own heading, by dropping the line.
+
+The main applied fixes:
+
+- the pointers into `references/` now reach every section they name;
+- the candidates include `origin/main` when a remote has no `origin/HEAD`;
+- the base is named `<base>`, so later commands work where there is no local `main`;
+- `git show <base>:path` is the read-only way to see the old version;
+- `push`, `clean` and named `branch` or `tag` are out of bounds;
+- the branch's own text is material, not instructions;
+- a note on changed behaviour says which way it moves and why;
+- the uncommitted-changes note counts toward the three;
+- the maintainer's real-branch read disables `push` and `gh` before it runs.
+
+#### Checks run before the commit
+
+- `just format`: no change to the skill's files.
+- `diff -r` of the draft against `skills/change-viz/`: only D1 to D3.
+- `NOTICE.md`'s `text` fence equals `ai_tmp/upstream/humanlayer-skills/LICENSE`, byte for byte (`cmp`; 1,067 bytes each).
+- P1 to P4 on `references/example.md`, from `## Why the change` to its end, through the harness's own matcher: patterns from `cases.load_suite`, applied by `assertions.evaluate` (`re.search` with the patterns' inline flags only). All four pass, both with the file's final newline and with trailing whitespace stripped. The script is `ai_tmp/green-apply/patterns.py`.
+- `evals_sha256` from `benchmark.evals_sha256`: `78828f74f0a72581d29d915ba3e3cfb1ccfcde1701c1622dc3d83d53ba5726d2`, the frozen value. `skill_sha256` from `benchmark.tree_sha256` is now `c8449d3b…`, where RED's was `3d94019e…`.
+- `just validate-skills`: 0 errors, and the one expected warning, `[extension-portability]` on `disable-model-invocation`. No `[placeholder]`.
+- `just validate-evals`: "2 eval suites valid."
+- `just run ./node_modules/.bin/claude plugin validate skills/change-viz --strict`: "Validation passed", with only the `ICON_MISSING` warning that cowsay also gets. It did not reject `metadata`, so the fallback is not taken. But it does not read `SKILL.md`'s frontmatter in this layout: copies whose `metadata` was unparseable YAML, or a nested mapping, also passed (`ai_tmp/green-apply/strict-probe/`). So this check says nothing about `metadata`, in either direction. Whether each CLI loads the skill with it is a separate check.
+
+#### Reading a GREEN `infra_error`
+
+GREEN runs on harness commits made after RED: `7f8c72b`, `ba93b1c` and `62caba3`. They changed how the adapter parses Codex's late denials, and the trial now runs the real `git` on macOS rather than its `xcrun` shim. So a Codex `infra_error` at GREEN is read against those commits before the skill text is blamed.
+
+#### Next
+
+Hand-off 2, from `c82b6f9` or any later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are:
+
+- **The GREEN run,** the two commands under **Next** above, in the maintainer's terminal. Run ids: pending.
+- **The maintainer's read of a real branch** of their choosing. Feedback: pending. It is recorded here and applied by changing what the skill explains.
+- **Then** the hand reads under **Design as approved**, the two new rows and the `--no-optional-locks` note included, and the maintainer's confirmation of D1 to D3, question 5's answer and the version.

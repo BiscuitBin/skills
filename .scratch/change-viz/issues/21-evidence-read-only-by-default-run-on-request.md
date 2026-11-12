@@ -31,6 +31,7 @@ As of 2026-11-10.
 - **What the harness can see:** the trace records each command the agent ran with its output and status, and the trial's `python3` wrapper logs each call. No assertion type today says "this command did not run", and a blinded expectation cannot be negative.
 - **Codex:** a command that exits nonzero and prints one of the denial keywords makes the trial an `infra_error`, so a fixture's failing check must not print one.
 - **CI status** needs `gh`, which is ticket 23's. Without it, the observed sources are commit messages and the session.
+- **From ticket 18's GREEN (2026-11-11):** `skills/change-viz/SKILL.md` says "Put every visual in a fenced block" and builds the outline from visuals "each in a fenced block", so a table cannot be a visual there. A ticket that adds an outcome or claim table edits both lines.
 
 ## Acceptance criteria
 
