@@ -15,7 +15,7 @@ Writers can preview an edit to one page without rebuilding the whole site, becau
 
 ## Change outline
 
-Each page is now checked against the record from the last build, and only a page whose source changed is rendered again.
+The path each page now takes through a build: only a page whose source does not match the record from the last build is rendered.
 
 ```mermaid
 flowchart LR
@@ -25,7 +25,7 @@ flowchart LR
     D --> E["Write the page and update the record"]
 ```
 
-The build loop gains the check and the record. Rendering and writing are unchanged.
+The build loop, old and new: it gains the check and the record. Rendering and writing are unchanged.
 
 ```diff
  build(site)

@@ -92,7 +92,7 @@ Show the shape of the change: how the parts fit together after it, and what each
 
 Build it from small visuals, at least one, each in a fenced block whose language names what it holds: `mermaid`, `diff`, `text`, or the code's own language. A raw reader then knows what kind of sketch follows. Spend the first visual on the change the why is about. Pick the smallest view that makes the point clear, and read [the views](references/views.md) before you pick: it lists each view, what it shows, and how to draw a diff sketch.
 
-Put a lead-in just above each block: one line, of one to three sentences, that tells the reader what they are looking at and what to notice. Without it the reader has to decode a visual before knowing why it is there. A pair of blocks, such as a flow and the diff behind it, gets a lead-in each.
+Put a lead-in just above each block: one line, of one to three sentences, that opens with what the visual draws and then says what to notice, such as "What `fetch()` calls when a retry times out: every retry now shares one deadline". Without a lead-in the reader has to decode a visual before knowing what it draws and why it is there. A pair of blocks, such as a flow and the diff behind it, gets a lead-in each.
 
 Prefer views of the structure you read, in the code and the diff, to samples of output. The structure holds for every input, and the reader can check it against the code, where a sample shows one input.
 
