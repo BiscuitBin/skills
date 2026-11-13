@@ -45,6 +45,8 @@ A starting pattern for the line, to be made stricter in each eval case:
 \*\*Risk: (🟢 Low|🟡 Medium|🔴 High)\*\* · \*\*Door: (one-way|two-way)\*\* · \*\*Blast radius: [^*\n]+\*\*
 ```
 
+**From ticket 18's second GREEN run (2026-11-12), inferred:** Codex's note called the new counting "more accurate" and never said which way the counts move for existing input, though `SKILL.md` asks for the direction. A risk line written that way would understate the blast radius for someone who relies on the old output.
+
 ## Acceptance criteria
 
 - [ ] Every description has the risk line and its two bullets, in the shape and position above.

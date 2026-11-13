@@ -32,6 +32,7 @@ As of 2026-11-10.
 - **Codex:** a command that exits nonzero and prints one of the denial keywords makes the trial an `infra_error`, so a fixture's failing check must not print one.
 - **CI status** needs `gh`, which is ticket 23's. Without it, the observed sources are commit messages and the session.
 - **From ticket 18's GREEN (2026-11-11):** `skills/change-viz/SKILL.md` says "Put every visual in a fenced block" and builds the outline from visuals "each in a fenced block", so a table cannot be a visual there. A ticket that adds an outcome or claim table edits both lines.
+- **From ticket 18's second GREEN run (2026-11-12):** three runtime claims, read from the code and not run, were wrong. Codex's skill arm and Claude's baseline both said a negative `--top` drops the least common words, where it prints none. Claude's skill arm said "a missing file still exits with status 2", where a path that does not exist exits 1. No GREEN trial ran the fixture's code, so a label for what was read and not run would have marked all three.
 
 ## Acceptance criteria
 

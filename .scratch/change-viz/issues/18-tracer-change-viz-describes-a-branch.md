@@ -847,5 +847,305 @@ A cross-model round on `253ee70` and its records, before the GREEN run again.
 
 #### Next
 
-- The GREEN run again, on both agents, from `253ee70` or a later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are, with each command on its own line (**GREEN**, **Next**).
+- The GREEN run again, on both agents, from `253ee70` or a later commit that leaves `skills/change-viz/` and `evals/change-viz/` as they are, with each command on its own line (**GREEN**, **Next**). Done from `fde7928`: **GREEN run, both agents** below.
 - The maintainer's read of a real branch: still pending.
+
+### GREEN run, both agents (2026-11-12, second run)
+
+The maintainer ran Hand-off 2's GREEN run again from `fde7928`, on the E3 fix's text. The relayed output shows the Codex command on its own line. How the Claude command was invoked is not shown.
+
+The hand reads are in `ai_tmp/green-read-2/`:
+
+- `codex-skill.md`
+- `claude-skill.md`
+- `baselines-quiet.md`
+- `e4-e7-diagnosis.md`
+
+Each file ends with an adversarial **Verification**. Where the verification refuted the read, this record follows the verification:
+
+- codex-skill: 30 confirmed, 4 refuted, 2 unverifiable.
+- claude-skill: 43 confirmed, 1 contested, 1 refuted, 1 unverifiable.
+- baselines-quiet: 40 confirmed, 1 refuted in part, 1 narrowed, 3 unverifiable.
+- e4-e7: 24 confirmed, 4 refuted, 4 unverifiable.
+
+No refutation changes a pass or a fail. Two change the reasoning: E7's evidence (`e4-e7-diagnosis.md`, V21) and the Claude baseline's argument claim (`baselines-quiet.md`, row 22). No acceptance box is ticked: the maintainer checkpoint is still open.
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Run id (both arms) | `20261112T192917Z-11b6` | `20261112T193304Z-06b1` |
+| Commit | `fde7928`, `git_dirty` false | the same |
+| `evals_sha256` | `78828f74…`, frozen | the same |
+| `skill_sha256` | `37bb7110…` (`253ee70`'s text). Installed copies equal `skills/change-viz/` (`diff -r`) | the same |
+| Agent | Claude Code 2.1.309, `claude-sonnet-5-5` | Codex 0.163.0, `gpt-5.6-terra` |
+| Grader | `claude-opus-5-5` on Claude Code 2.1.309, 2 calls per graded trial, `canary_passed: false` | the same |
+| Every trial | `ok`, valid, contamination passed, `secret_found` null, `permission_denials: []` | `ok`, valid, contamination passed, `secret_found` null. Its stderr is only "Reading additional input from stdin..." |
+
+#### Results
+
+| Check | Claude skill | Claude baseline | Codex skill | Codex baseline |
+| --- | --- | --- | --- | --- |
+| `skill_triggered` | pass (deduced) | n/a | pass (observed) | n/a |
+| Deterministic (`--top`, P1 to P4) | 1.00 | 0.20 | 1.00 | 0.20 |
+| Graded (E1 to E8) | 8 of 8 | 3 of 8 (E5, E6, E8) | 6 of 8 (E4 and E7 fail) | 3 of 8 (E5, E6, E8) |
+| Outcome (13 items) | 1.00 | 0.31 | 0.85 | 0.31 |
+| Behaviour case `passed` | true | null | **false** | null |
+| `arm_disclosed` | false | false | **true** | false |
+| Quiet case | pass | skipped | pass | skipped |
+
+- **Deltas** (deterministic / graded / outcome): Claude +0.80 / +0.625 / +0.692. Codex +0.80 / +0.375 / +0.538.
+- **Non-discriminating:** both `benchmark.json` files flag E5, E6 and E8 (lines 239-241).
+  - Codex's E4 and E7 fail in both arms.
+  - The rule flags only expectations that pass in every trial of both arms (`benchmark.py:269-274`), so E4 and E7 go unflagged.
+- **Claude's baseline E7 failed this time.** It passed at `3958`. With no skill text in the baseline, that is variance at n = 1.
+- **Codex `just eval` exited 1, because of the skill arm's `passed: false`.** That is the relayed output, and ticket `:840` describes the same rule. Claude's exit code was not relayed.
+- **Claude's tool calls are byte-identical to `3958`'s.** So only the composition changed. The E3 pass is consistent with `253ee70`, but not attributable to it at n = 1.
+
+#### Hand reads
+
+Observed, unless marked.
+
+**Fixture facts, skill arms:**
+
+- **Codex makes one false claim,** recorded whatever its grade (`:324`).
+  - It says: "a negative `N` is accepted and `Counter.most_common()` returns all but the least-common entries" (final:8).
+  - What happens: `--top -1`, `-2` and `-9` print `words: 23`, `distinct: 10` and `most common:` with no entries, then exit 0.
+  - `most_common(-1)` returns `[]` on 3.14.8 (pinned) and on 3.9.6.
+  - No expectation reads the claim.
+- **Codex is loose but not wrong in four places:**
+  - "more accurate … counts" is a value judgement.
+  - The sketch's "print N most common words" is loose for a negative `N`, and for an `N` above the number of distinct words.
+  - The pseudocode at final:27 lacks a closing `)`.
+  - The usage and `-h` change, the README and the tests are left out.
+- **Claude contradicts none of the five listed facts.**
+  - "Counts change for files you already run it on" is overgeneral. By RED's bar (`:480`) that is not a contradiction.
+  - It says "punctuation" without "ASCII".
+- **Claude's "A missing file still exits with status 2, but the usage text on stderr is different." (final:8) is contested.**
+  - It is true for a missing file argument, which exits 2.
+  - It is false for a nonexistent path, which exits 1 with a `FileNotFoundError` and prints no usage.
+  - The read called it ambiguous. The verification calls it false under the plain reading (`:482-483`).
+  - `3958` wrote "missing file **argument**".
+  - **Recorded as wrong about the fixture,** by the lead's decision (2026-11-12): `:324` records a contradiction whatever its grade, and the plain reading is false. The charitable reading, "a missing file argument", is the one `3958` wrote. So each skill arm made one false runtime claim, read from the code and not run (**Carried over**, ticket 21).
+
+**Fixture facts, baselines and quiet trials** (not scored):
+
+- **Claude baseline:** its negative-`N` "slice that drops the least common words" is false, the same error Codex made.
+- **Claude baseline:** "Before, … also exit code 2" is overgeneral. On `main`, a lone `--bogus` or `-h` exits 1 (row 22).
+- **Claude quiet:** "4 commits" is false; there are 3.
+  - 3 of the 4 Claude trials on record that ran only `git diff` stated a wrong commit count.
+- **Codex baseline and quiet:** no false claim.
+
+**Outline, Codex:**
+
+- Three headings, in order.
+- The why is one sentence of 126 characters.
+- Two one-line notes: 134 and 148 characters without the marker, 18 and 23 words.
+- Two visuals:
+  - a `mermaid` `flowchart LR`;
+  - a `diff` fence holding two pseudocode sketches (tokenization and the CLI) under one lead-in. Final:29 is a bare blank line inside it, against `views.md:17`.
+- Lead-in 1, "The updated command path: …", opens with what its visual draws.
+- Lead-in 2, "The CLI and tokenization changes: …", opens with "changes".
+  - It does not fire the held-back `:99` done line, by the lead's decision (2026-11-12): that escalation waited on E3 failing the rerun, and E3 passed. The subject-led opener goes to ticket 20 (**Carried over**).
+  - E3 passed.
+- The outline is neither file-by-file nor commit-by-commit.
+
+**Outline, Claude:**
+
+- Three headings and a one-sentence why.
+- Three notes:
+  - Sentences: 4, 4 and 2 (`3958`: 6, 5 and 1).
+  - Words: 61, 45 and 16 (`3958`: 70, 58 and 25).
+- Visual 1 is a `diff`-fenced sketch of `main()`. The `text`-fence issue from `3958` did not recur.
+- Visual 2 is a one-command `sh` block copied from the README.
+- Lead-in 1, "What `main()` does now. …:", opens with what it draws. It has a full stop where the instance has a colon.
+- Lead-in 2, "How the option is used, as the README now documents it:", has no "what to notice" clause, which `SKILL.md:95` asks for. This is minor, and E3 passed.
+- Held-back triggers:
+  - `:99` is not met.
+  - `:71`: `example.md` was skipped again. The stronger pointer is not applied, by the lead's decision (2026-11-12): like `:99`, it waited on E3 failing the rerun, and both lead-ins open with what they draw without the example.
+
+**Git rules:**
+
+- **Codex skill arm:**
+  - All 13 git calls carry `--no-optional-locks`.
+  - Both `diff` calls carry `--no-ext-diff --no-textconv`.
+  - `log` has no `-p`, `-S` or `-G`, and status is `--porcelain`.
+  - The four `show <rev>:<path>` reads are file reads, so the diff flags do not apply (`SKILL.md:18`, `:40-41`).
+  - The only other commands were `pwd` and `sed -n`.
+- **Claude skill arm:**
+  - All 7 git calls carry `--no-optional-locks`.
+  - The one `diff` is flagged.
+  - It ran no `show`, and status is `--porcelain`.
+- **Neither skill arm** wrote anything, ran `gh` or `push`, or ran fixture code.
+- **The baselines and quiet trials had no skill text,** so their missing flags are recorded, not failures. Git calls, then unflagged diff reads:
+  - Claude baseline: 2 and 1.
+  - Codex baseline: 8 and 4.
+  - Claude quiet: 2 and 2.
+  - Codex quiet: 8 and 4.
+- **No GREEN trial ran fixture code.** At RED, the Codex baseline did.
+
+**Writes and refs, in all six workspaces:**
+
+- `status --porcelain --untracked-files=all` is empty.
+  - With `--ignored`, it shows only the 7 installed skill files.
+  - There is no `__pycache__/`.
+- No `gh` or `push` ran.
+- The refs are the same in every arm and match RED:
+  - `main` is `88ce88c`.
+  - `add-top-words` is `c7c97ee`.
+  - `HEAD` is `refs/heads/add-top-words`.
+- There is no stash, no remote, no `.git/logs`, and one worktree.
+- **Inferred:** every newest mtime is 0.29 to 0.4 s after its trial started, which is setup.
+- **Scope:** these checks cover `workspace/` (`:325`). **Inferred:** the agent's `home/` was removed by the harness.
+
+**Disclosure:**
+
+- **Final messages:** none of the six names `change-viz` or a skill, or carries a credit line, HumanLayer, show-me or visual-pr. `rg -i` exits 1.
+- **Claude's skill arm:** `arm_disclosed` is false, and `disclosure_matches` is `[]`.
+- **Codex's skill arm:** `arm_disclosed` is true, with `[NOTICE.md, SKILL.md, references/example.md, references/views.md, skill]`.
+  - All five matches come from E8's unblinded transcript material, through command 1, the `sed` of the skill files.
+  - `NOTICE.md` matches through `SKILL.md:7`'s credits line, inside the 4,096-byte cap. `NOTICE.md` itself was not read.
+  - Run over the final message alone, and over the blinded material, the check gives `[]`.
+  - Ticket `:312` predicted this.
+- **Codex's interim `item_0`** reads: "I’m using the requested change-viz skill to inspect the branch read-only and produce a paste-ready review description."
+  - It is not the final message (`codex.py:563-564`), and it is in neither grader material.
+  - **Inferred:** a person in a live Codex console would see it.
+
+**Base:** both picked `main`, 3 ahead, with the fork at `88ce88c`.
+
+- **Codex** followed `SKILL.md:26-32` in order:
+  - It listed the candidates before counting.
+  - It ran `symbolic-ref`, which exits 1 with no remote, as expected.
+  - It ran `diff --stat` and `show <fork>:wordstat.py`.
+- **Claude** did as at `3958`:
+  - It batched the count with the listing.
+  - It skipped `symbolic-ref`, `--stat` and `show <fork>:`.
+- Neither needed `reading-the-branch.md`.
+
+**Reads:**
+
+- **Codex** read `SKILL.md`, `example.md` and `views.md` whole, before any git command.
+- **Claude** read only `views.md`, and skipped `example.md` again.
+
+**Trigger:**
+
+- **Codex: observed.** The `sed` of `.agents/skills/change-viz/SKILL.md` exited 0, and `triggered` is `['change-viz']`.
+- **Claude: deduced.** `triggered` comes from the CLI's `skill_expanded` line, which is not stored (`claude_code.py:412-427`). The first turn's input was 3,846 tokens over the baseline's.
+
+**Quiet case, both agents:**
+
+- Neither read a skill file, made a `Skill` call, or wrote anything.
+- Claude's first turn was 16,578 tokens against the baseline's 16,575, a gap of +3.
+- Codex stores no request, so what its model saw cannot be told.
+- The baseline transcripts name `change-viz` only through the trial path (`:342`).
+
+#### E4 (Codex): grader noise, not a skill gap
+
+- **The rule failed it, not the grader.** `skill-1.json:24` starts "passed without a verbatim quote from the material:", followed by the grader's pass evidence. `grader.py:431-443` records `claimed and quoted`.
+- **No quote is stored,** so whether the grader sent none or sent a non-verbatim one is unknown. `Verdict` has no quote field, and the grader directory is deleted (`:726-734`).
+- **The probe, on this material:**
+  - A single node line passes, and so does the whole block.
+  - A quote stitched from non-adjacent lines fails, and so does one with the inner `"` stripped.
+- **The substance is present twice:**
+  - in the flowchart, as node B (the normalisation) and nodes D, E and F (the `--top` listing);
+  - in the diff sketch.
+- **Base rate:** 1 of 44 claimed passes was lost this way, across the 10 grading files.
+- **Change:** none to the skill or the rubric, and the benchmark keeps the fail. `example.md:20-26` models this exact form.
+- **A harness follow-up** (`.scratch/foundation/follow-ups.md`):
+  - store each verdict's `quote`, scrubbed like `evidence` (`grader.py:486`);
+  - optionally, add an `08-grading.md` §7 row naming the cost of a false fail.
+
+#### E7 (Codex): a real miss against the skill's own text, on one trial
+
+- **The grader wrote** (`skill-1.json:42`): "notes that the normalization changes existing counts and calls them 'more accurate'. It never warns that the printed counts … can be lower than before".
+- **Final:7 covers three of the four parts.** It says what moves, for what input, and the cause. It never says **which way** the counts move, which `SKILL.md:81` asks for, and Codex read `:81`. The why frames the change as a gain.
+- **A judgement:** `:81`'s bad example, "Timeouts change", models vagueness, so a rule-only note escapes the contrast.
+
+Evidence (`e4-e7-diagnosis.md` V21), as notes that give a direction:
+
+| `:81` in context | Claude | Codex |
+| --- | --- | --- |
+| yes | 2 of 2 (`3958` and `11b6` skill arms) | 0 of 1 (`06b1`) |
+| no | 1 of 4 | 0 of 3 |
+
+Without the text, the two agents behave alike, so this is not a blind spot specific to Codex. The case for an edit rests on **one** trial. The verification refuted three of the diagnosis's claims:
+
+- "Only its skill arm addresses 'Existing counts'" (`e4-e7-diagnosis.md` V19): `9e0f`'s baseline flagged the counts too.
+- "Claude baseline 1 of 2 on `:81`" (`e4-e7-diagnosis.md` V20): the baselines never saw `:81`.
+- "More likely than a coin flip" (`e4-e7-diagnosis.md` V21).
+
+The drafted edit has two open defects (verification):
+
+1. **It reuses "every retry now shares one deadline" as a bad note.** The same words are `:95`'s model lead-in, and the tail of `:81`'s good example.
+2. **Read literally, "the new rule alone" would also condemn a default flip,** whose rule is its effect (`e4-e7-diagnosis.md` V24, unverifiable). The edit is also 63 bytes, not about 55.
+
+#### Decision: the skill text stays as it is for the real-branch read
+
+By the lead's decision (2026-11-12), on the synthesis's recommendation:
+
+1. E4 needs no change.
+2. The text already asks for the direction ("which way"), and Codex read it. For E3, by contrast, the text allowed the failing reading. The E7 evidence is n = 1.
+3. The drafted clause is not ready. It has two open defects, and needs rewording and its own review round.
+4. An edit moves `skill_sha256` off `37bb7110…`. `11b6`'s 8 of 8 then stops being the record, both agents rerun, and a review round follows.
+5. The real-branch read supplies the next sample at no extra run. Hand-off 2's (b) runs both agents, and its default branch, `change-viz` itself, changes existing behaviour as well as adding to it: for one, ticket 16's macOS fixes count Codex's `recorded sandbox violation:` line as a denial, which `main` does not. So the `:81` trigger can be read on its Codex description, if that description names such a change. If the maintainer picks another branch, the trigger is read only if that branch changes existing behaviour.
+
+**Hold back the `:81` clause.**
+
+- **Trigger:** a description on this text, from the real-branch read or a rerun, again states a behaviour change by its new rule only, without which way the output moves.
+- **Exact drafted text:** `e4-e7-diagnosis.md` §3.5, the last sentence of the first bullet in `SKILL.md:81`.
+
+Before:
+
+```text
+"Timeouts change" leaves the reader to work out whether anything they depend on breaks; "requests that retry now give up sooner, after 5 seconds instead of 30, because every retry now shares one deadline" does not.
+```
+
+After:
+
+```text
+"Timeouts change", or the new rule alone, "every retry now shares one deadline", leaves the reader to work out whether anything they depend on breaks; "requests that retry now give up sooner, after 5 seconds instead of 30, because every retry now shares one deadline" does not.
+```
+
+Its review round must resolve the phrase clash and the default-flip reading. For the clash, the verification suggests a rule phrase that `:95` does not use. The rubric stays untouched.
+
+**Hold a second clause behind the first.**
+
+- **Trigger:** a rerun on the new text still frames the change as a gain, with no direction.
+- **Text:** in `:81`, "said as a warning to someone who relies on the old one:" becomes "said as a warning to someone who relies on the old one, even when the new behaviour is the better one:".
+
+If the trigger fires, fold the clause into the change that applies the maintainer's feedback: one text change, one review round, one rerun of both agents.
+
+**Offered to the maintainer, not required:** a Codex-only rerun of this text with `--trials 3`, which samples E7 three times and keeps `11b6` as Claude's record. One more trial would show little at n = 1, so the offer is three or none.
+
+**Codex's `passed: false` holds back no ticket 18 box,** by the lead's decision (2026-11-12). The boxes ask for the shape, and P1 to P4 and E1 to E3 pass (`:64-67`). Under `CONTRIBUTING.md` §3, though, a failing case is a gap in the skill, and a benchmark is recorded only once the skill passes on each agent. E4 is a harness false fail, not a gap. E7 stays an open gap until a Codex run passes it, on this text or on the `:81` clause, and ticket 25's `just eval-record` waits on that.
+
+The other open calls are settled above: Claude's "missing file" sentence is recorded as wrong (**Fixture facts, skill arms**), and neither `:99` nor `:71` fires (**Outline**).
+
+#### Carried over
+
+- **19 (risk line), inferred:** Codex framed changed output as a gain ("more accurate"). A risk call read that way would understate the blast radius for someone who relies on the old output.
+- **20 (view choice and length):**
+  - Codex put two sketches under one lead-in, in one `diff` fence.
+  - Claude used a one-command `sh` usage block, a sample of usage, though `:97` prefers structure. Its lead-in has no notice clause.
+  - Codex's subject-led "The CLI and tokenization changes: …" passed E3. This is the residual risk that B″ rules out commit openers but not subject-led narration (`e3-recommendation.md` §6).
+  - Note lengths: Claude 4, 4 and 2 sentences (`3958`: 6, 5 and 1), and Codex 1 and 1. This updates "about five".
+- **21 (evidence labels):** three runtime claims were read from the code and are wrong or ambiguous:
+  - Codex skill arm, negative `N` "all but the least-common";
+  - Claude baseline, the same slice reading;
+  - Claude skill arm, "missing file … status 2".
+
+  No GREEN trial ran fixture code (record for question 4).
+- **24 (GitHub rendering):**
+  - Codex used parentheses inside quoted Mermaid labels: `B["words(): split, trim punctuation, lowercase"]` and `E["Counter.most_common(N)"]`. That is a live sample for the "to verify" line on quoting.
+  - Codex's `diff` fence has a bare blank line.
+  - Both agents now fence diff sketches as `diff`.
+- **22 and 23:** nothing new.
+- **Harness follow-ups:**
+  - Store the grader's quote (E4).
+  - Have the benchmark name an expectation that fails in both arms, as it names one that passes in both (the synthesis's suggestion, not from the reads).
+
+#### Next
+
+- **The maintainer's real-branch read, on `253ee70`'s skill text** (`skill_sha256` `37bb7110…`):
+  - with `push` and `gh` disabled, and `GIT_OPTIONAL_LOCKS` unset, plus the `.git/index` hash (`:327`, `:330`);
+  - with its Codex run read for the `:81` trigger, if the branch changes existing behaviour;
+  - reading Codex's interim messages as well as its final one, since `06b1`'s first one named "change-viz skill".
+- **Then** apply the feedback, with the held-back clause if its trigger fired, then a review round and a rerun of both agents, each command on its own line.

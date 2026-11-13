@@ -33,6 +33,12 @@ As of 2026-11-10.
 - **A pattern can cap length and forbid a construct.** `output_matches` is Python's `re.search`, so an anchored pattern with a bounded repeat limits the whole message, and a negative lookahead at the start rejects a message that holds a given fence. That is how this ticket's "does not" outcomes are checked.
 - **From ticket 18's GREEN (2026-11-11):** `skills/change-viz/SKILL.md` says "Put every visual in a fenced block" and builds the outline from visuals "each in a fenced block", so a table cannot be a visual there. A ticket that adds an outcome or claim table edits both lines.
 - **From ticket 18's Claude GREEN run (2026-11-12):** the skill arm put a pseudocode diff sketch with `+` marks in a `text` fence, though `references/views.md` gives a diff sketch the `diff` fence and the run read it, and its first two note bullets ran to about five sentences each, where ticket 18 sets no limit on a bullet's length. Its E3 fix (`253ee70`) has each lead-in open with what its visual draws, and rewrote the example's two lead-ins to match: any example lead-in this ticket adds or edits keeps that form.
+- **From ticket 18's second GREEN run (2026-11-12):**
+  - Both agents fenced the diff sketch as `diff`.
+  - Codex put two sketches, tokenization and the CLI, under one lead-in in one `diff` fence.
+  - Claude's second visual was a one-command `sh` usage block from the README: a sample of use, where `SKILL.md` prefers structure. Its lead-in says what the block draws but not what to notice.
+  - Codex's second lead-in opens with its subject, "The CLI and tokenization changes: …", not with what it draws, and still passed E3. The lead-in rule rules out openers that narrate the commits, but not ones that name the subject.
+  - Notes ran 4, 4 and 2 sentences on Claude, down from about five, and one each on Codex.
 
 ## Acceptance criteria
 

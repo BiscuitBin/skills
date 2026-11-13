@@ -39,6 +39,8 @@ Recalled by the planning agent, not checked. Each line is **to verify** against 
 
 **From ticket 18's Claude GREEN run (2026-11-12):** the skill arm put a pseudocode diff sketch with `+` marks in a `text` fence, though `references/views.md` gives a diff sketch the `diff` fence; whether GitHub colours those marks only in a `diff` fence is on the "to verify" list above.
 
+**From ticket 18's second GREEN run (2026-11-12):** Codex put parentheses inside quoted Mermaid labels, `B["words(): split, trim punctuation, lowercase"]` and `E["Counter.most_common(N)"]`, a live sample for the "to verify" line on quoting. Its `diff` fence holds a bare blank line. Both agents now fence diff sketches as `diff`.
+
 ## Acceptance criteria
 
 - [ ] Every line of the "to verify" list above is checked against GitHub's documentation or a real render, and marked confirmed, corrected or dropped, with the source. The list in this ticket is updated to match.
