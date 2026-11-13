@@ -21,6 +21,7 @@ As of 2026-11-10.
 - Not decided by the maintainer: what the skill covers when the request names no change source, and the scope line's wording. Both are for this ticket's design checkpoint.
 - `output_matches` is Python's `re.search`. An anchored pattern with a bounded repeat caps the whole message, and a negative lookahead at the start rejects a message that holds a given heading. That is how the empty case is checked.
 - **From ticket 18's GREEN (2026-11-11):** `change-viz` already answers an empty branch in one line (`skills/change-viz/references/reading-the-branch.md`, "Nothing is ahead"), and notes uncommitted changes in one bullet. So the empty case's skill arm may pass at RED: record it as a guard from ticket 18.
+- **From ticket 18 (2026-11-13):** with `--no-optional-locks` and `GIT_OPTIONAL_LOCKS=0`, `git diff` and `git diff HEAD` still rewrite a stat-dirty `.git/index` on Apple Git 2.50.1, where `status --porcelain`, `diff-files`, `diff-index HEAD` and `git -c diff.autoRefreshIndex=false diff` leave it alone. `skills/change-viz/SKILL.md:18` now tells agents to diff two commits only, so reading uncommitted changes needs one of the reads that leave it alone, and that line changes with it.
 
 ## Acceptance criteria
 

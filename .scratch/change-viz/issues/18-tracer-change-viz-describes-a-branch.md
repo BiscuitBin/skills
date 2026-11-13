@@ -1144,8 +1144,93 @@ The other open calls are settled above: Claude's "missing file" sentence is reco
 
 #### Next
 
-- **The maintainer's real-branch read, on `253ee70`'s skill text** (`skill_sha256` `37bb7110…`):
+- **The maintainer's real-branch read, on `253ee70`'s skill text** (`skill_sha256` `37bb7110…`). Superseded: it now reads `c85caaa`'s text (**Codex trials, and the E7 fix**):
   - with `push` and `gh` disabled, and `GIT_OPTIONAL_LOCKS` unset, plus the `.git/index` hash (`:327`, `:330`);
   - with its Codex run read for the `:81` trigger, if the branch changes existing behaviour;
   - reading Codex's interim messages as well as its final one, since `06b1`'s first one named "change-viz skill".
 - **Then** apply the feedback, with the held-back clause if its trigger fired, then a review round and a rerun of both agents, each command on its own line.
+
+### Codex trials, and the E7 fix (2026-11-13)
+
+#### Run `20261113T005315Z-c5be`
+
+The maintainer ran three Codex trials of the `253ee70` text, with the baseline off, on the lead's recommendation (**GREEN run, both agents**, **Offered to the maintainer**). The hand read is `ai_tmp/e7-fix/c5be-hand-read.md`, which ends with its own **Verification**.
+
+| | Value |
+| --- | --- |
+| Run id | `20261113T005315Z-c5be` |
+| Commit | `21053fe`, `git_dirty` false |
+| `skill_sha256` / `evals_sha256` | `37bb7110…` / `78828f74…`, frozen |
+| Agent | Codex 0.163.0, `gpt-5.6-terra`. Grader `claude-opus-5-5` |
+| Behaviour case, skill arm | skill-1: 6 of 8 (E5 and E7 fail). skill-2: 8 of 8. skill-3: 7 of 8 (E7 fails). `--top` and P1 to P4 pass in all three |
+| Quiet case | 3 of 3 stayed quiet |
+| `arm_disclosed` | 3 of 3, from the `sed` of the skill's files in the commands, as at `06b1`. No final message names the skill |
+
+- **E7:** skill-1 and skill-3 name the rule and its cause, and never say which way the counts move. skill-3 wrote "Existing word and distinct counts can change: …", close to `:81`'s own bad example. skill-2 passes on "can therefore decrease", though "for punctuation-heavy input" is too narrow: case alone lowers the distinct count. **On the `253ee70` text, Codex passed E7 in 1 of 4 trials,** so the held-back `:81` clause's trigger fired.
+- **E5 (skill-1):** fails correctly. It never says each word is listed with its count. Record only: both second-run benchmarks flagged E5 as passing in both arms.
+- **E3 and E4** passed in all three.
+- **Hand checks:** no claim contradicts the fixture. Every git command carries its flags, no trial wrote anything, and each picked `main`, 3 ahead.
+- **Interim messages:** skill-2's and skill-3's first messages name the "change-viz skill", as `06b1`'s did. None reaches a final message.
+- **Quiet trials:** none triggered or read a skill file. quiet-2 ran `python3 -m unittest -v` and `wordstat.py`, which left `__pycache__/` in its workspace. It had no skill text, so this is recorded (`:325`), not failed.
+- **Correction to the second run's record (`:1030`):** both facts there hold, but Codex's trigger is recorded from its own `skill_invocation` event, not from the `sed`. The harness's read rule finds no read in `06b1` or in any `c5be` trial: each `sed` of `SKILL.md` sits in a chain (`reads.py:107-124`). Inferred, since the run keeps no debug lines.
+- **A side effect of the hand read:** one of its checks, `git --no-optional-locks diff --name-only HEAD`, rewrote `.git/index` in all six kept `c5be` workspaces. A later index or mtime check of those workspaces sees that write, not setup. It also found the git behaviour under **The index note** below.
+
+#### The fix, applied before the real-branch read
+
+By the lead's decision (2026-11-13), the fix went in at once, and not with the maintainer's feedback as **Hold back the `:81` clause** said. The real-branch read had not started (`ai_tmp/real-read/` did not exist), so the maintainer now reads the text meant to ship. Both agents still rerun once, after the feedback.
+
+**The `:81` wording** came from a workflow (`ai_tmp/e7-fix/`): three drafts from different angles (minimal, reason-led, a reader's test), three judges (fidelity to the six real notes, generality, text quality), and a synthesis (`final.md`). It resolves the drafted clause's two defects. The bad example's cause is a paraphrase, so `:95`'s phrase stays a good model only. "Up or down, or from the old value to the new" passes a default flip. The second held clause, on framing a change as a gain, stays held: no `c5be` note framed it that way.
+
+```text
+Name what the reader gets and say which way it moves, such as up or down, or from the old value to the new, even when the cause implies it. You have worked the effect out from the code, and they have not. "Timeouts change, because retries now draw on one time budget" leaves the reader to work out …
+```
+
+- **Read against the six real notes** (`final.md`, **Test table**): the three that failed E7 (`06b1` skill-1, `c5be` skill-1 and skill-3) fall short of it, and the three that passed (`c5be` skill-2, Claude `3958` and `11b6`) meet it. c5be-1's "three spellings now count as one" depends on reading "it" as what the reader gets. That is a reading, not a run.
+- **Nine invented notes from other domains** (default flips, a stricter check, a removed field, a mixed direction, a reorder) are not condemned. Three can draw an over-ask: the old value beside the new.
+- **Gave up:** about 250 bytes, and the bullet is now the section's longest.
+
+**The index note (`:18`).** The line said that without `--no-optional-locks`, "`git status` and `git diff` may rewrite `.git/index`", which implies the flag stops both. The lead reproduced this on Apple Git 2.50.1, with a stat-dirty tracked file, the flag, and `GIT_OPTIONAL_LOCKS=0`:
+
+| Read | `.git/index` |
+| --- | --- |
+| `status --porcelain`, `diff A...B`, `diff A..B`, `diff-index HEAD`, `diff-files`, `log -p` | untouched |
+| `diff` and `diff HEAD`, against the working tree | rewritten |
+| Without the flag, `status --porcelain` | rewritten |
+
+The line now says the flag stops `status`, and that a diff against the working tree can still rewrite the index, so diff two commits, as step 2 does. Step 2 and `reading-the-branch.md` already diff only `<base>...HEAD`. Ticket 22, which reads uncommitted changes, needs a way to read them that does not refresh the index (**Carried over**).
+
+**Checks:**
+
+- `c85caaa`: `skill_sha256` `89ff20ab…`, and `evals_sha256` still `78828f74…`.
+- P1 to P4 still pass the example, 8 of 8 (`ai_tmp/green-apply/patterns.py`).
+- The body is 99 lines, 12,213 bytes, about 3,054 tokens.
+- `just validate-skills` gives only the expected `extension-portability` warning.
+- `just check`: 1210 passed, 4 skipped.
+
+#### Cross-model review (`c85caaa`)
+
+- **Reviewer:** Codex `gpt-6-astra` through `review.py`, implementer `claude-code`, no fallback. It reviewed `21053fe..c85caaa`, exit 0, with the brief `ai_tmp/e7-fix/review-brief.md`. Its four questions covered the direction rule, teaching to the test, the git claim and the text.
+- **Findings:** none. The whole output is "No findings in `21053fe..c85caaa` against the supplied acceptance criteria." It is as thin as the E3 fix's review: it answered none of the four questions (`ai_tmp/e7-fix/codex-review.md`).
+- **Triage:** a separate agent read the four questions independently and ran the git claims in a scratch repo (`ai_tmp/e7-fix/triage.md`). It found nothing that needs a text change:
+  - Notes that give only the cause fall short. The default flip, the removed field, the mixed direction, the reorder, the stricter check and `example.md:13-14` still meet the rule.
+  - The added text has no fixture words.
+  - The `:18` claim holds on Apple Git 2.50.1, the only Git installed, and every two-commit form leaves the index alone, step 2's included. Git's current source has no optional-locks check on the diff's refresh path. That was read, not run, and the versions in between were not checked.
+
+#### Carried over
+
+- **22 (local changes):** with `--no-optional-locks`, `git diff` and `git diff HEAD` still rewrite a stat-dirty `.git/index` on Apple Git 2.50.1. `diff-files`, `diff-index HEAD` and `git -c diff.autoRefreshIndex=false diff` leave it alone (triage). A description of uncommitted work needs one of those, and `SKILL.md:18`, which now says to diff two commits, has to change with it.
+- **19 (risk line):** the second held clause, a change framed as a gain, is still held. `06b1`'s why said "more accurate" and `c5be` skill-3's said "more useful". Neither is a note, but a risk line could take the same tone.
+
+#### When E7 counts as closed on Codex
+
+Set before the next run (lead, 2026-11-13). On a Codex run of three trials on `89ff20ab…` or a later text:
+
+- **E7 passes in all three:** closed. The GREEN run can be recorded once both agents pass (`CONTRIBUTING.md` §3).
+- **Two of three:** improved, but not closed. The hand read decides whether the miss is the text or variance, and the maintainer decides whether to run more trials.
+- **One or none:** the fix failed. Revisit the wording before any further runs.
+
+#### Next
+
+1. The maintainer's real-branch read, Hand-off 2 (b), on `c85caaa`'s text.
+2. Apply the feedback by changing what the skill explains, then hold a review round.
+3. Rerun both agents, each command on its own line: Claude with `--baseline`, and Codex with `--baseline --trials 3`.
