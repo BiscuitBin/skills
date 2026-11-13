@@ -13,14 +13,22 @@ A skill used only by agents working on this repository, such as the cross-model 
 _Avoid_: Internal skill, private skill
 
 **Trigger**:
-An agent loading a skill, usually on its own because the request matched the skill's description. In Codex, an explicit `$<name>` mention that loads the skill also counts, because the trace records it as a trigger, so trigger accuracy includes such cases.
+A trial's recorded evidence that the agent loaded a skill: on its own because the request matched the skill's description, by name because the prompt invoked it (`/<name>` in Claude Code, `$<plugin>:<name>` in Codex), or by a read of its `SKILL.md` that the trace confirms. Not every load leaves such evidence, and a confirmed read can count without printing the skill's text.
 _Avoid_: Activation, firing
+
+**Change source**:
+What a `change-viz` description covers: the commits on a branch since its base, uncommitted work, or a pull request.
+_Avoid_: Diff target, diff source
 
 ## Evals
 
 **Eval case**:
-One scenario a skill is tested against: a prompt, any input files, and the assertions or rubric that decide whether the outcome is right.
+One scenario a skill is tested against: a prompt, the fixture its trials start in if it has one, and the assertions or rubric that decide whether the outcome is right.
 _Avoid_: Test case, scenario, example
+
+**Fixture**:
+A small project with Git history, a branch checked out and any uncommitted edits, that an eval case's trials start in, the same in both arms.
+_Avoid_: Input files, seed repo, test repo
 
 **Placeholder case**:
 A starter eval case that a new skill begins with, standing in for a real case the author has not written yet. It is never run, so it can never pass.

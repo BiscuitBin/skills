@@ -1,6 +1,6 @@
 # Distribution
 
-The Claude Code marketplace and `npx skills` ship every skill in `skills/`, currently `skills/cowsay/`.
+The Claude Code marketplace and `npx skills` ship every skill in `skills/`, one plugin per skill.
 Dev skills stay in `dev-skills/build/`, exposed to repository agents through relative
 symlinks in `.claude/skills/` and `.agents/skills/`. They are excluded from both
 installation channels when no skill is named. See [ADR 0010](../adr/0010-distribution-boundaries.md)
@@ -53,8 +53,8 @@ Each test clones the committed tree. Both installers use the README's
 `BiscuitBin/skills` shorthand and Git's process-local
 `url.<file-url>.insteadOf` configuration to redirect the clone to the local
 source. `GIT_ALLOW_PROTOCOL=file` prevents network Git transport. This exercises
-the hosted Git-source behavior. Claude installs cowsay into its plugin cache and its
-recorded `gitCommitSha` must match the local clone's HEAD;
+the hosted Git-source behavior. The marketplace round trip installs one plugin, cowsay, into
+Claude's plugin cache, and its recorded `gitCommitSha` must match the local clone's HEAD;
 the other three installs use the default `skills add --agent <agent> --yes`
 behavior without naming a skill, exercising installation of all shipped skills.
 The listing assertions also name no skill: `--list` and `--list --full-depth`
@@ -113,19 +113,19 @@ Its `declared in user settings` line refers to the project's Claude Code home,
 `.tools/agent-homes/claude/settings.json`, not your own. The project's `.claude/settings.json` now enables the plugin, and the plugin
 itself is cached in `.tools/agent-homes/claude/plugins/cache/`.
 
-Install it through `skills`, the binary that `npx skills@1.7.4` runs, once per agent:
+Install every shipped skill through `skills`, the binary that `npx skills@1.7.4` runs, once per agent:
 
 ```sh
 just run sh -c 'cd .tools/tmp/install-check && DO_NOT_TRACK=1 ../../../node_modules/.bin/skills add ../../.. --agent claude-code --yes'
 just run sh -c 'cd .tools/tmp/install-check && DO_NOT_TRACK=1 ../../../node_modules/.bin/skills add ../../.. --agent codex --yes'
-ls .tools/tmp/install-check/.claude/skills/cowsay .tools/tmp/install-check/.agents/skills/cowsay
+ls .tools/tmp/install-check/.claude/skills .tools/tmp/install-check/.agents/skills
 ```
 
-Each `skills` run reports `Found 1 skill` and `✓ cowsay (copied)`. Under an agent,
-it first prints `Agent detected — installing non-interactively`, and its summary
-may show the shared `.agents/skills/cowsay` path for Claude Code; the final line
-shows where the skill landed. The `ls` lists `SKILL.md`, `agents` and `scripts`
-for each agent.
+Each `skills` run reports `Found <n> skills`, one for each directory in
+`skills/`, and a `✓ <name> (copied)` line for each. Under an agent, it first
+prints `Agent detected — installing non-interactively`, and its summary may show
+the shared `.agents/skills/<name>` paths for Claude Code; the final lines show
+where each skill landed. The `ls` lists each shipped skill for each agent.
 
 `../../..` is this checkout, which is the form to use unless you are checking a
 release. To check what is published on GitHub, replace it with `BiscuitBin/skills`

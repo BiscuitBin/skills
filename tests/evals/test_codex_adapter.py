@@ -16,7 +16,17 @@ from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import run_suite
 from tests.evals.fake_openai import message, serve, shell
 from tests.evals.test_grader import fake_grader
-from tests.evals.test_runner import CASES, COW, fake_root, settings
+from tests.evals.test_runner import (
+    AGENT_GIT_ENV,
+    AVERAGE,
+    CASES,
+    COW,
+    FIXTURE_CASE,
+    fake_root,
+    fixture_root,
+    results,
+    settings,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -71,6 +81,47 @@ def test_trial_records_trigger_command_and_final_message(tmp_path: Path) -> None
     # The trial's python3 wrapper ran the installed copy.
     installed = (trial.workspace / ".agents/skills/cowsay/scripts/cowsay.py").resolve()
     assert any(Path(c.cwd, c.argv[0]).resolve() == installed for c in trace.python_calls)
+
+
+@pytest.mark.parametrize(
+    ("manifest", "prompt"),
+    [
+        (None, "$cowsay:cowsay Have a cow say: moo"),
+        ({"name": "cow-kit"}, "$cow-kit:cowsay Have a cow say: moo"),
+    ],
+    ids=["shipped", "renamed-plugin"],
+)
+def test_a_by_name_prompt_names_the_installed_copys_plugin(
+    tmp_path: Path, manifest: dict[str, str] | None, prompt: str
+) -> None:
+    adapter = Codex(pinned_executable(ROOT))
+    installed = adapter.install_skill(ROOT / "skills/cowsay", tmp_path)
+    assert installed is not None
+    if manifest is not None:
+        (installed / ".claude-plugin/plugin.json").write_text(json.dumps(manifest))
+    assert adapter.by_name_prompt(installed, "Have a cow say: moo") == prompt
+
+
+def test_a_by_name_prompt_without_a_plugin_manifest_is_the_bare_mention(tmp_path: Path) -> None:
+    adapter = Codex(pinned_executable(ROOT))
+    installed = adapter.install_skill(ROOT / "skills/cowsay", tmp_path)
+    assert installed is not None
+    (installed / ".claude-plugin/plugin.json").unlink()
+    assert (
+        adapter.by_name_prompt(installed, "Have a cow say: moo") == "$cowsay Have a cow say: moo"
+    )
+
+
+@pytest.mark.parametrize("manifest", ["{", '{"version": "1.0.0"}', '{"name": ""}', "[]"])
+def test_a_by_name_prompt_refuses_a_manifest_it_cannot_name_the_plugin_from(
+    tmp_path: Path, manifest: str
+) -> None:
+    adapter = Codex(pinned_executable(ROOT))
+    installed = adapter.install_skill(ROOT / "skills/cowsay", tmp_path)
+    assert installed is not None
+    (installed / ".claude-plugin/plugin.json").write_text(manifest)
+    with pytest.raises(ValueError, match=r"plugin\.json"):
+        adapter.by_name_prompt(installed, "Have a cow say: moo")
 
 
 # The second prints a carriage return before the header, which a reader that
@@ -442,3 +493,149 @@ def test_a_token_refreshed_before_the_run_fails_is_still_swept(tmp_path: Path) -
     [trial] = data["trials"]
     assert trial["status"] == "infra_error"
     assert trial["secret_found"] == {"files": ["workspace/copied.txt"], "deleted": True}
+
+
+@dataclass
+class Arm:
+    """One arm's fixture trial: its record in results.json, its trace, and what Codex reported."""
+
+    record: dict[str, Any]
+    trace: Trace
+    reported: dict[str, Any]
+
+    def evidence(self) -> str:
+        """For a failed assertion: each command's exit code and full output, and the denials."""
+        reason = self.record.get("status_reason")
+        return json.dumps({"status_reason": reason, **self.reported}, indent=2)
+
+
+def reported(raw: RawRun, trial: TrialPaths) -> dict[str, Any]:
+    """Each command as the event stream has it, Codex's sandbox lines, and the trial's git."""
+    events = [json.loads(line) for line in raw.transcript.read_text().splitlines() if line.strip()]
+    items = [e["item"] for e in events if e.get("type") == "item.completed" and "item" in e]
+    fields = ("command", "status", "exit_code", "aggregated_output")
+    git = trial.bin / "git"
+    return {
+        # A command Codex denied within its early-exit window has no item.
+        "commands": [
+            {f: item.get(f) for f in fields}
+            for item in items
+            if item.get("type") == "command_execution"
+        ],
+        "sandbox_lines": [line for line in raw.debug_lines if line.startswith("sandbox_")],
+        "stderr_violations": [
+            line for line in raw.stderr.splitlines() if "recorded sandbox violation" in line
+        ],
+        "bin/git": str(git.readlink()) if git.is_symlink() else git.read_text(),
+    }
+
+
+def fixture_trials(
+    tmp_path: Path, turns: list[Any], *, prompt: str = AVERAGE, baseline: bool = True
+) -> dict[str, Arm]:
+    """The fixture case run through the runner, by arm."""
+    traces: dict[str, tuple[Trace, dict[str, Any]]] = {}
+
+    class Recording(Codex):
+        def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401
+            raw = super().run(prompt, trial, homes, **kwargs)
+            # Read before teardown removes the trial's tmp/ and bin/.
+            traces[trial.root.name.partition("-")[0]] = (self.parse(raw), reported(raw, trial))
+            return raw
+
+    root = fixture_root(tmp_path, [{**FIXTURE_CASE, "prompt": prompt}])
+    with serve(turns, api_key=KEY) as server:
+        adapter = Recording(pinned_executable(ROOT), api_base_url=server.url)
+        run_suite(
+            settings(
+                root,
+                server.url,
+                adapter=adapter,
+                model=adapter.default_model,
+                credentials={"auth.json": AUTH},
+                baseline=baseline,
+                grading_skipped=True,
+            )
+        )
+    by_arm = {trial["arm"]: trial for trial in results(root)["trials"]}
+    assert set(by_arm) == set(traces), (set(by_arm), set(traces))
+    return {arm: Arm(record, *traces[arm]) for arm, record in by_arm.items()}
+
+
+def test_git_reads_in_a_fixture_trial_are_not_denied_and_the_skill_is_still_found(
+    tmp_path: Path,
+) -> None:
+    turns = [
+        shell("git status --porcelain", "call_1"),
+        shell("git diff --stat", "call_2"),
+        shell("env | grep '^GIT_'", "call_3"),
+        message("The average is 2.5."),
+    ]
+    # An explicit mention, which Codex expands only for a skill it found.
+    arms = fixture_trials(tmp_path, turns, prompt=f"$cowsay:cowsay {AVERAGE}")
+    assert set(arms) == {"skill", "baseline"}
+    for arm in arms.values():
+        evidence = arm.evidence()
+        assert (arm.record["status"], arm.record["contamination"]["passed"]) == ("ok", True), (
+            evidence
+        )
+        # Codex's sandbox keeps .git read-only; reading Git needs no write to it.
+        assert not [line for line in arm.trace.debug_lines if "outcome=denied" in line], evidence
+        status, diff, env = arm.trace.commands
+        # The fixture's own edits, and no ?? .agents/ in the skill arm.
+        assert (status.ok, status.output) == (
+            True,
+            "M  README.md\n M tally.py\n?? notes.txt\n",
+        ), evidence
+        assert (diff.ok, diff.output) == (
+            True,
+            " tally.py | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n",
+        ), evidence
+        # Every one of the fixture trial's git variables reaches the agent's commands.
+        assert {f"{k}={v}" for k, v in AGENT_GIT_ENV.items()} <= set(env.output.splitlines()), (
+            evidence
+        )
+    # The exclude hides the skill from Git, not from Codex.
+    assert (
+        arms["skill"].record["trigger"]["actual"],
+        arms["baseline"].record["trigger"]["actual"],
+    ) == (
+        True,
+        False,
+    )
+
+
+# Codex logs its violation line for every denied command, but sandbox_outcome
+# only for one that exits within 150 ms of starting. The sleep makes the write
+# outlast that window on any machine, as a slow git does. The plain add usually
+# exits within it, but a loaded machine can push it past, so the test does not
+# require either path for it.
+SLOW_ADD = "sleep 0.5; git add notes.txt"
+
+
+@pytest.mark.parametrize("add", ["git add notes.txt", SLOW_ADD])
+def test_a_git_write_in_a_fixture_trial_is_denied_and_not_scored(tmp_path: Path, add: str) -> None:
+    # The limit the docs state: a flow that writes to Git cannot be scored on Codex.
+    turns = [
+        shell(add, "call_1"),
+        shell("git status --porcelain", "call_2"),
+        message("The average is 2.5."),
+    ]
+    arm = fixture_trials(tmp_path, turns, baseline=False)["skill"]
+    evidence = arm.evidence()
+    assert arm.record["status"] == "infra_error", evidence
+    assert arm.record["status_reason"].startswith(
+        "Codex reported 1 command(s) as denied by its sandbox"
+    ), evidence
+    # The sandbox blocked the write: notes.txt is still untracked.
+    [status] = [c for c in arm.trace.commands if c.command == "git status --porcelain"]
+    assert "?? notes.txt" in status.output.splitlines(), evidence
+    lines = arm.trace.debug_lines
+    assert len([line for line in lines if line.startswith("sandbox_violation ")]) == 1, evidence
+    if add == SLOW_ADD:
+        # Past the window the violation line is the only signal: no denied
+        # sandbox_outcome, and the denied add is an ordinary failed command.
+        assert not [line for line in lines if "outcome=denied" in line], evidence
+        assert [(c.command, c.ok) for c in arm.trace.commands if c.command == add] == [
+            (add, False)
+        ], evidence

@@ -1,0 +1,10 @@
+{
+  "name": "change-viz",
+  "version": "0.1.0",
+  "description": "Describe what a branch changes, as a short Markdown outline with visuals for a pull request. Invoked by name only.",
+  "author": {
+    "name": "BiscuitBin"
+  },
+  "license": "MIT",
+  "skills": ["./"]
+}

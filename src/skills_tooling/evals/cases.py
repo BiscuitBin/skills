@@ -10,6 +10,12 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from skills_tooling.evals.fixture import Fixture, Fixtures, load_fixtures
+
+# Beside the disclosure check, which shares it, because fixture already
+# imports grader: grader importing from here would cycle.
+from skills_tooling.evals.grader import invocation_mentions
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -23,9 +29,11 @@ CASE_KEYS = {
     "should_trigger",
     "expected_output",
     "files",
+    "fixture",
     "assertions",
     "expectations",
     "placeholder",
+    "by_name",
 }
 EXPECTATION_KEYS = {"text", "needs_transcript"}
 # Each assertion type's required and optional fields, beyond `type`.
@@ -73,6 +81,11 @@ class Case:
     expectations: tuple[Expectation, ...] = ()
     # A starter case from `just new-skill`, not yet written; `just eval` refuses to run it.
     placeholder: bool = False
+    # The git fixture the trial's workspace starts in; None for an empty `git init`.
+    fixture: Fixture | None = None
+    # The skill arm invokes the skill by name: the adapter puts its own syntax
+    # before the prompt, which holds only the bare request.
+    by_name: bool = False
 
 
 @dataclass(frozen=True)
@@ -172,7 +185,50 @@ def _expectations(data: dict[str, object], where: str, problems: list[str]) -> l
     return [e for e in found if e is not None]
 
 
-def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Case | None:  # noqa: PLR0912 -- one check per schema rule
+def _fixture(
+    data: dict[str, object], where: str, fixtures: Fixtures, problems: list[str]
+) -> Fixture | None:
+    if "fixture" not in data:
+        return None
+    name = data["fixture"]
+    if not isinstance(name, str) or SLUG.fullmatch(name) is None:
+        problems.append(f"{where}: fixture must be a lowercase slug ([a-z0-9-])")
+        return None
+    if name not in fixtures.found:
+        problems.append(f"{where}: fixture {name!r} has no directory {fixtures.where}/{name}/")
+        return None
+    # A fixture that failed validation has its own problems listed.
+    return fixtures.found[name]
+
+
+def _by_name(data: dict[str, object], where: str, skill: str, problems: list[str]) -> None:
+    """A by_name case loads the skill, and its prompt is the bare request."""
+    if "by_name" not in data:
+        return
+    # false is the default; two spellings of one thing are rejected.
+    if data["by_name"] is not True:
+        problems.append(f"{where}: by_name must be true, or left out")
+        return
+    if data.get("should_trigger") is not True:
+        problems.append(f"{where}: by_name cases need should_trigger: true")
+    prompt = data.get("prompt")
+    if not isinstance(prompt, str):
+        return
+    # The adapter puts the agent's own syntax before the prompt.
+    if prompt.lstrip().startswith(("/", "$")):
+        problems.append(
+            f"{where}: a by_name prompt is the bare request, so it must not start with / or $"
+        )
+    problems += [
+        f"{where}: a by_name prompt holds an invocation of the skill ({mention!r}); "
+        "the adapter adds one, so leave it out"
+        for mention in invocation_mentions(prompt, skill)
+    ]
+
+
+def _case(  # noqa: PLR0912 -- one check per schema rule
+    data: object, where: str, skill_dir: Path, fixtures: Fixtures, problems: list[str]
+) -> Case | None:
     if not isinstance(data, dict):
         problems.append(f"{where}: a case must be an object")
         return None
@@ -199,12 +255,12 @@ def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Cas
     expected = data.get("expected_output")
     if expected is not None and not isinstance(expected, str):
         problems.append(f"{where}: expected_output must be a string")
-    files = data.get("files", [])
-    if files != []:
+    if data.get("files", []) != []:
         problems.append(
-            f"{where}: input files are not staged yet (deferred to a later ticket); "
-            "remove 'files' or leave it empty"
+            f"{where}: input files are staged with a fixture (see `fixture`); "
+            "remove `files` or leave it empty"
         )
+    fixture = _fixture(data, where, fixtures, problems)
     raw_assertions = data.get("assertions", [])
     if not isinstance(raw_assertions, list):
         problems.append(f"{where}: assertions must be a list")
@@ -217,6 +273,7 @@ def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Cas
     # false is the default; two spellings of one thing are rejected.
     if "placeholder" in data and data["placeholder"] is not True:
         problems.append(f"{where}: placeholder must be true, or left out")
+    _by_name(data, where, skill_dir.name, problems)
     if kind == "trigger" and raw_assertions:
         problems.append(f"{where}: assertions are allowed on behaviour cases only")
     if kind == "behaviour":
@@ -235,6 +292,8 @@ def _case(data: object, where: str, skill_dir: Path, problems: list[str]) -> Cas
         assertions=tuple(a for a in assertions if a is not None),
         expectations=tuple(expectations),
         placeholder="placeholder" in data,
+        fixture=fixture,
+        by_name="by_name" in data,
     )
 
 
@@ -259,8 +318,9 @@ def load_suite(root: Path, directory: str) -> Suite:
     if not isinstance(raw_cases, list) or not raw_cases:
         problems.append(f"{where}: evals must be a nonempty list")
         raw_cases = []
+    fixtures = load_fixtures(root, directory, problems)
     cases = [
-        _case(item, f"{where}: evals[{index}]", skill_dir, problems)
+        _case(item, f"{where}: evals[{index}]", skill_dir, fixtures, problems)
         for index, item in enumerate(raw_cases)
     ]
     ids = [item.get("id") for item in raw_cases if isinstance(item, dict)]

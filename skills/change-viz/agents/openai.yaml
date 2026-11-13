@@ -1,0 +1,5 @@
+interface:
+  display_name: 'Change Viz'
+  short_description: 'Describe a branch as a short visual outline'
+policy:
+  allow_implicit_invocation: false

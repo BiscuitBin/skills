@@ -1,0 +1,54 @@
+{
+  "skill_name": "change-viz",
+  "evals": [
+    {
+      "id": "behaviour-describe-branch",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "wordstat-top",
+      "expected_output": "The add-top-words branch described under the three headings: one sentence of why, a note that counts for existing input can fall, and a led-in visual of the --top listing or the new word handling.",
+      "assertions": [
+        { "type": "skill_triggered" },
+        { "type": "output_contains", "value": "--top" },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^##[ \\t]+Special things to note[ \\t]*\\n(?:[ \\t]*\\n)*(?:[-*+][ \\t]+\\S[^\\n]*\\n(?:(?:[ \\t]*\\n)*[ \\t]+\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*){1,3}(?:(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)^##[ \\t]+Change outline[ \\t]*$(?:(?!^#{1,2}[ \\t]).)*?^[ \\t]{0,3}(?:```|~~~)[^\\n]*\\n.*?^[ \\t]{0,3}(?:```|~~~)[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)^##[ \\t]+Why the change[ \\t]*\\n(?:[ \\t]*\\n)*(?:(?!\\*\\*Risk:)[^\\s#][^\\n]*\\n)+(?:[ \\t]*\\n)*(?:\\*\\*Risk:(?:(?!^##[ \\t]).)*?|(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?^##[ \\t]+Special things to note[ \\t]*$"
+        }
+      ],
+      "expectations": [
+        "The first paragraph under the 'Why the change' heading is a single sentence.",
+        "The first paragraph under the 'Why the change' heading says what the branch makes possible for someone running wordstat: listing the most common words in a text, treating words that differ only in case or surrounding punctuation as the same word, or both.",
+        "Under the 'Change outline' heading, every diagram or code block is directly preceded by its own lead-in: one line of prose that says what the block shows.",
+        "At least one diagram or code block in the description shows the --top listing or the new handling of case and punctuation as part of how wordstat works: its steps, its functions, or its output before and after.",
+        "The description says the branch adds a --top option that lists the most common words in the file with how many times each occurs.",
+        "The description says the branch changes how words are counted: each word is lower-cased and punctuation is stripped from its ends before counting.",
+        "The description warns that, because words are now lower-cased and stripped of punctuation before counting, the counts printed for existing input can be lower than before, for example the number of distinct words.",
+        {
+          "text": "A command compares the checked-out branch with the local main branch, such as git log main..HEAD, git diff main...HEAD or git merge-base HEAD main.",
+          "needs_transcript": true
+        }
+      ]
+    },
+    {
+      "id": "no-trigger-unnamed-request",
+      "kind": "trigger",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": false,
+      "fixture": "wordstat-top"
+    }
+  ]
+}

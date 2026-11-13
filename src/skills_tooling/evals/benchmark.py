@@ -5,17 +5,15 @@ references. Every exclusion is counted and shown, never folded in as a 0.
 """
 
 import hashlib
-import os
 import statistics
-import subprocess
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeIs
 
-from skills_tooling.evals import workspace
+from skills_tooling.evals import fixture, workspace
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
+    from pathlib import Path
 
 # Below this many values a sample stddev is undefined, so it is null, never 0.
 MIN_STDDEV_N = 2
@@ -521,35 +519,33 @@ def git_state(root: Path) -> dict[str, Any]:
     A root inside some other repository, such as a copy under a dotfiles
     checkout, would otherwise record that repository's commit.
     """
-    toplevel = workspace.git("rev-parse", "--show-toplevel", cwd=root)
-    if toplevel.returncode != 0 or Path(toplevel.stdout.strip()).resolve() != root.resolve():
+    if not workspace.is_toplevel(root):
         return {"git_commit": None, "git_dirty": None}
     head = workspace.git("rev-parse", "HEAD", cwd=root)
-    excludes = _global_excludes()
-    ignore = ("-c", f"core.excludesFile={excludes}") if excludes is not None else ()
-    status = workspace.git(*ignore, "status", "--porcelain", cwd=root)
+    # Without the user's global ignore file, a file only it ignores would make the tree dirty.
+    status = workspace.git(*workspace.global_excludes(), "status", "--porcelain", cwd=root)
     return {
         "git_commit": head.stdout.strip() if head.returncode == 0 else None,
         "git_dirty": bool(status.stdout.strip()) if status.returncode == 0 else None,
     }
 
 
-def _global_excludes() -> Path | None:
-    """The user's global ignore file, which the harness's isolated git calls never read.
+def evals_sha256(root: Path, skill: str) -> str:
+    """The suite's cases and rubric, and the fixtures its trials start in.
 
-    Without it, a file only the user's own git ignores would make the tree dirty.
+    A suite with no fixtures/ hashes its evals.json alone, as before fixtures
+    existed, so the hashes recorded for it still match. Otherwise the hash also
+    covers every fixture, named by a case or not, and the format build() makes
+    of them, since the same files built another way give the agent another start.
     """
-    configured = subprocess.run(
-        ["git", "config", "--global", "--path", "core.excludesFile"],  # noqa: S607 -- as workspace.git
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if found := configured.stdout.strip():
-        path = Path(found)
-    else:
-        path = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "git/ignore"
-    return path if path.is_file() else None
+    evals = root / "evals" / skill
+    digest = file_sha256(evals / "evals.json")
+    fixtures = evals / "fixtures"
+    if not fixtures.is_dir():
+        return digest
+    # Two fixed-length digests and a number, one per line: no two inputs join alike.
+    parts = (digest, str(fixture.FIXTURE_FORMAT), tree_sha256(fixtures))
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
 def provenance(root: Path, skill: str) -> dict[str, Any]:
@@ -557,5 +553,5 @@ def provenance(root: Path, skill: str) -> dict[str, Any]:
     return {
         **git_state(root),
         "skill_sha256": tree_sha256(root / "skills" / skill),
-        "evals_sha256": file_sha256(root / "evals" / skill / "evals.json"),
+        "evals_sha256": evals_sha256(root, skill),
     }
