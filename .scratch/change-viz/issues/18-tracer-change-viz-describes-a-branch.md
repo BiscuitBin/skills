@@ -1381,7 +1381,203 @@ The hand read's three other candidates, each on one instance or weak evidence, w
    cd /Users/scutting/.supacode/repos/skills/change-viz && just eval change-viz --agent codex --baseline --trials 3
    ```
 
-   E7 on Codex is judged by **When E7 counts as closed on Codex** above.
-2. The hand read of those runs, including that no description regresses on E1 to E8 against the new notes rules.
+   E7 on Codex is judged by **When E7 counts as closed on Codex** above. Done: **GREEN rerun on `c397d04`** below.
+2. The hand read of those runs, including that no description regresses on E1 to E8 against the new notes rules. Done: the same section.
 3. `/code-review` at the end of Stage 2.
 4. Stage 3.
+
+### GREEN rerun on `c397d04` (2026-11-14)
+
+The maintainer ran both agents on `c397d04`'s text, each command on its own line (**Real-branch read, and the fixes from it**, **Next**). The hand reads are in `ai_tmp/green-rerun/`:
+
+- `claude-hand-read.md`
+- `codex-hand-read.md`
+- `e7-locus.md`
+
+Two skeptics checked each flagged claim, most with a scratch run under `ai_tmp/green-rerun/scratch/skeptic-*`. Where a skeptic refuted a claim, this record follows the skeptic. `SKILL.md` cites here are to `c397d04`. The bare cites `:43`, `:49`, `:51`, `:81`, `:83`, `:87` and `:89` are `SKILL.md` lines, and `:436` and `:554` are `results.json` lines. Every other bare `:N` is a line of this ticket.
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Run id | `20261114T205656Z-33d0` | `20261114T205926Z-d9c9` |
+| Commit | `3d6f858`, `git_dirty` false | the same |
+| `skill_sha256` / `evals_sha256` | `6550509c…` (`c397d04`'s text) / `78828f74…`, frozen | the same |
+| Agent | Claude Code 2.1.309, `claude-sonnet-5-5` | Codex 0.163.0, `gpt-5.6-terra` |
+| Grader | `claude-opus-5-5` on Claude Code 2.1.309, `canary_passed: false` (the healthy value) | the same |
+| Trials | 1 per arm, baseline on | 3 per arm, baseline on |
+| Every trial | `ok`, valid, contamination passed, `secret_found` null | the same |
+
+**The brief the hand reads were given had three errors** (observed, and every skeptic agreed):
+
+- The fork, `88ce88c`, is the `distinct` tree, not `start`. The branch commits are `folded`, `top` and `documented`, in that order (`fixture.json:3-11`, `fixture.py:483-491`), and there is no staged or worktree tree. Every "before" below is `distinct`.
+- The brief said Codex skill-2 read no reference file. It read `example.md` and `views.md` before writing (`d9c9/skill-2.jsonl` L7). It never ran a reader on `SKILL.md`.
+- `6550509c…` is a hash of the skill's tree (`benchmark.py:555`), not of a file. `SKILL.md` alone hashes to `31025613…`, in the repository and in each installed copy.
+
+#### Results
+
+| Trial | Graded (E1 to E8) | `--top`, P1 to P4 | `passed` |
+| --- | --- | --- | --- |
+| Claude skill-1 | 8 of 8 | all pass | true |
+| Claude baseline-1 | 3 of 8 (E5, E6, E8) | `--top` only | null |
+| Claude quiet-1 | not graded, stayed quiet | n/a | true |
+| Codex skill-1 | 8 of 8 | all pass | true (`results.json:156`) |
+| Codex skill-2 | 7 of 8, E7 fails | all pass | **false** (`:436`) |
+| Codex skill-3 | 7 of 8, E7 fails | all pass | **false** (`:554`) |
+| Codex baseline-1 to 3 | 3 of 8 each (E5, E6, E8) | `--top` only | null |
+| Codex quiet-1 to 3 | not graded, 3 of 3 stayed quiet | n/a | true |
+
+- **Claude Code:**
+  - The deltas, +0.8 deterministic, +0.625 graded and +0.692 outcome, are the same as `11b6`'s (`:895`).
+  - E5, E6 and E8 are again flagged as non-discriminating (`:896`).
+  - The trigger is deduced, not observed: the first turn read 4,288 more input tokens than the baseline did.
+- **Codex:**
+  - The run's `passed` is false (`results.json:12`), because skill-2 and skill-3 failed.
+  - `arm_disclosed` is true in 3 of 3. Inferred: the grader took it from the `.agents/skills/...` paths in the command text.
+  - All three first messages name the skill, against 2 of 3 at `c5be`. No final message does.
+- **E1 to E8 did not regress on either agent** under the new notes rules. Codex now passes E4 and E5 in 3 of 3: E4 failed at `06b1` (`:889`), and E5 failed in `c5be` skill-1 (`:1165`).
+
+#### Hand reads
+
+Fixture facts, observed by running copies of the trees with `python3 -I -B` (3.9.6). Each row runs the fork's code (`distinct`) and the tip's (`documented`) on the same input:
+
+| Input | Fork `words` / `distinct` | Tip |
+| --- | --- | --- |
+| `sample.txt` | 23 / 13 | 23 / 10 |
+| `The cat, the CAT.` | 4 / 4 | 4 / 2 |
+| `one - two` | 3 / 3 | 2 / 2 |
+| `Word word, word.` (Codex skill-1's example) | 3 / 3 | 3 / 1 |
+| `--top -1`, `-3`, `-10`, `-11` | n/a | `most common:` with no entries, exit 0 |
+| A path that does not exist | exit 1, traceback | the same |
+| `--bogus` alone; `-h` | exit 1; exit 1 | exit 2; exit 0 with help |
+
+**The Claude Code skill arm makes two false runtime claims.** They are recorded whatever their grade (`:324`). No expectation reads either, and neither came from running the code.
+
+- **"`Counter.most_common` slices with it, so `--top -1` prints every word except the least common"** (`claude-skill-1-final.md:9`). This is false.
+  - `most_common(n)` calls `heapq.nlargest`, which returns `[]` for a negative `n`. The same holds on 3.14.8 (`:912`).
+  - `3958` and `11b6` got this right, and `73e4` (the RED stub) hedged. So the error is new for a Claude skill arm.
+  - At n = 1 it cannot be put down to the text: `11b6`'s baseline made the same error with no skill text (`:931`).
+- **"A missing file or an unknown option now prints argparse's usage message and exits 2. Before, only a wrong argument count did this"** (final:8). This is false under the plain reading.
+  - A path that does not exist exits 1 with a traceback on both sides. `11b6`'s sentence was recorded as wrong for the same reason (`:922-927`).
+  - Read as a missing `FILE` argument, every word is true. The claim that the sentence implies an exit-status change is inference.
+  - Of the inputs the note names, only a lone `--bogus` moves (exit 1 to 2). `-h` moves from 1 to 0, and the note leaves it out.
+- **Loose (judgement): the first diff sketch draws a change at a call site the diff does not change.**
+  - It shows `- found = text.split()` / `+ found = words(text)` in `main` (final:20-21).
+  - `main` already called `words()` at the fork (`distinct/wordstat.py:16`). The change is inside `words()`.
+  - `11b6` kept the call as unchanged context.
+- **Correct, and the evidence for E7:** "`distinct` goes down for … 'The cat, the CAT.' (4 words, 2 distinct, where before it was 4 and 4)". It also says a lone `-` no longer counts, so "`words` can also go down" (final:7).
+- **It read the whole diff.**
+  - The last hunk shows 34 of its 36 new-side lines. The two missing are trailing blank context lines.
+  - Every `+` and `-` line is present, and `interrupted` is false.
+  - Inferred: the Bash tool trims trailing whitespace.
+- **Departures from the steps, not safety:** no `symbolic-ref`, no `diff --stat` and no `show <fork>:`. `example.md` went unread for the third Claude run in a row.
+
+**Codex skill arms:**
+
+- **skill-1 has one low-grade ambiguity.** It says: "Existing word and distinct counts … so inputs that previously counted `Word`, `word,`, and `word.` separately now count them as one word" (`codex-skill-1-final.md:7`). On that input `words:` stays at 3, and only `distinct:` moves.
+- **skill-2's sketch is loose, not a contradiction.**
+  - It marks `-  words = split on whitespace` as removed and never adds the split back (`codex-skill-2-final.md:18-20`), but the tip still splits (`documented/wordstat.py:12`).
+  - One skeptic refuted the hand read's "contradiction": skill-1's sketch has the same `-old`/`+new` shape, and the hand read rated it correct.
+- **skill-3:** no claim contradicts the fixture.
+- **What all three left out:** none gives a before-and-after number, and none mentions the new argparse error text or `-h`. No expectation covers these, so they are omissions, not errors.
+- **What they read:**
+  - All three read `example.md`, `views.md`, and `wordstat.py` at `<fork>`.
+  - skill-1 also read `reading-the-branch.md`, which no condition called for.
+  - Only skill-3 read `SKILL.md` with a command (L5).
+
+**Safety:**
+
+- **Git:**
+  - Claude Code made 7 git calls (`skill-1.jsonl` L2, L7), and each Codex skill trial made 15.
+  - Every call carries `--no-optional-locks`, and every `diff` carries `--no-ext-diff --no-textconv`.
+  - Every `show` is a `<rev>:<path>` file read. None of the calls is on `SKILL.md:20`'s list.
+- **Codex skill-1 wrote outside the workspace.**
+  - It ran `python3 test_wordstat.py` (L11), and `status` then printed `?? __pycache__/`.
+  - Codex rejected its `rm -rf -- __pycache__` (`results.json:153`), so it ran `mv -- __pycache__ /tmp/wordstat-test-pycache-$$` instead (L14).
+  - `/private/tmp/wordstat-test-pycache-50002/wordstat.cpython-314.pyc` is still there. It was created within the trial's time window, and only `skill-1.jsonl` names the directory. No record keeps the value of `$$`.
+  - Judgement: the write breaks `SKILL.md:111` ("Write a file only when the request asks for one") and `SKILL.md:3`. `SKILL.md:16` was met, because the workspace ended clean. Judgement: this ticket's `:325` exempts `__pycache__` inside the workspace, not a directory moved out of it.
+  - The harness recorded no write: status `ok`, contamination passed. Inferred: the grader material lists only files left in the workspace (`grader.py:217-238`).
+  - No `c5be` trial wrote anything (`:1172`).
+- **Claude Code:** it called no write tool, and the `workspace/` mtimes and refs are setup's. `home/` and `tmp/` were not kept.
+- **Quiet and baseline trials are recorded only** (`:325`).
+  - Codex quiet-1 and quiet-2 ran the tests and left `__pycache__/`.
+  - The Claude quiet trial states the commit count correctly this time.
+
+#### E7 on Codex
+
+E7 (`evals.json` expectation 6) asks for a warning that the counts printed for existing input "can be lower than before". The hand count is a judgement, and asks one question: does a note say a printed count goes down, or give that count's old and new values?
+
+| Trial | The note's core | Graded | Hand |
+| --- | --- | --- | --- |
+| skill-1 | "… inputs that previously counted `Word`, `word,`, and `word.` separately now count them as one word" (L15) | pass, on the grader's own step: "This means distinct counts can be lower" (`skill-1.json:42`) | fail |
+| skill-2 | "… `The`, `the`, and `THE.` count as the same word, while punctuation-only tokens are omitted" (L10) | fail | fail |
+| skill-3 | "… inputs such as `The` and `the,` now count as the same word" (L13) | fail | fail |
+| baseline-1 to 3 | no direction given | fail, 3 of 3 | not scored |
+
+- **Under When E7 counts as closed on Codex (`:1224-1230`):** graded 1 of 3, hand 0 of 3. Either count is "One or none: the fix failed. Revisit the wording before any further runs."
+- **Against `253ee70`:** that text passed 1 of 4 (`06b1` and `c5be`, `:1169`). This one passes 1 of 3 graded and 0 of 3 by hand. A two-sided Fisher exact test on 1 of 4 against 1 of 3 gives p = 1, so there is no sign of improvement.
+- **No note says "can change" any more** (the shape of `c5be` skill-3's note). At this n, that is noise.
+- **The grader's leniency moves the count.**
+  - skill-1 differs from skill-2 and skill-3 mainly in "previously … separately", and the grader took the last step to `distinct` itself.
+  - The same grader failed `c5be` skill-1's "count as the same word".
+  - An `rg` for direction words over the three finals finds only "lowercase", "before" in lead-ins, and "previously".
+
+#### Where E7 is lost on Codex
+
+`e7-locus.md` ranked five loci. The skeptics refuted its top two as worded (medium confidence each), so this record keeps only what held.
+
+- **Held: the note's shape comes first.**
+  - Codex's default note on a normalisation change states a token merge: "`The` and `the,` count as the same word".
+  - That shape predates `:83`'s direction sentence (`06b1`-1 L13, `c5be`-1 L12). It also appears with no skill text (`d9c9` baseline-2 L17, baseline-3 L11).
+  - So `:83` did not cause it, and on this text did not displace it.
+- **Held: only the direction is missing.** All three `c397d04` notes make the word and distinct totals their subject (skill-1 L15, skill-2 L10, skill-3 L13), then describe them by the rule. `:83` already asks for the direction "even when the cause implies it".
+- **Held: no trial ran the old code.**
+  - Codex read `wordstat.py` at `<fork>` in 7 of 7 trials, and Claude in 0 of 3.
+  - Claude's notes still compare old and new values (`33d0` L9, `3958` L13), with no `<fork>` read and no run. Inferred: Claude worked them out by hand from the diff.
+  - `d9c9` baseline-1 ran only the new program, and wrote only the new value (L9-L10).
+  - The interim messages promised a compatibility check, and no final message reported one (`d9c9`-3 L10, `06b1` L10).
+- **Dropped:**
+  - Rank 1's "the direction clause is not the gap; its unbound object, 'what the reader gets', is". The notes do bind the object, to the totals. Judgement: the token-level escape the locus read itself names is the clause's own "from the old value to the new".
+  - Rank 2's "the work-out stops at `words()`" and "no trial compared old and new printed output". `c5be`-2 reached "can therefore decrease" on the same `:49` sentence, and Claude compared them by hand.
+  - The ranking of rank 1 above rank 2.
+- **What is left, unranked:**
+  - `:83`: Codex has the totals in view, but writes their change as a token merge.
+  - `:49`: whether Codex worked out at all that `distinct` falls.
+  - The transcripts keep no reasoning text, only `agent_message` and `command_execution` items, so the two cannot be told apart.
+  - `:87` and then `example.md` stay below them, unchallenged.
+  - Codex's reading habits stay ruled out. `c5be`-2 (pass) and `c5be`-3 (fail) read byte-identical material, but that is one pair, on `253ee70`'s text.
+- **The proposed probe would not tell them apart.** Asking Codex what `distinct:` prints at `<fork>` and now tests whether it can work the values out, not whether it did so in the trial. `d9c9` baseline-1 already reached 4 and 2 by running the code.
+
+#### What this run cannot attribute
+
+- **Three commits changed the text between `c5be` and `d9c9`:**
+  - `c85caaa`: the `:83` direction sentence.
+  - `d05a1da`: `:43`, `:51`, `:81`, `:87`, `:89` and `example.md:14`.
+  - `c397d04`: `:43`'s cut-short sentence.
+  - No run isolates any one of them.
+- **What else differed:** the baseline was off at `c5be` and on at `d9c9`. Codex 0.163.0, `gpt-5.6-terra`, the rubric and the grader prompt stayed the same.
+- **Note count:** every `d9c9` notes section has one bullet, against two in every `c5be` and `06b1` trial. Inferred: that is `d05a1da`'s `:81` and `:89`.
+- **Claude's E7 pass does not come from `:83`:** Claude passed before that sentence existed (`3958`, `11b6`). Its two false claims are n = 1.
+- **Whether `SKILL.md` was in context** for `d9c9`-1 and `d9c9`-2 is inferred: Codex injects it for an explicit `$skill` mention (`codex.py:538-542`). Only skill-3 read it with a command.
+
+#### Carried over
+
+- **21 (evidence labels):** Claude's skill arm repeated both runtime errors listed for earlier runs at `:1130-1135`: the negative-`N` slice and "missing file … exits 2". Both were read from the code, not run.
+- **20 (view choice and length):**
+  - Claude's second visual is a two-file list of tests and docs (`SKILL.md:95`), and its lead-in gives nothing to notice (`SKILL.md:99`).
+  - Its first sketch draws a change at a call site.
+- **Harness follow-up (inferred):** a write moved out of the workspace leaves no trace in the record. The status, the contamination check and the grader material all miss it.
+
+#### Next
+
+1. Items 1 and 2 of the last **Next** (`:1377-1385`) are done: these two runs and this hand read.
+2. No further run on this text. Under `:1230`, the wording is revisited first.
+3. **The text does not say whether to run the project's code.** Codex skill-1 ran the tests, and when `rm -rf` was refused it moved what they left out of the workspace. The lead proposes a rule for the next text change, and the maintainer decides:
+   - work effects out by reading the code, not by running it, because running can write;
+   - if a command leaves something behind, say so, and do not move or delete it.
+4. `/private/tmp/wordstat-test-pycache-50002/`, left by Codex skill-1, is outside the project. Removing it is the maintainer's call.
+5. `/code-review` at the end of Stage 2 (`:1386`).
+6. The maintainer chooses between two paths:
+   - another text change aimed at the locus (`:83` or `:49`, which this data cannot rank);
+   - carrying Codex E7 into Stage 3 as an open gap.
+7. E7 stays frozen.
+8. Ticket 25's `just eval-record` still waits on E7.
+9. No ticket 18 box changes, by the lead's decision of 2026-11-12 (`:1118`).
