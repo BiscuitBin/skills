@@ -23,6 +23,7 @@ As of 2026-11-10.
 - **This repository's own changes cannot be eval material**, because the grader flags the word `skill` as disclosing the arm. Reading the skill's output on skills#1 and skills#4 by hand involves no grader, so it is fine here.
 - **The skill is by-name-only**, so skill-creator's description optimisation does not apply.
 - **Benchmarks:** `just eval-record` writes one iteration from one run per agent, and both runs must share the same `skill_sha256` and `evals_sha256` (ADR 0014).
+- **Codex E7 is an open gap** (ticket 18, **GREEN rerun on `c397d04`** and **The maintainer's decisions (2026-11-14)**). E7 passed in 1 of 3 graded Codex trials, and 0 of 3 by hand: the notes name the new counting rule, but not that the printed counts can be lower. Under `CONTRIBUTING.md` §3, `just eval-record` waits until E7 passes on Codex, or until the maintainer decides how to record it.
 
 ## Acceptance criteria
 

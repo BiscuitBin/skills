@@ -1573,11 +1573,36 @@ E7 (`evals.json` expectation 6) asks for a warning that the counts printed for e
 3. **The text does not say whether to run the project's code.** Codex skill-1 ran the tests, and when `rm -rf` was refused it moved what they left out of the workspace. The lead proposes a rule for the next text change, and the maintainer decides:
    - work effects out by reading the code, not by running it, because running can write;
    - if a command leaves something behind, say so, and do not move or delete it.
-4. `/private/tmp/wordstat-test-pycache-50002/`, left by Codex skill-1, is outside the project. Removing it is the maintainer's call.
+
+   Decided: the text stays as it is (below).
+4. `/private/tmp/wordstat-test-pycache-50002/`, left by Codex skill-1, is outside the project. Removing it is the maintainer's call. Done: removed, with the maintainer's approval.
 5. `/code-review` at the end of Stage 2 (`:1386`).
 6. The maintainer chooses between two paths:
    - another text change aimed at the locus (`:83` or `:49`, which this data cannot rank);
    - carrying Codex E7 into Stage 3 as an open gap.
+
+   Decided: the open gap (below).
 7. E7 stays frozen.
 8. Ticket 25's `just eval-record` still waits on E7.
 9. No ticket 18 box changes, by the lead's decision of 2026-11-12 (`:1118`).
+
+#### The maintainer's decisions (2026-11-14)
+
+Asked after the hand read, with the lead's recommendation first. The maintainer chose against the recommendation on the first two.
+
+| Question | Recommended | Decided |
+| --- | --- | --- |
+| E7 on Codex | One more text change: for each change to existing behaviour, work out from the code what a small input printed at `<fork>` and prints now. Then three Codex trials, under the same rule | **Carry Codex E7 as an open gap into Stage 3.** No further text change for E7 |
+| Running the project's code | A rule to read, not run, and to report anything a command leaves behind rather than move or delete it | **Leave the text as it is.** Codex skill-1's test run and `mv` stay recorded under **Safety** above |
+| `/private/tmp/wordstat-test-pycache-50002/` | Remove it | **Removed** by the lead, after listing it: one `wordstat.cpython-314.pyc` |
+
+What follows from them:
+
+- **E7 stays an open gap on Codex.** The `c397d04` text is the text that goes into Stage 3. `CONTRIBUTING.md` §3 records a benchmark only once the skill passes on each agent, so ticket 25's `just eval-record` waits until E7 passes on Codex or the maintainer decides how to record it. Ticket 25's **What is known** says so.
+- **Running code stays unaddressed by the text.** Ticket 21 (evidence) and ticket 22 (local changes) are where it comes up next: 21 labels what was run against what was read, and 22 reads a working tree that a test run would change.
+- **No ticket 18 box changes,** by the lead's decision of 2026-11-12 (`:1118`).
+
+#### Next, after the decisions
+
+1. `/code-review` at the end of Stage 2.
+2. Stage 3: cases for tickets 19 to 24, a design review for each, and Hand-off 3.
