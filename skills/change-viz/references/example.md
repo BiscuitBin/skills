@@ -11,7 +11,7 @@ Writers can preview an edit to one page without rebuilding the whole site, becau
 ## Special things to note
 
 - An edit to a shared layout no longer reaches pages whose own source is unchanged, so after a layout change those pages keep the old layout until a full rebuild with `--clean`.
-- The builder now writes `.build-record.json` at the site root, and `.gitignore` lists it.
+- `.gitignore` keeps the new `.build-record.json` out of the repository, so a build in a fresh checkout, such as a CI job, is no faster: with no record, it still renders every page.
 
 ## Change outline
 
