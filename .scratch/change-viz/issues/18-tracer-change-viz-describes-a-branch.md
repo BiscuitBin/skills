@@ -1231,6 +1231,157 @@ Set before the next run (lead, 2026-11-13). On a Codex run of three trials on `8
 
 #### Next
 
-1. The maintainer's real-branch read, Hand-off 2 (b), on `c85caaa`'s text.
-2. Apply the feedback by changing what the skill explains, then hold a review round.
-3. Rerun both agents, each command on its own line: Claude with `--baseline`, and Codex with `--baseline --trials 3`.
+1. The maintainer's real-branch read, Hand-off 2 (b), on `c85caaa`'s text. Done: **Real-branch read, and the fixes from it**.
+2. Apply the feedback by changing what the skill explains, then hold a review round. Done: `d05a1da` and `c397d04`.
+3. Rerun both agents, each command on its own line: Claude with `--baseline`, and Codex with `--baseline --trials 3`. Now on `c397d04`'s text (**Real-branch read, and the fixes from it**, **Next**).
+
+### Real-branch read, and the fixes from it (2026-11-13)
+
+#### The run
+
+Hand-off 2 (b) (`ai_tmp/green-apply/handoff-2.md`) read this repository's `change-viz` branch at `a9be07a`, cloned from GitHub, on `c85caaa`'s text (`skill_sha256` `89ff20ab…`). The branch is 82 commits and 122 files ahead of `origin/main` (`9aafe36`). The clone has no local `main`, and `origin/HEAD` points to `origin/main`: the fresh-clone case.
+
+- **Who ran what:** the session ran the setup block and, with the maintainer's approval (2026-11-13), the Codex line. The maintainer ran the Claude Code line through `ai_tmp/green-apply/run-claude.sh`, which holds `handoff-2.md`'s Claude Code block unchanged, because the token stays in the maintainer's terminal. The setup printed the expected 14 `!!` lines. The outputs are in `ai_tmp/real-read/`.
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Agent | Claude Code 2.1.309, `claude-sonnet-5-5` | Codex 0.163.0, `gpt-5.6-terra` |
+| Result | success, 6 turns, $0.15, 18 s | exit 0; input 134,965 tokens (73,984 cached), output 1,483 |
+| Commands | 5 Bash calls, no Read | 4 chained commands |
+| Tool output, characters | 239, 2,304, 11,617, 16,761, 9,746 | 35, 792,018, 15,192, 106,372 |
+
+- **After-checks, all clean:** the clone's status shows the same 14 `!!` lines; its refs, `.git/index` and config hashes and the outer worktree are unchanged; the branch is `change-viz`; `rg` finds no risky command. Every git call carries `--no-optional-locks` and every diff `--no-ext-diff --no-textconv`. No log has `-p`, `-S` or `-G`, and each `show HEAD:path` is a file read.
+- **Base:** both ran step 1 first and took `origin/main`. Claude Code first counted against the absent local `main` (exit 128).
+
+#### What the read found
+
+The hand read is `ai_tmp/real-read-check/hand-read.md`. Its check, workflow `real-read-check` (59 agents, `raw.json`), had four fact-checkers (each description by part), three skeptics per flagged claim (none overturned), a coverage list of the branch's changes made without reading either description, a rule check against `SKILL.md`, and a synthesis. `SKILL.md` cites here are to `c85caaa`.
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Claims wrong or misleading | 8 of 47 (why and notes 4 of 17, outline 4 of 30) | 9 of 44 (why and notes 1 of 11, outline 8 of 33) |
+| References opened | none | `example.md`, `views.md` |
+
+**How each read the branch:**
+
+- **Claude Code wrote from a sample.** Its second result, the log with bodies and the stat, was a `<persisted-output>` notice, "Output too large (56.6KB). Full output saved to: …", and a 2 KB preview. It never opened the file, and reran the log as subjects only. It cut its own diffs, `head -300` over three files and `head -150` over two (`claude-commands.txt:4-5`), and never diffed `claude_code.py`, `codex.py`, `fixture.py`, `contamination.py` or `benchmark.py`.
+- **Codex printed the log, the stat and the whole diff in one call** of 792,018 characters. What reached the model is not verified.
+- **Neither** opened `reading-the-branch.md` (`SKILL.md:39`) or read a file at `<fork>`.
+
+**Claude Code:**
+
+- **Shortfalls:** a two-sentence why listing what the branch adds (`claude-final.md:3`, against `SKILL.md:75`). Bullet 3 (`:9`) packs two changes into six sentences. The fourth lead-in (`:48`) gives nothing to notice.
+- **Errors, the most telling:**
+  - `:7` "or has no skill expansion, is an infrastructure error": such a session stays `ok` (`claude_code.py:507-510`, `:541-542`).
+  - `:9` "Every trial's git calls now use the system git": `bin/git` already linked to it (`workspace.py:98-100` on `origin/main`). Only macOS changes, from xcrun's shim to the git `xcrun --find git` names.
+  - `:9` "The 150 ms window now applies only to denials" restates `5a9fc74`, a docs fix to text this branch added in `7f8c72b`: a commit's "now" read as a change from the base.
+- **Left out:** that recorded provenance cannot tell runs before and after the branch apart (`benchmark.py:533-548`), and that a slowly denied Codex command now moves its trial from scored to `infra_error` (`codex.py:617-631`).
+
+**Codex:**
+
+- **Shortfalls:** its notes are a reassurance (`codex-final.md:7`, "so it does not modify the branch or working tree it describes") and two new features (`:8`, `:9`), so none warns anyone who relies on `origin/main`. The last block (`:39-50`) is a tree of features with no paths, across the whole change, and its lead-in (`:37`) gives nothing to notice.
+- **Errors:** 8 of the 9 are in the outline.
+  - `:3` and `:13` make reviewers the people who run the skill, which the author runs (`SKILL.md:12`, `:107`). This rests on the branch being the skill's own.
+  - `:28-31` draws the preflight before the install; the skill is installed first (`runner.py:290-297`).
+- **Left out:** every change of importance 4 or 5 on the coverage list: the Claude Code trigger and contamination change, persistent sessions and fail-closed trials, Codex denials, publishing on merge, and provenance.
+
+**Both** left out that merging publishes `change-viz` 0.1.0 to the marketplace and to `npx skills` while tickets 19 to 25 are open, with the new marketplace entry in view.
+
+**The direction rule (`SKILL.md:81`) on a real branch:**
+
+- **Claude Code, bullet 2, meets it:** a `should_trigger: false` case whose agent reads the installed `SKILL.md` goes from pass to fail, because a confirmed `Read` now counts. ADR 0017:7 states that direction.
+- **Claude Code, bullet 3, git half: E7's pattern.** The cause, then "can therefore behave differently from before", with the effect in its fifth tool result (`workspace.py:152-153`: the shim "prints warnings into git's output and adds half a second"). Its first direction miss with the rule in context, after 2 of 2 on the eval (**E7 (Codex)**).
+- **Claude Code, bullet 3, denial half: a reading miss.** Only the new rule: it read no `codex.py` diff, and `7f8c72b`'s body fell outside the preview.
+- **Codex: never exercised.** No note is a change to existing behaviour, so the sample **Decision** (item 5) expected did not come. On E7 it chose the right change and left out the direction; here it chose none.
+- **So:** the rule held where a document stated the direction, failed once with the effect in view, and was otherwise bypassed, by under-reading on Claude Code and by note selection on Codex.
+
+**Interim messages:** Codex's first again named the skill: "I’m using the requested change-viz skill to inspect the branch read-only and produce a paste-ready PR description." Its second promised the "compatibility-impacting harness changes", and no note gave one.
+
+#### The maintainer's decision
+
+Shown `ai_tmp/real-read-check/show-me-five-fixes.html`, the maintainer replied (2026-11-13) "Let's go with your suggestions", with no separate notes on the descriptions.
+
+1. **Read the rest of an output a tool cuts short:** yes.
+2. **One change per note:** yes.
+3. **A note warns; it does not describe a feature or reassure,** and the example's second note becomes a warning: yes.
+4. **A cause with no direction: read more, or leave the note out:** yes.
+5. **Say what a merge publishes:** deferred to ticket 19 (**Carried over**).
+
+The hand read's three other candidates, each on one instance or weak evidence, were not offered.
+
+#### The fix (`d05a1da`)
+
+`SKILL.md` cites here are to `d05a1da`. The rubric and the fixture are unchanged.
+
+1. **Fix 1 (`:43`, `:51`).** A step 2 paragraph: when a tool cuts an output short, read the rest, the log from the file the tool names or a range of commits at a time, and the diff a path at a time, because "A change you never saw reaches the reader as no change at all." The Done line asks for every commit message and the diff of each file that carries the change, read in full (`reading-the-branch.md:23`'s bound).
+2. **Fix 2 (`:89`).** "Give each bullet one change: two in one bullet are still two to keep in mind, and the second gets less care."
+3. **Fix 3 (`:81`, `example.md:14`).** A note is a warning of what could catch the reader out. One that only says what the branch adds, or that it is safe, goes to the why or the outline. "Only" keeps a migration or a surprising decision (`:84-85`). The example's second note becomes a warning (below).
+4. **Fix 4 (`:87`).** A writer who can name a change's cause, but not what the reader gets and which way it moves, reads the code that decides it, now and at `<fork>`, and leaves the note out if they still cannot say. "If you have read it" leaves code no allowed command reaches under `:20`. The direction rule (`:83`) is byte-identical.
+
+**Wording** came from a workflow (`ai_tmp/real-read-fix/final.json`, `workflow-output.json`): three drafts (minimal, reason-led, self-test), three judges (fidelity to the evidence, generality and safety, text quality), a synthesis, two skeptics (12 findings, 9 medium or high), and one revision. Both high findings, an unbounded read and the writer's own cuts, were on fix 1, and led the revision to move its demand into the bounded Done line.
+
+**The lead then changed two things:**
+
+- **The example's second note.** The revision had replaced the synthesis's line with one no judge or skeptic saw, which its own residual risks said over-claimed and nearly repeated note 1. The lead wrote instead: "`.gitignore` keeps the new `.build-record.json` out of the repository, so a build in a fresh checkout, such as a CI job, is no faster: with no record, it still renders every page." It keeps the old line's fact and names what the reader gets.
+- **Fix 1's first sentence,** reordered for grammar: "read the rest of the log from the file it names, or …" became "read the rest: the log from the file the tool names, or …".
+
+**Checks:**
+
+- `skill_sha256` `6b6e3c5f…`; `evals_sha256` still `78828f74…`.
+- P1 to P4 still pass the example, 8 of 8 (`ai_tmp/green-apply/patterns.py`).
+- The body is 103 lines, 13,135 bytes, about 3,284 tokens.
+- `just validate-skills` gives only the expected `extension-portability` warning.
+- A scan of the added words for fixture and branch words found nothing.
+- `just check`: 1210 passed, 4 skipped.
+
+#### Cross-model review (`d05a1da`)
+
+- **Reviewer:** Codex `gpt-6-astra` through `review.py`, implementer `claude-code`, no fallback, exit 0. It reviewed `a9be07a..d05a1da` with the brief `ai_tmp/real-read-fix/review-brief.md`, which the runner built into `brief-real-read-fix.md` with the diff. The output is `ai_tmp/real-read-fix/codex-review.md`. Unlike the last two reviews, it answered every question: 2 and 4 to 7 hold, including no teaching to the test and the example note being true.
+- **Triage:** a separate agent judged each item against the text and the real branch (`ai_tmp/real-read-fix/triage.md`).
+
+| Item | Verdict | Action |
+| --- | --- | --- |
+| 1. `:43`: a single file's diff that is still cut short has no next step, though `:51` asks for it in full (medium) | Valid. On the real branch, two single-path diffs are larger than the 56.6 KB log that was cut: this ticket's, 150,440 bytes, and `docs/reference/evals.md`'s, 64,494. Skeptic finding 4 had rejected the case as invented. | Fixed in `c397d04` (+223 bytes): read the whole of it, from the file the tool names or a range of lines at a time, and if it still cannot be read in full, say in a note what could not be read. |
+| 2. `:87` with `:89`: "leave the note out" can let a known change end at `- None.` (medium) | Out of scope. The concern is real but narrow, and the suggested note, naming the change without its direction, is what E7 fails. It would reverse fix 4's approved intent. | No change. The maintainer decides: keep the exit, or allow a note naming the change and what the code does not settle, which needs a guard and a Codex rerun. |
+| 3. A remark under question 1: the Done line has no practical bound, and no way out on a very large branch | Out of scope for a cap or a budget exit, which would loosen fix 1's approved meaning. Valid only where the tool cannot deliver, which item 1's fix covers. | No separate change. A cap or a budget is the maintainer's call. |
+
+- Codex's answer to question 3, that `:20` covers a part that cannot be read, is over-broad: `:20` covers only commands ruled out. Its answer to question 5 holds: the example's note is true of the sketch and the flowchart.
+
+**Checks on `c397d04`:**
+
+- `skill_sha256` `6550509c…`; `evals_sha256` still `78828f74…`.
+- P1 to P4 pass the example, 8 of 8.
+- The body is 103 lines, 13,358 bytes, about 3,340 tokens. With the review fix, the change adds 1,236 bytes, against the workflow's aim of about 900.
+- `just validate-skills` gives only the expected warning, and the scan of added words found nothing.
+- `just check`: 1210 passed, 4 skipped.
+
+#### Residual risks
+
+- **One run per agent, on one branch** that adds the skill itself. How a note sorts under the new text is a reading, not a run.
+- **The eval's fixture is small,** so the rerun will not exercise fix 1's paragraph. It does test the Done line, where "each file that carries the change" can read narrower than `:39`'s whole diff.
+- **Reading in full makes a large branch slower and dearer.** Claude Code's 18 s and $0.15 came from a sample.
+- **Fix 1 rests on the Done line.** The writer's own cuts, a subjects-only log and a file never diffed are caught only if the writer counts the file as one that carries the change. An output that arrived whole but too long to take in is not covered. Since `c397d04`, a writer could also say a part could not be read instead of paging through it; "still" and the Done line push against that, and only a run would show whether they hold.
+- **Fix 3 adds no ranking.** A writer who still files changes for existing users as features can end at `- None.` over them, as Codex did. Only `:49`, `:51` and the direction rule's place at the head of the list (`:83`) push against it.
+- **Fix 4's exit is its own sentence.** A writer who skips the read could drop a note that needed only its direction, which on the frozen eval reads as an E7 fail, and with `:89` reach `- None.` over a known change.
+- **Fix 2 leaves "one change" to the writer.** A note on one change with several effects may be split.
+- **The example line is the lead's,** and only the cross-model review has read it.
+- **`adds`** is new to `SKILL.md` and occurs in rubric expectation 5, as the approved fix's own word.
+
+#### Carried over
+
+- **19 (risk line):** fix 5, already in ticket 19's **What is known**: what a merge publishes to people who install or deploy from the default branch is part of its blast radius, tested with a fixture of its own.
+- **20 (view choice and length):** where the outline errors fell, both last blocks listing the whole change, and the lead-in shortfalls (ticket 20, **What is known**).
+
+#### Next
+
+1. Both agents rerun once on `c397d04`'s text (`skill_sha256` `6550509c…`), each command on its own line, never chained with `&&`:
+
+   ```sh
+   cd /Users/scutting/.supacode/repos/skills/change-viz && just eval change-viz --agent claude --baseline
+   cd /Users/scutting/.supacode/repos/skills/change-viz && just eval change-viz --agent codex --baseline --trials 3
+   ```
+
+   E7 on Codex is judged by **When E7 counts as closed on Codex** above.
+2. The hand read of those runs, including that no description regresses on E1 to E8 against the new notes rules.
+3. `/code-review` at the end of Stage 2.
+4. Stage 3.

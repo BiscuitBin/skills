@@ -47,6 +47,8 @@ A starting pattern for the line, to be made stricter in each eval case:
 
 **From ticket 18's second GREEN run (2026-11-12), inferred:** Codex's note called the new counting "more accurate" and never said which way the counts move for existing input, though `SKILL.md` asks for the direction. A risk line written that way would understate the blast radius for someone who relies on the old output.
 
+**From ticket 18's real-branch read (2026-11-13), observed:** both agents described this repository's `change-viz` branch, and neither said that merging it publishes `change-viz` 0.1.0 to the marketplace and to `npx skills` while tickets 19 to 25 are open. Both had the new marketplace entry in view. The maintainer chose to settle it here, not in ticket 18's notes rule: what a merge publishes to people who install or deploy from the default branch is part of its blast radius. Write the rule so it holds for any project that ships from its default branch, and test it with a fixture of its own (ticket 18, **Real-branch read**).
+
 ## Acceptance criteria
 
 - [ ] Every description has the risk line and its two bullets, in the shape and position above.
