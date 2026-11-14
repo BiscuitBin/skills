@@ -40,7 +40,7 @@ Read every commit since the base, not only the last one. A branch often finishes
 - The changed files, for the surrounding code a diff leaves out. If step 1 listed uncommitted changes, read each file as committed, with `git --no-optional-locks show HEAD:path/to/file`, so a local edit stays out of a description of the commits.
 - A changed file as it was before the branch, when you need the old version: `git --no-optional-locks show <fork>:path/to/file`. It prints the file and changes nothing. Read it at `<fork>`, not `<base>`: that is the version the three-dot diff compares with, and the base may have changed the same file since the branch was cut, which would put someone else's change into this branch's description.
 
-When a tool cuts an output short, read the rest: the log from the file the tool names, or a range of commits at a time, and the diff a path at a time. A change you never saw reaches the reader as no change at all.
+When a tool cuts an output short, read the rest: the log from the file the tool names, or a range of commits at a time, and the diff a path at a time. If the diff of a file that carries the change is still cut short, read the whole of it, from the file the tool names or a range of lines at a time. If you still cannot read all of it, say in a note what you could not read. A change you never saw reaches the reader as no change at all.
 
 Take every fact about the branch from what these commands show now. A summary in your starting context may be stale, or may count commits that are not on this branch.
 
