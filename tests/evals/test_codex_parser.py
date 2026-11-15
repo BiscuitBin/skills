@@ -12,8 +12,9 @@ from typing import Any
 
 import pytest
 
-from skills_tooling.evals.adapter import RawRun, Trace
-from skills_tooling.evals.assertions import contains_lines, expected_script_output
+from skills_tooling.evals.adapter import Command, RawRun, Trace
+from skills_tooling.evals.assertions import contains_lines, evaluate, expected_script_output
+from skills_tooling.evals.cases import Assertion
 from skills_tooling.evals.codex import (
     echoed_lines,
     kept_lines,
@@ -128,6 +129,46 @@ def test_a_read_that_never_completed_is_not_a_trigger(tmp_path: Path) -> None:
     lines = without_invocations("fake-should-trigger")
     trace = parse_stream(raw_run(path, lines))
     assert trace.skills_triggered == []
+
+
+def test_a_command_that_never_completed_is_kept_as_failed(tmp_path: Path) -> None:
+    # Still running when the turn ended: kept, as Claude Code keeps a Bash call with no result.
+    started = {
+        "type": "item.started",
+        "item": {
+            "id": "item_0",
+            "type": "command_execution",
+            "command": "/bin/zsh -lc '/usr/bin/python3 -c pass'",
+            "aggregated_output": "",
+            "exit_code": None,
+            "status": "in_progress",
+        },
+    }
+    answer = {
+        "type": "item.completed",
+        "item": {"id": "item_1", "type": "agent_message", "text": "Done."},
+    }
+    events = [{"type": "turn.started"}, started, answer, {"type": "turn.completed"}]
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("".join(json.dumps(e) + "\n" for e in events))
+    trace = parse_stream(raw_run(path, ()))
+    assert trace.status == "ok"
+    assert trace.commands == [Command("/usr/bin/python3 -c pass", ok=False, output="")]
+    # So python_not_run reads it, as it reads a failed command.
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    result = evaluate(
+        Assertion("python_not_run"),
+        trace,
+        skill="cowsay",
+        skill_dir=SKILL_DIR,
+        installed=None,
+        workspace=workspace,
+    )
+    assert (result.passed, result.evidence) == (
+        False,
+        "a command runs python: /usr/bin/python3 -c pass",
+    )
 
 
 def test_codexs_implicit_event_alone_is_not_a_trigger(tmp_path: Path) -> None:

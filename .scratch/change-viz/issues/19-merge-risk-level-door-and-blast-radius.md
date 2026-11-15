@@ -180,5 +180,6 @@ After the fixes, under 3.9.6:
 The brief's R1 copy is left as reviewed.
 
 Landed: the Renovate change and its test, `ae6fc72`.
+The same implementation review covered `ae6fc72`; it raised no finding against it (ticket 21's notes hold the record).
 
 Freeze commit: TBD; evals_sha256: TBD.

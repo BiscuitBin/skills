@@ -282,7 +282,8 @@ def _names_python(text: str) -> str | None:
 def _runs_python(command: str, depth: int = 0) -> str | None:
     """How the command's text starts python, as the evidence's opening; None if it does not."""
     # A backslash-newline continues the line, as in the shell; the lexer would end it there.
-    command = command.replace("\\\n", "")
+    # An escaped backslash before the newline ends the line, so only an odd run joins.
+    command = re.sub(r"(?<!\\)((?:\\\\)*)\\\n", r"\1", command)
     found = command_list(command, whole_words=True)
     if not found and command.strip():
         # Unbalanced quotes, as in a here-doc body with an apostrophe: fail closed.
@@ -291,7 +292,8 @@ def _runs_python(command: str, depth: int = 0) -> str | None:
         program = _program(words)
         if not program:
             continue
-        name = Path(program[0]).name
+        # A redirection may be glued to the program's word: python3<<EOF, ./x.py>out.
+        name = Path(re.split(r"[<>]", program[0], maxsplit=1)[0]).name
         if PYTHON.fullmatch(name):
             return "a command runs python"
         # Its #! line starts the interpreter, past the wrapper once PATH is reset.

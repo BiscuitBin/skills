@@ -376,6 +376,11 @@ def test_python_not_run_fails_on_any_call_the_wrapper_logged(tmp_path: Path) -> 
         "python -m unittest",
         "python3.14 -m unittest",
         "nohup /usr/local/bin/python3.13 x.py",
+        # The shell cuts a word at a redirection glued to it.
+        "/usr/bin/python3<<'EOF'\npass\nEOF",
+        "/usr/bin/python3</dev/null",
+        # An escaped backslash ends the line: it does not continue it.
+        "echo \\\\\n/usr/bin/python3 -c pass",
     ],
 )
 @pytest.mark.parametrize("ok", [True, False])
@@ -443,6 +448,7 @@ def test_python_not_run_reads_the_string_a_shell_runs(tmp_path: Path, command: s
         "sh -c 'PATH=/usr/bin:/bin ./fingerprint.py --check fingerprints.txt'",
         "./fingerprint.py --check fingerprints.txt",
         "if true; then /trial/workspace/fingerprint.py; fi",
+        "PATH=/usr/bin:/bin ./x.py>/dev/null",
     ],
 )
 def test_python_not_run_fails_on_a_python_script_run_by_path(tmp_path: Path, command: str) -> None:
@@ -499,6 +505,9 @@ def test_python_not_run_fails_closed_on_a_command_the_lexer_cannot_split(
         "command -pv python3",
         "which python3",
         "type python3",
+        # A .py name glued to a redirection is the file read or written, not the program.
+        "cat<fingerprint.py",
+        "cat>x.py <<'EOF'\nprint(1)\nEOF",
         # Commands the lexer cannot split, with no interpreter word: longer names are not one.
         "cat <<EOF\nThe branch's list\nEOF",
         "cat .python-version cpython-314.pyc mypython; echo it's",
@@ -560,6 +569,8 @@ def test_python_not_run_reads_three_nested_shells_and_fails_closed_past_them(
         ("__pycache__/fingerprint.cpython-314.pyc", "__pycache__"),
         ("x.pyc", "x.pyc"),
         ("notes/__pycache__/", "notes/__pycache__"),
+        # The name decides, whatever the entry's type: here a regular file.
+        ("__pycache__", "__pycache__"),
     ],
 )
 def test_python_not_run_fails_on_bytecode_in_the_workspace(

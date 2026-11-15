@@ -185,5 +185,6 @@ After the fixes, under 3.9.6:
 3.14.8 was not run.
 
 Landed: T1 and T2 and their docs, `b4733c7`. They pass locally on macOS; the Ubuntu rows wait for a push.
+The same implementation review covered `b4733c7`; its one point on the GitHub paragraph was triaged invalid (ticket 21's notes hold the record).
 
 Freeze commit: TBD; evals_sha256: TBD.

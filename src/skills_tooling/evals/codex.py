@@ -532,6 +532,40 @@ def frontmatter_name(output: str, skip: int) -> str | None:
     return name if isinstance(name, str) else None
 
 
+def _command(item: dict[str, Any]) -> Command:
+    """A completed `command_execution` item: the agent's command and its tool result."""
+    return Command(
+        unwrap(str(item.get("command", ""))),
+        ok=item.get("status") == "completed" and item.get("exit_code") == 0,
+        output=str(item.get("aggregated_output", "")),
+    )
+
+
+def _commands(events: list[dict[str, Any]]) -> list[Command]:
+    """The agent's commands, in the order they started.
+
+    One that started and never completed is kept as failed, with no output, as
+    Claude Code keeps a Bash call with no result.
+    """
+    commands: list[Command] = []
+    # Where each started command sits in `commands`, until its item.completed arrives.
+    running: dict[str, int] = {}
+    for event in events:
+        item = event.get("item")
+        if not isinstance(item, dict) or item.get("type") != "command_execution":
+            continue
+        key = str(item.get("id"))
+        if event.get("type") == "item.started":
+            running[key] = len(commands)
+            commands.append(Command(unwrap(str(item.get("command", ""))), ok=False, output=""))
+        elif event.get("type") == "item.completed":
+            if (index := running.pop(key, None)) is None:
+                commands.append(_command(item))
+            else:
+                commands[index] = _command(item)
+    return commands
+
+
 def parse_stream(raw: RawRun) -> Trace:
     """Normalise `codex exec --json` output and the kept stderr lines.
 
@@ -552,7 +586,6 @@ def parse_stream(raw: RawRun) -> Trace:
     invoked: list[str] = []
     implicit: list[str] = []
     listed: list[str] = []
-    commands: list[Command] = []
     final = ""
     # The frontmatter names that successful reads of unplaced SKILL.md files printed.
     unplaced_names: set[str] = set()
@@ -563,15 +596,12 @@ def parse_stream(raw: RawRun) -> Trace:
         if item.get("type") == "agent_message":
             final = str(item.get("text", ""))
         elif item.get("type") == "command_execution":
-            command = unwrap(str(item.get("command", "")))
-            output = str(item.get("aggregated_output", ""))
-            ok = item.get("status") == "completed" and item.get("exit_code") == 0
-            commands.append(Command(command, ok, output))
-            read, unplaced = skills_read(command)
+            done = _command(item)
+            read, unplaced = skills_read(done.command)
             invoked += read
-            if ok and outcome_is_the_read(command, output):
+            if done.ok and outcome_is_the_read(done.command, done.output):
                 triggered += read
-                if unplaced and (name := frontmatter_name(output, pwd_lines(command))):
+                if unplaced and (name := frontmatter_name(done.output, pwd_lines(done.command))):
                     unplaced_names.add(name)
     starts = ""
     for line in raw.debug_lines:
@@ -597,7 +627,7 @@ def parse_stream(raw: RawRun) -> Trace:
         # A read and Codex's event for it are one trigger.
         skills_triggered=list(dict.fromkeys(triggered)),
         skills_invoked=list(dict.fromkeys(invoked)),
-        commands=commands,
+        commands=_commands(events),
         final_message=final,
         cli_version=started.get("app.version", ""),
         model=started.get("model", ""),

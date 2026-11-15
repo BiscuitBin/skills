@@ -165,6 +165,21 @@ After the fixes, under 3.9.6:
 
 3.14.8 was not run.
 
-Landed: `python_not_run`, test first, `871249d`. Its cross-model implementation review follows before the freeze.
+Landed: `python_not_run`, test first, `871249d`, with its review fixes in the next commit.
+
+#### Implementation review (Codex `gpt-6-astra`, 2026-11-15)
+
+- **Reviewed:** `c3a1222..ae6fc72`, the three harness commits: `871249d` (this ticket's `python_not_run`), `b4733c7` (ticket 23's T1 and T2) and `ae6fc72` (ticket 19's Renovate change). Reviewer run through `review.py`, read-only; a separate triage reproduced each finding.
+- **Records:** `ai_tmp/stage3/impl-review/brief.md`, `codex.md`, `triage.md` and `apply/` (each fix's failing and passing test logs).
+
+| # | Severity (Codex → triage) | Claim | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | high → low | A redirection glued to the program's word (`python3<<EOF`, `./x.py>out`) hides the run | valid, reproduced | The program's name is cut at the first `<` or `>`; five test rows, two of them passes (`cat<fingerprint.py`). A word glued to a subshell's closing `)` stays a documented miss |
+| 2 | medium → low | Joining every backslash-newline also joins after an escaped backslash, erasing a real command boundary | valid, reproduced | Only an odd run of backslashes joins; a test row; the Limits line now says so |
+| 3 | medium | The bytecode walk can follow a directory swapped for a link mid-walk, and has no bound | invalid | It needs a process still running at scoring time, which the adapters already make an infrastructure error; such a process could delete bytecode anyway |
+| 4 | medium → low | Codex's parser drops a command that started and never completed, so the check could pass on a trace missing the run | valid, reproduced | `codex.py` keeps a started command as failed with no output until its `item.completed` replaces it, as Claude Code keeps a Bash call with no result. Trigger reads still come only from completed items. A parser test, and the reference's Event stream line |
+| 5 | low | Bytecode is matched by name before type | valid (doc) | The reference now says any entry so named, whatever its type; a regular-file row pins it |
+| Q1 | answer | `env -S 'python3 -c pass'` escapes | invalid | Already a documented limit (a prefix option's value read as the program) |
+| Q8, Q10 | answer | The GitHub paragraph mixes what T1 and T2 test with what is inferred | invalid | The paragraph already says the tests check only the `PATH`, the lookup and the exit status |
 
 Freeze commit: TBD; evals_sha256: TBD.
