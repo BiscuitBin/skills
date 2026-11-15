@@ -1622,7 +1622,7 @@ What follows from them:
 | F4 | `rev-parse --verify --quiet <name>` also resolves a tag | valid, low | `reading-the-branch.md:8`: `refs/heads/<name>`, "not for a tag of the same name" |
 | F5 | Files opened only for context are read from a dirty working tree | valid, low | `SKILL.md:40`: "read every file you open as committed, changed or not". Searching a dirty tree is carried to 22 |
 | F6 | `git show <fork>:<new path>` fails for a renamed file | valid, low | `SKILL.md:41`: at `<fork>` a renamed file has its old path, from `--name-status`. `reading-the-branch.md:23` (from the skeptic): give a renamed file both paths when you read the diff a path at a time |
-| F7 | With no remote, step 1 counts another local `main` or `master` that the reference says not to | valid, low | `SKILL.md:30` and `reading-the-branch.md:16`: the reference is read when "the current branch was itself a candidate", and with no remote there is no base, even beside a local `main` or `master` |
+| F7 | With no remote, step 1 counts another local `main` or `master` that the reference says not to | valid, low | `SKILL.md:30` and `reading-the-branch.md:16`: the reference is read when "the current branch was itself a candidate or is the default branch", and with no remote there is no base, even beside a local `main` or `master` |
 | F8 | Untracked litter such as `?? .DS_Store` takes one of the three note slots | out of scope, low | Carried to 22 |
 | F9 | `log.showSignature` runs a signing program under step 2's `log` | out of scope, none | Recorded under **Residual risk** |
 
@@ -1631,12 +1631,26 @@ What follows from them:
   - F5's "even one you open or search only for context" became "read every file you open as committed, changed or not". `git show` cannot search, and search over a dirty tree is ticket 22's.
 - **Residual, not fixed** (`fix-plan.md`, **Residual**):
   - F1: a remote `HEAD` naming `origin/main/x` would be dropped.
-  - F4: when a branch and a tag share the bare name, git prints "refname … is ambiguous" on the first `rev-list`.
+  - F4: when a branch and a tag share the bare name, the bare name as the base resolves to the tag, and git prints "refname … is ambiguous" on the first `rev-list`.
   - F6: a rename git does not detect shows as a delete and an add.
   - F7: no remote, on `main`, with `master` as the right base, now asks where it could have been described.
+  - F7: no remote, on a stale `master` with `main` ahead, `reading-the-branch.md:16` asks and `:19` stops. Both are one-line answers.
 - **Checks on the edited text:**
   - P1 to P4 pass 8 of 8 (`ai_tmp/green-apply/patterns.py`).
   - `evals_sha256` is still `78828f74…`. `skill_sha256` is now `abfe006e…`, where `c397d04`'s was `6550509c…`. So the GREEN rerun above is the record of `c397d04`'s text, and the Stage 3 RED pass runs on this one.
   - The body is 103 lines, 13,604 bytes, about 3,401 tokens.
   - `just validate-skills` gives only the expected `extension-portability` warning. No word added is in `evals/change-viz/` (`fix-plan.md`, **Teach-to-test**).
-- **Cross-model review:** Codex `gpt-6-astra` reviews this commit next, as AGENTS.md requires, and is recorded below.
+- **Cross-model review:** below.
+
+#### Cross-model review (`6eec474`)
+
+- **Reviewer:** Codex `gpt-6-astra` through `review.py`, implementer `claude-code`, no fallback. It reviewed `dc607d5..6eec474`, exit 0, in one run, with the brief `ai_tmp/stage2-code-review/review-brief.md` and its seven questions. Its output is `ai_tmp/stage2-code-review/codex-review.md`.
+- **Triage:** a separate agent reproduced each claim on Apple Git 2.50.1 (`ai_tmp/stage2-code-review/codex-triage.md`, `scratch/codex-triage/repro.log`). The review answered all seven questions, briefly, and the triage answered them again with evidence.
+
+| # | Finding | Verdict | Action |
+| --- | --- | --- | --- |
+| 1 | F7's new trigger misses a current branch that is the default but not a candidate, such as `trunk` beside an older local `main` with no remote | valid, low: it lost coverage the old trigger had. That coverage depends on the agent knowing which branch is the default, because step 1 never reads `init.defaultBranch` | `SKILL.md:30`: "or when the current branch was itself a candidate or is the default branch". `reading-the-branch.md:16`'s label is changed to match |
+| 2 | The F4 residual leaves out that the bare name resolves to the tag | valid, low, record only | The F4 residual above now says so |
+| T1 | The triage's own: the residuals drop `fix-plan.md`'s second F7 case | valid, low, record only | Added above: a stale `master` with `main` ahead, where `:16` asks and `:19` stops |
+
+- **Checks on the fixed text:** P1 to P4 pass 8 of 8, and `evals_sha256` is still `78828f74…`. `skill_sha256` is `8b459f34…`, and the Stage 3 RED pass runs on this text. The body is 103 lines, 13,629 bytes, about 3,408 tokens. `just validate-skills` gives only the expected warning. The fix for finding 1 has had no review round of its own. It restores the old clause beside the new one.
