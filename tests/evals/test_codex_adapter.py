@@ -12,6 +12,7 @@ import pytest
 from skills_tooling.evals import workspace
 from skills_tooling.evals.codex import Codex, pinned_executable
 from skills_tooling.evals.contamination import NeverAppear, check
+from skills_tooling.evals.fixture import DENIAL_KEYWORDS
 from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import run_suite
 from tests.evals.fake_openai import message, serve, shell
@@ -22,8 +23,11 @@ from tests.evals.test_runner import (
     CASES,
     COW,
     FIXTURE_CASE,
+    GH_VIEW,
+    ends_in_the_system_path,
     fake_root,
     fixture_root,
+    gh_in_a_trial,
     results,
     settings,
 )
@@ -603,6 +607,39 @@ def test_git_reads_in_a_fixture_trial_are_not_denied_and_the_skill_is_still_foun
         True,
         False,
     )
+
+
+def test_a_gh_call_in_a_fixture_trial_fails_before_the_network_and_is_scored(
+    tmp_path: Path,
+) -> None:
+    # What the harness owns, never gh's own wording: the host's gh is not pinned.
+    turns = [
+        shell('echo "$PATH"', "call_1"),
+        shell("command -v gh || echo none", "call_2"),
+        # Left to fail on its own, so Codex's denial test sees its nonzero exit.
+        shell(GH_VIEW, "call_3"),
+        # A trace's command carries no exit status, so the shell prints it.
+        shell(f'{GH_VIEW} >/dev/null 2>&1; echo "exit=$?"', "call_4"),
+        message("The average is 2.5."),
+    ]
+    found, exit_status = gh_in_a_trial()
+    arms = fixture_trials(tmp_path, turns)
+    assert set(arms) == {"skill", "baseline"}
+    for arm in arms.values():
+        evidence = arm.evidence()
+        assert (arm.record["status"], arm.record["contamination"]["passed"]) == ("ok", True), (
+            evidence
+        )
+        lines = arm.trace.debug_lines
+        assert not [line for line in lines if "outcome=denied" in line], evidence
+        assert not [line for line in lines if line.startswith("sandbox_violation ")], evidence
+        path, lookup, view, status = arm.trace.commands
+        # Only where gh can come from: a CLI may put a directory of its own first.
+        assert ends_in_the_system_path(path.output), evidence
+        # Codex's denial test reads a failed command's output: here, all gh printed.
+        assert not view.ok, evidence
+        assert not [word for word in DENIAL_KEYWORDS if word in view.output.lower()], evidence
+        assert (lookup.output, status.output) == (f"{found}\n", f"{exit_status}\n"), evidence
 
 
 # Codex logs its violation line for every denied command, but sandbox_outcome

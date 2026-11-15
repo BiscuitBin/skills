@@ -20,7 +20,7 @@ from tests.evals.test_grader import fake_grader
 if TYPE_CHECKING:
     import pytest
 
-    from skills_tooling.evals.adapter import Homes, RawRun, TrialPaths
+    from skills_tooling.evals.adapter import Homes, RawRun, Trace, TrialPaths
     from tests.evals.fake_anthropic import Request
 
 ROOT = Path(__file__).parents[2]
@@ -286,6 +286,64 @@ def test_a_fixture_trial_starts_with_the_same_git_context_in_both_arms(tmp_path:
     assert (
         f"Recent commits:\n{SMALL_TALLY_HEAD[:7]} Print the average after the total\n" in context
     )
+
+
+# A number this repository's public origin has never used: a trial's
+# workspace sits inside this checkout (docs/reference/evals.md, Isolation).
+GH_VIEW = "gh pr view 4817"
+
+
+def gh_in_a_trial() -> tuple[str, str]:
+    """What `command -v gh || echo none` prints in a trial, and `gh pr view`'s exit.
+
+    Off the trial's PATH, as Homebrew's gh is on macOS, gh is not found (127).
+    On it, as /usr/bin/gh is on an Ubuntu runner, it has no login (4).
+    """
+    found = shutil.which("gh", path=workspace.SYSTEM_PATH)
+    return (found or "none", "exit=127" if found is None else "exit=4")
+
+
+def ends_in_the_system_path(printed: str) -> bool:
+    """An `echo "$PATH"` ends in /usr/bin:/bin and holds neither Homebrew directory."""
+    entries = printed.rstrip("\n").split(":")
+    homebrew = {"/opt/homebrew/bin", "/usr/local/bin"}
+    return entries[-2:] == ["/usr/bin", "/bin"] and not homebrew & set(entries)
+
+
+def test_a_gh_call_in_claude_codes_bash_fails_before_the_network_and_is_scored(
+    tmp_path: Path,
+) -> None:
+    traces: dict[str, Trace] = {}
+
+    class Recording(ClaudeCode):
+        def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401
+            raw = super().run(prompt, trial, homes, **kwargs)
+            # Read before teardown removes the trial's tmp/, which holds the transcript.
+            traces[trial.root.name.partition("-")[0]] = self.parse(raw)
+            return raw
+
+    # Whether the Bash tool keeps the constructed PATH, or a login shell's
+    # path_helper puts Homebrew's directory on it. gh's own wording is not asserted.
+    command = (
+        f'echo "$PATH"; command -v gh || echo none; {GH_VIEW} >/dev/null 2>&1; echo "exit=$?"'
+    )
+    script = [tool("Bash", {"command": command, "description": "Look for gh"}, "toolu_1")]
+    found, exit_status = gh_in_a_trial()
+    root = fixture_root(tmp_path, [FIXTURE_CASE])
+    with serve({AVERAGE: [*script, text("The average is 2.5.")]}) as server:
+        adapter = Recording(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+        run_suite(settings(root, server.url, adapter=adapter, baseline=True, grading_skipped=True))
+    by_arm = {trial["arm"]: trial for trial in results(root)["trials"]}
+    assert set(by_arm) == set(traces) == {"skill", "baseline"}, (set(by_arm), set(traces))
+    for arm, trial in by_arm.items():
+        assert (trial["status"], trial["contamination"]["passed"]) == ("ok", True), trial
+        commands = traces[arm].commands
+        assert len(commands) == 1, commands
+        [bash] = commands
+        assert bash.ok, bash.output
+        path, *rest = bash.output.splitlines()
+        assert ends_in_the_system_path(path), bash.output
+        assert rest == [found, exit_status], bash.output
 
 
 def user_texts(body: str) -> list[str]:
