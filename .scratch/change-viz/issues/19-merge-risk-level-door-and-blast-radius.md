@@ -84,3 +84,101 @@ Use the `cross-model-review` dev skill.
 
 - **Design checkpoint:** before the live run, write the level rules, the one-way list with its reasons, the two fixtures and the frozen rubric, and get them reviewed. Can a one-way door ever be Low? Would two careful readers pick the same level for each fixture? Does the one-way fixture make its irreversible step findable in the diff without naming it in a comment?
 - **Implementation checkpoint:** before marking done, review the full diff against these acceptance criteria. Pay particular attention to level rules an agent could satisfy by always answering Medium, and to a `Walk it back:` line that suggests a revert where data is already gone.
+
+## Completion notes
+
+### Stage 3: cases, fixtures and frozen rubric (2026-11-15)
+
+Design: `ai_tmp/stage3/design-19.md`. Base: `change-viz` at `c3a1222`. RED measures that commit's skill text, `skill_sha256` `8b459f34…` (`ai_tmp/stage3/decisions.md`, **Pre-freeze checks**).
+
+#### Decisions that bind this ticket
+
+From `ai_tmp/stage3/decisions.md`. Each matches the design's recommendation.
+
+| Row | Decided |
+| --- | --- |
+| 2b | Only descriptions carry the risk line. Short answers that are not descriptions skip the scope line, the headings and the risk line; the scope line also goes on the "nothing to describe" line. |
+| 3 | A runtime claim carries an inline bracket right after it: `(read from the code, not run)`, `` (observed: ran `cmd`) ``, `(observed: commit <sha>)` or `(observed: CI <check>)`. The commit label is used only when a message reports a run's result. |
+| 4 | The level comes from two yes-or-no questions, then the table. One-way: a revert cannot undo what merging sets off. Reach: something that exists behaves differently as written. Two-way and no is Low; two-way and yes, or one-way and no, is Medium; one-way and yes is High. |
+
+Decision 4 settles the design's questions 1 and 2 as (a), so merging that publishes a release is one-way and its receivers are the blast radius (fix 5). Decision 2b settles question 3. Under row 3, ticket 21's design keeps the label off the risk line (its requirement 4).
+
+#### Cases, fixtures and assertions
+
+Three by-name behaviour cases, appended after the tracer's two. All three prompt "Describe what this branch changes." The ids name the branch, not what is scored.
+
+| Case | Fixture (files) | Assertions | Expectations |
+| --- | --- | --- | --- |
+| `behaviour-describe-add-weekdays` | `daygap-weekdays` (17): Low, two-way | `skill_triggered`; `output_contains` `--weekdays`; R1; R2 door `two-way`; R2 level Low | A1, A3, A4 |
+| `behaviour-describe-retire-wishlist` | `readlog-drop-wishlist` (21): High, one-way | `skill_triggered`; `output_contains` `wishlist`; R1; R2 door `one-way`; R2 level High; R4 | B1 to B4 |
+| `behaviour-describe-add-weekdays-2` | `daygap-release` (35): Medium, one-way, publishes 1.4.0 on merge | `skill_triggered`; `output_contains` `1.4.0`; R1; R2 door `one-way`; R2 level Medium | C1 to C5 |
+
+- **R1** is the risk block's shape, position and uniqueness, the same in all three cases: the line under the why, its two plain-label bullets, at most eight words of blast radius that are not only file names, and no risk heading outside a code fence. **R2 door** and **R2 level** read the line's door and level and the first bullet's label. **R4** asks that the `Walk it back:` bullet name the `.bak` copy.
+- All 12 expectations are blinded. A's and B's blast radii are hand-read only. C5 checks that C's names the release's receivers.
+- The case file is `ai_tmp/stage3/f19/cases-19.json`, sha256 `dab25ce0a146e840…` after the design review. The fixtures come from `f19/make_fixtures.py`, 73 files.
+- RED costs 6 agent trials and 6 grader calls per agent (`ai_tmp/stage3/review/final-check.md` §5).
+- One repository change goes with the fixtures, test first: `renovate.json`'s `ignorePaths` gains `evals/*/fixtures/**` and re-lists the preset's eight entries (`tests/test_renovate.py`). It must land before any fixture (final-check §4 step 4).
+
+#### RED predictions (unobserved)
+
+From design §7. The current text says nothing about risk, door or blast radius.
+
+- R1, R2 door, R2 level and R4 fail in every arm on both agents, because no answer has the line. So each case fails in the baseline, and none is guard-only.
+- A3, A4, B3, B4 and C3 to C5 fail, because there is no block to read.
+- The `output_contains` guards and B1 likely pass in both arms. A1, B2 and C2 can go either way.
+- C1, that merging publishes 1.4.0, likely fails in both arms. Ticket 18's real-branch read missed the same thing on both agents.
+- How the gain is split: shape is R1. The call is R2 door, R2 level and C5. Substance in both arms is A1, B1, B2, C1 and C2. Substance that needs the block is A3, A4, B3, B4, C3, C4 and R4.
+
+#### Residual risk and what is carried
+
+- **n = 1 per arm.** At GREEN a level is a judgement, so read why each miss happened before blaming the text.
+- **Grader leniency.** A4's "because", C3's "both", and C5 passed on "daygap users". B4 does not ask for revert-then-restore. The hand read records every radius and walk-back verbatim (design §6, §13).
+- **Open:** the triage's optional B5 for B's blast radius ("the saved wishes, or the people whose logs hold them") was not adopted. `decisions.md` does not settle it.
+- **Lookups.** The door calls on B and C are close to lookups. No case tests a one-way kind the list leaves out, so a generalisation case is a follow-up (review row 11).
+- **Encoding.** The emoji and `·` are the first non-ASCII the output assertions read. Under a non-UTF-8 locale, R1 and R2 would fail for a harness reason. Reading with `encoding="utf-8"` in `cases.py` and the transcript reads is a follow-up (design §8).
+- **Running the fixture's code.** On Codex, `pip`, `python -m build` or a `git checkout` to demonstrate the loss can make a trial an `infra_error`. The batch's one-rerun rule applies.
+- **The package name.** `daygap` was rechecked unclaimed on PyPI (404) on 2026-11-15 (`ai_tmp/stage3/build/recheck.md`). A later registration would contradict the fixture.
+- **Owed before the freeze:**
+  - the Renovate test and change;
+  - the fixture copy, and `just format`, which re-wraps the three `fixture.json` files;
+  - the first pinned 3.14.8 run of `f19/patterns.py` (final-check §4 step 5.4). The revised patterns ran under 3.9.6 only.
+- **Before RED:** a clean tree with `git_dirty: false`, and ticket 21's `python_not_run` merged.
+- **At Stage 4:** `ai_tmp/stage3/review/final/bans.batch.txt` (23 lines for this ticket) runs at every commit. The paraphrase read in design §9 item 10, with hand entry 19-7 `wish`, stays by hand.
+
+#### Design review (Codex `gpt-6-astra`, 2026-11-15)
+
+- **Reviewer:** Codex `gpt-6-astra`, through `review.py run --implementer claude-code`, with no fallback. One run, exit 0.
+- **Reviewed:** `change-viz` at `c3a1222`: `ai_tmp/stage3/design-19.md`, `f19/cases-19.json` (sha256 `bd5522ef…`), `f19/patterns.py` and `f19/make_fixtures.py`. The brief is `ai_tmp/stage3/review/brief-19.md`, sent as `brief-19-run.md`, with eight questions.
+- **Findings:** `ai_tmp/stage3/review/codex-19.md`, a copy of `ai_tmp/review-20261115T193633Z-codex.md`. **Triage:** `ai_tmp/stage3/review/triage-19.md`, 14 rows: 8 valid, 5 invalid, 1 out of scope.
+
+Severity is Codex's, then the triage's. A dash means none was given.
+
+| # | Severity | Claim | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1a | medium / medium | Canonical B's walk-back copies the `.bak` back while the branch stays merged, so the next run drops the wishes again | valid | Canonical B's walk-back now says to revert, then copy the `.bak` back. §0's byte range becomes 245 to 314 |
+| 1b | medium / medium | Nothing scores or hand-reads a walk-back that offers the `.bak` without a revert | valid | §6's hand read fails acceptance on a `.bak`-only walk-back. §9 item 6 gains the general sentence. B4 stays, with its leniency stated in §13 |
+| 1c | medium / – | B4 should require the overwrite caveat and the later-entries caveat | invalid | None to B4. Both facts are recorded, not failed, in §6's hand read |
+| 2 | medium / medium | A wrong blast radius passes A and B | valid | §6 hand-reads A's and B's radii verbatim, and fails acceptance on one the change does not reach. No new expectation |
+| 3 | medium / low | R1 reads text inside code fences as headings | valid | R1's heading check steps over closed fences. Six new controls and two stated limits |
+| 4 | low / low | R1 accepts nested bullets, though §0 says exactly two | valid | A continuation line may not start a list item. Three new controls |
+| 5a | medium / low | The reach rule does not settle new help or usage text | valid | §1.1 and §9 item 3: a new option shown in help or usage text is new input, not a change to what exists |
+| 5b | medium / – | Narrow A1, A3, C2 and C3 to date-counting runs | invalid | None |
+| 6 | – / medium | The design's canonical B likely fails B3 | valid | Canonical B's Why bullet ends "no revert brings it back". B3 is unchanged |
+| 7 | – / – | Tighten C5 so that "daygap users" fails | invalid | None. The leniency is recorded, and the radii are kept verbatim |
+| 8 | – / low | The GREEN text never states R1's eight-word cap or its no-emphasis rule | valid | §9 item 4: at most eight words, as plain text with no emphasis inside the bold field |
+| 9 | – / – | R4 needs the literal `.bak` | invalid | None: it is already a stated limit |
+| 10 | – / – | Report exclusions by case and arm, and record a conditional publish claim on its own | invalid | None: §7, §11 and §13 cover both |
+| 11 | – / – | The door calls on B and C reduce to lookups, and no case tests a one-way kind the list leaves out | out of scope | A §13 limit. A generalisation case is a follow-up |
+
+After the fixes, under 3.9.6:
+
+- `f19/patterns.py` runs 84 controls with 0 failures, and the frozen P1 to P4 pass 7 of 7.
+- `cross-check/combined.py` reports no unexpected result. It ran through the 3.9 wrapper `review/apply-19-work/combined39.py`, which skips the four patterns 3.9 cannot compile.
+- The fixture rebuild is byte-equal.
+- 3.14.8 was not run.
+
+The brief's R1 copy is left as reviewed.
+
+Landed: the Renovate change and its test, `ae6fc72`.
+
+Freeze commit: TBD; evals_sha256: TBD.

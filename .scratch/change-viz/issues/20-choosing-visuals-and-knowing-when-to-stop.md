@@ -75,3 +75,117 @@ Use the `cross-model-review` dev skill.
 
 - **Design checkpoint:** before the live run, write the choosing rule, the length budgets, the three fixtures and their patterns, and get them reviewed. Does any pattern pass on a message that picked the wrong view? Does the length cap for the one-line fix still leave room for the three headings, and for ticket 19's risk line if it has landed?
 - **Implementation checkpoint:** before marking done, review the full diff against these acceptance criteria. Pay particular attention to rules that read as "always include one of each", and to budgets the fixtures never test.
+
+## Completion notes
+
+### Stage 3: cases, fixtures and frozen rubric (2026-11-15)
+
+Design: `ai_tmp/stage3/design-20.md`, at revision 5. Base: `change-viz` at `c3a1222`. RED measures that commit's skill text, `skill_sha256` `8b459f34…` (`ai_tmp/stage3/decisions.md`).
+
+#### Decisions that bind this ticket
+
+| Source | Decided |
+| --- | --- |
+| Row 6 | Exact character ceilings: 1,500 for a small change, 2,500 for a restructure, 3,500 for a behaviour change, 5,000 for several changes at once, and 350 per note. They are limits, not targets, and the eval checks the stated number. |
+| Row 12 | `MER_A` is not anchored. MER stays as designed: it does not require the Mermaid diagram to be the outline's first block. |
+| Figures | The 350 cap stands, though it fails two of Claude Code's three recorded E7 passes (see below). |
+| Assumed | Six stop-rule checks beyond the ticket's three are frozen. "Several changes at once" has no fixture, so its 5,000 ceiling is checked in ticket 25's real-branch reads (`questions.md`, **Recommendations assumed**; not overruled). |
+
+#### Cases, fixtures and assertions
+
+Three by-name behaviour cases, one per branch of a lending-desk CLI. All three prompt "Describe what this branch changes."
+
+| Case | Fixture (files) | Assertions | Expectations |
+| --- | --- | --- | --- |
+| `behaviour-describe-fix-due-today` | `desk-due-today` (15): a one-line fix | `output_contains` `overdue`; H, P2, LEN1500, NOMER, DIFF, ONE, NOTE | F1 to F3 |
+| `behaviour-describe-split-modules` | `desk-split` (26): a split into a `lending/` package | `output_contains` `events.py`; H, P2, LEN2500, TREE, LE2, NOTE | R1 to R3 |
+| `behaviour-describe-add-holds` | `desk-holds` (25): a new `held` state | `output_contains` `held`; H, P2, LEN3500, MER, LE2, NOFL, NOTE | B1 to B3 |
+
+- **Every case also asserts `skill_triggered`.** H and P2 are ticket 18's P1 and P2, verbatim.
+- **The ticket's own patterns** are NOMER, TREE, MER and the length caps.
+- **The additions** are P2, DIFF, ONE, LE2, NOFL and NOTE:
+  - DIFF: the `>=` to `>` lines in a `diff` fence;
+  - ONE: one fenced block;
+  - LE2: one or two blocks;
+  - NOFL: no file-list block;
+  - NOTE: no note over 350 characters, counted as typed.
+- **TREE** reads only the first block under the outline, which must name `lending`.
+- **The expectations.** F2, R2 and B2 are ticket 18's E3, verbatim. All nine expectations are blinded.
+- **Files.** The case file is `ai_tmp/stage3/work-20/cases-20.json`, sha256 `9b347e7f…5ba8` after the design review. The fixtures come from `work-20/fixtures/`. No harness change.
+- **Cost of RED:** 6 agent trials and 6 grader calls per agent.
+
+#### RED predictions (unobserved)
+
+From design §6. The base rates come from 2 Claude Code and 4 Codex messages on `wordstat-top`.
+
+- **The baseline** fails every case on both agents, on H, P2 and a fence check (DIFF, TREE, MER or LE2). That is ticket 18's gap, not this ticket's.
+- **The current-text skill arm** is mostly "either" at one trial. One item per case and agent is expected to discriminate:
+
+  | Case | Claude Code | Codex |
+  | --- | --- | --- |
+  | fix | ONE | NOMER |
+  | split | NOTE | TREE: Codex led with Mermaid 3 of 4 times |
+  | holds | MER | B1 |
+
+- **Guards.** The split may pass on Claude Code, and the holds may pass on Codex. A case that passes at RED is recorded as a guard for that agent, and no case changes after RED.
+- **GREEN.** This design asks Hand-off 4 for `--trials 3` at GREEN.
+
+#### Residual risk and what is carried
+
+- **The 350-character note cap against E7.**
+  - Claude Code has four notes over 350 characters on record: 357, 412, 421 and 423. The cap fails all four.
+  - Of Claude Code's three recorded E7 passes, the cap fails two: 357 (`11b6`) and 412 (`3958`, on the first GREEN text `b76a09db…`). It passes the third, 329 (`33d0`).
+  - The maintainer kept the cap (`decisions.md`, row 6 and **Figures**). At GREEN, ticket 18's frozen case reruns as the regression guard. A Claude Code E7 fail whose note was cut under the cap is counted against the cap, never a reason to edit E7. `3958`'s message also fails NOTE in all three cases here.
+- **LEN1500** is the likeliest GREEN fail on Claude Code, because agents count characters poorly. Three notes of about 300 characters, plus the risk block, overrun 1,500.
+- **The sibling tickets.** One freeze covers six tickets. A larger line from 19, 21 or 22 can fail LEN1500 at GREEN for a reason outside this ticket.
+- **E3 is lenient**, so "what to notice" in a lead-in is a hand read.
+- **The quote rule.** F1, R1 and B1 need a verbatim quote, and F1 needs the `def is_overdue` context line.
+- **DIFF and NOFL** are specific to these fixtures, and their limits are stated (design §3.6).
+- **Codex.** A test run or a baseline's `git checkout` can make a Codex trial an `infra_error`. The batch's one-rerun rule applies. After the batch, list the system temp directory for leftovers moved out of a workspace.
+- **To ticket 25:** the 5,000 ceiling and the several-changes rule, in the real-branch and four-PR reads.
+- **Owed before the freeze:**
+  - the first pinned 3.14.8 run of `work-20/patterns.py`, `check2.py` and `check3.py`, and `make_cases.py`'s `load_suite`. The revision 5 patterns ran under 3.9.6 only;
+  - carrying revisions 4 and 5 into `work-20/design-20.template.md` before any `render.py` run.
+- **Before RED:** a clean tree with `git_dirty: false`, and ticket 21's `python_not_run` merged. The notes record each run's `git_commit`, `skill_sha256` and `evals_sha256`.
+- **Stale text.** `design-20.md:1461` still calls ticket 21's hand-read variant a fallback. Decision 1 and triage-21 C4 replaced it: stop and ask (final-check §6.5).
+- **At Stage 4:** design §8 item 8's structure read, and ban hand entries 20-9 to 20-15 and 20-20, stay by hand at each commit.
+
+#### Design review (Codex `gpt-6-astra`, 2026-11-15)
+
+- **Reviewer:** Codex `gpt-6-astra`, through `review.py run --implementer claude-code`, with no fallback. One run, exit 0, with empty stderr.
+- **Reviewed:**
+  - `change-viz` at `c3a1222`;
+  - `ai_tmp/stage3/design-20.md` at revision 4, kept in `work-20/pre-design-review/`;
+  - `work-20/cases-20.json`, sha256 `8fa50b33…6f8a`;
+  - the brief, `ai_tmp/stage3/review/brief-20-run.md` (`01d5ac91…18db`).
+- **Findings:** `ai_tmp/stage3/review/codex-20.md`, a copy of `ai_tmp/review-20261115T194152Z-codex.md`.
+- **Triage:** `ai_tmp/stage3/review/triage-20.md`, 11 rows: 5 valid, 6 invalid, 0 out of scope. Fixes C1 to C5 tighten patterns, which is within the designer's remit.
+
+Severity is Codex's, then the triage's. A dash means none was given.
+
+| # | Severity | Claim | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1a | high / low | TREE passes a flat `+events.py`, `+rules.py`, `+report.py` list | valid (pattern half) | C1: TREE's block must name `lending`. Two new controls |
+| 1b | high / – | Require parent-child structure in TREE, and a file tree in R1 | invalid | None. A `+lending/events.py` path list is a tree by design |
+| 2a | medium / low | NOTE stops counting at a blank line inside a note | valid | C2: NOTE counts across blank lines, in all three cases |
+| 2b | medium / – | A 40-space wrap of 170 + 170 characters counts as 381 | invalid under C2's rule | Rule stated: a line break and its indent count as one, so that note is 341 and passes. Stage 4's text states the rule |
+| 3a | medium / medium | TREE can match a later block, so a Mermaid-led split passes | valid | C3: only the first block under the outline counts. A `python` block before the tree now fails |
+| 3b | medium / – | On the holds, a diff first and then a state diagram passes MER and B1 | invalid, as designed | None. `MER_A` was left to the maintainer, and decisions row 12 kept MER unanchored |
+| 4a | medium / low | DIFF fails `+    return today > due  # was >=` | valid | C4: the `+` line is read up to its first `#` |
+| 4b | medium / – | Allow a context line between the `-` and `+` lines | invalid | None. The unbounded form is quadratic, and the limit stays |
+| 5a | medium / low | NOFL rejects correct views | valid, in part | C5: NOFL skips a run that starts at a `mermaid` opener, and needs two different file names. Two new stated limits |
+| 5b | medium / – | Move catalogue detection to the hand read; NOFL accepts closing catalogues | invalid | None |
+| 5c | medium / – | ONE and LE2 permit a redundant Markdown table | invalid | None. On the fix it is a hand read; on the holds, NOFL rejects it |
+
+**Also applied, from the triage's answer to Q3:** §11's quote-rule risk now names F1.
+
+**After the fixes, under 3.9.6:**
+
+- 77 controls, 0 mismatches;
+- the §3.5 matrix is unchanged;
+- `cross-check/combined.py`, through the 3.9 wrapper `combined39.py`, reports no unexpected result;
+- the fixture rebuild is byte-equal.
+
+3.14.8 was not run.
+
+Freeze commit: TBD; evals_sha256: TBD.

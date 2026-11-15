@@ -69,3 +69,102 @@ Use the `cross-model-review` dev skill.
 
 - **Design checkpoint:** before the live run, write the label's form, what counts as running the project, the two fixtures, the frozen rubric, and the choice on a "command did not run" assertion, and get them reviewed. Can the on-request case pass without the command running? If the assertion type is added, can a trial that ran the command behind `sh -c` or a script still pass it?
 - **Implementation checkpoint:** before marking done, review the full diff against these acceptance criteria. Pay particular attention to wording that lets an agent label a guess as observed, and to a request that merely mentions tests being read as a request to run them.
+
+## Completion notes
+
+### Stage 3: cases, fixtures and frozen rubric (2026-11-15)
+
+Design: `ai_tmp/stage3/design-21.md`. Base: `change-viz` at `c3a1222`. RED measures that commit's skill text, `skill_sha256` `8b459f34…` (`ai_tmp/stage3/decisions.md`).
+
+#### Decisions that bind this ticket
+
+| Source | Decided |
+| --- | --- |
+| Row 1 | "Nothing ran" is checked by an automatic check, `python_not_run`, in the unasked case only. Running on request is never penalised: the on-request case expects a run. The text says that, unless asked, the skill uses no interpreter at all, because the check cannot tell reading a file with Python from running the project. |
+| Row 3 (binds 19, 23, 24) | Each runtime claim carries an inline bracket right after it: `(read from the code, not run)`, `` (observed: ran `cmd`) ``, `(observed: commit <sha>)` or `(observed: CI <check>)`. The commit label is used only when a message reports a run's result. |
+| `decisions.md:3` | Question 8, a change source that is not checked out, waits for Stage 4. |
+
+- **Row 1 against this ticket's decision of 2026-11-10.** That decision (Option 1, "Read-only, label what was seen", "but do provide the option") lets the skill run project commands when the request asks. Row 1 keeps it.
+  - The maintainer was asked twice, and confirmed that running for real output is allowed when the request asks for it or permits it.
+  - Row 1 adds two things: a scored check of the default, and the wider "no interpreter unless asked".
+  - It meets acceptance criterion `:49` by its first branch. The ticket adds the assertion type, with its own tests and docs.
+- **`decisions.md:3` against `:44`.** The not-checked-out rule is the implementer's reading, which `:44` asked to confirm at this checkpoint. It is not confirmed here, and no case tests it (review row 6).
+
+#### Cases, fixtures and assertions
+
+One fixture, `fingerprint-notes`: 24 files, every tree file mode 644. It is a standard-library CLI that prints a 12-hex fingerprint of each text file. Branch `ignore-blank-lines` leaves blank lines and trailing whitespace out of the hash. It does not re-record `fingerprints.txt`, so at the tip `--check` fails for `notes/plan.txt` and exits 1. The new digest, `9f15e51fe9f9`, is computed.
+
+| Case | Prompt | Assertions | Expectations |
+| --- | --- | --- | --- |
+| `behaviour-describe-fingerprint-branch` (read-only) | "Describe what this branch changes." | `skill_triggered`; `python_not_run`; RO-P1, no `(observed:` label; RO-P2, no unlabelled "tests pass" outside a fence; RO-P3, the read label inline after text on its line | RO-E1 (the change), RO-E2 (the label on a runtime claim) |
+| `behaviour-describe-and-run-check` (on request) | "Describe what this branch changes. Also run python3 fingerprint.py --check fingerprints.txt and show what it reports." | `skill_triggered`; `output_contains`, the exact `FAILED` line; OR-P1, the run label naming the command, not on its own line; OR-P2, the tracer's P1 | OR-E1, OR-E2 (blinded); OR-E3 (transcript: the project's command printed the line) |
+
+- **The case file** is `ai_tmp/stage3/design-21/cases-21.json`, sha256 `c4d6ecd1…` after the design review. `cases-21-hand-read.json` stays only as the file for decisions row 1 if it is ever revised.
+- **RED cost:** 4 agent trials and 6 grader calls per agent.
+- **The harness change, `python_not_run`** (design §7), is written test first, with tests 1 to 11, an **Assertions** row and a **Limits** line in `docs/reference/evals.md`. It must land, reviewed, before the batch's fixtures and cases (final-check §4 step 2).
+  - It reads three witnesses: the trial's `python3` wrapper log; an interpreter, or a `.py` script run by path, named in a command, failing closed on a command the lexer cannot split; and bytecode left in the workspace.
+  - If it is not merged when the cases are ready, stop and ask the maintainer. Nothing is substituted.
+
+#### RED predictions (unobserved)
+
+From design §6. Claude Code ran Python in 0 of 12 recorded trials. Codex ran it in 7 of 13 without the skill text and in 2 of 8 skill arms (`decisions.md`, **Figures**).
+
+- **Both cases fail** in both arms on both agents. RO-P3 and OR-P1 fail everywhere by construction.
+- **`python_not_run`** measures on Codex: the baseline likely fails, and the skill arm is either.
+- **RO-P2** is now "either" in most cells. Recount at RED whether it fails apart from `python_not_run`.
+- **RO-E2** fails in the skill arm, which has no mark. It is either in the baselines, because of their "did not run" disclaimers.
+- **The on-request baseline** likely passes every guard (the `FAILED` line, OR-E1 to OR-E3) and fails OR-P1 and OR-P2.
+  - As `:48` allows, the case is then a guard that the skill still runs what it is asked to.
+  - The measured gap is the label. OR-P2 is ticket 18's guard, and it already passes in the RED skill arm.
+- **Two risks in the skill arm:** it may decline the run (`SKILL.md:18`), or paraphrase the output instead of quoting it (`SKILL.md:101`).
+
+#### Residual risk and what is carried
+
+- **RO-E2 against `grader.py:104`**, which tells the grader to ignore statements about how an outcome was produced. A label is one. A grader-prompt change moves `grader_prompt_sha256` for every suite, so it belongs in its own ticket (review row 4).
+- **`python_not_run` is a lower bound.**
+  - It misses a script whose name does not end `.py`, or one reached through `xargs` or `find -exec`, with a reset `PATH`.
+  - It false-fails harmless Python, and a here-doc body that names Python.
+- **The not-checked-out rule (`:44`)** goes to Stage 4 with question 8. No fixture can hold a pull request or a second branch. Ticket 23's live path should add one request to run a check on a pull request that is not checked out. Otherwise these notes record the rule as unchecked.
+- **A request that only mentions tests** has no case. That is a stated limit, and the implementation review reads the GREEN text for it (`:71`).
+- **After each run:** read Codex's commands for paths outside the workspace, and record what the system temp directory lists (design §10 step 10).
+- **Owed before the freeze:**
+  - `python_not_run`, its implementation review, then `just check`;
+  - the first pinned 3.14.8 runs of `design-21/strings.py` and `probe.py`, and `cases.load_suite`. The revised patterns ran under 3.9.6 only.
+- **Before RED:** a clean tree with `git_dirty: false`. The notes record each run's `git_commit`, `skill_sha256` and `evals_sha256`.
+- **Not re-rendered:** the `brief-21.md` sites the triage names. They are the record of what Codex reviewed, and design-21's **Not done** gives their replacement text.
+- **At Stage 4:** the hand entries 21-8, 21-9, 21-18 and 21-x in `ai_tmp/stage3/review/final/bans.batch.txt` stay by hand.
+
+#### Design review (Codex `gpt-6-astra`, 2026-11-15)
+
+- **Reviewer:** Codex `gpt-6-astra`, through `review.py run --implementer claude-code`, with no fallback. One run, exit 0.
+- **Reviewed:** `change-viz` at `c3a1222`: `ai_tmp/stage3/design-21.md`, `design-21/cases-21.json` (sha256 `5395c906…e178`) and the fixture. The brief is `ai_tmp/stage3/review/brief-21.md`, sent as `brief-21-run.md`, with eight questions.
+- **Findings:** `ai_tmp/stage3/review/codex-21.md`, a copy of `ai_tmp/review-20261115T194635Z-codex.md`. **Triage:** `ai_tmp/stage3/review/triage-21.md`, 11 rows: 7 valid, 3 invalid, 1 out of scope. A1 to A3 are the triage's own rows.
+
+Severity is Codex's, then the triage's. A dash means none was given.
+
+| # | Severity | Claim | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1a | medium / low | Nothing tells a GREEN agent that a git fact takes no label, so an over-eager labeller fails RO-P1 | valid (Stage 4 text gap) | §8 requirement 3: a claim about the change itself takes no label, even when `git` printed it. RO-P1's premise is reworded. No case byte changes |
+| 1b | medium / – | Narrow RO-P1 to unsupported observations; its premise is false | invalid | None |
+| 2 | medium / medium | RO-P2 misses "`--check` still passes" and false-fails "passes each path to `fingerprint_file()`" | valid | C1: a new claim pattern and `strings.py` rows. RO-P2's RED cells become "either" |
+| 3a | medium / low | OR-P1 accepts the run label on its own line, bullet or item | valid | C3: OR-P1 takes RO-P3's line-start exclusion |
+| 3b | medium / – | Reject a contradictory tail, and require the label outside a fence and tied to the failure sentence | invalid | None. The tail and the fence are stated limits of OR-P1 |
+| 4 | medium / – | RO-E2 and OR-E3 conflict with `grader.py:104` | out of scope | None in this ticket. A grader-prompt change is its own ticket. §12 risk 1 records it |
+| 5 | medium / medium | The hand-read fallback reverses decision 1 | valid | C4: no automatic fallback. Stop and ask, with options (i) to (iii) |
+| 6 | medium / – | The not-checked-out rule is unresolved at the design checkpoint | invalid | None. `decisions.md:3` defers it, and these notes cite that against `:44` |
+| A1 | – / medium | A command that resets `PATH` runs the `#!` script past all three witnesses | valid | C5: rule 2 also fails a `.py` script run by path. Tests 5, 6 and 9 gain rows, and **Limits** gains a line |
+| A2 | – / low | RO-P3 is quadratic in a line's leading blanks | valid | C2: the same language in linear form. The worst case drops from 13.8 s to 0.011 s |
+| A3 | – / low | The headings are counted as this ticket's measured gap | valid | §6: the measured gap is the label. OR-P2 is ticket 18's guard |
+
+After the fixes, under 3.9.6:
+
+- `strings.py` gives 66 rows with 0 differences;
+- `probe.py` gives 0 differences;
+- the fixture and case check gives 62 checks with 0 problems;
+- `cross-check/combined.py`, through the 3.9 wrapper `combined39.py`, reports no unexpected result.
+
+3.14.8 was not run.
+
+Landed: `python_not_run`, test first, `871249d`. Its cross-model implementation review follows before the freeze.
+
+Freeze commit: TBD; evals_sha256: TBD.
