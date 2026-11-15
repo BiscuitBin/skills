@@ -24,6 +24,7 @@ As of 2026-11-10.
 - **The skill is by-name-only**, so skill-creator's description optimisation does not apply.
 - **Benchmarks:** `just eval-record` writes one iteration from one run per agent, and both runs must share the same `skill_sha256` and `evals_sha256` (ADR 0014).
 - **Codex E7 is an open gap** (ticket 18, **GREEN rerun on `c397d04`** and **The maintainer's decisions (2026-11-14)**). E7 passed in 1 of 3 graded Codex trials, and 0 of 3 by hand: the notes name the new counting rule, but not that the printed counts can be lower. Under `CONTRIBUTING.md` §3, `just eval-record` waits until E7 passes on Codex, or until the maintainer decides how to record it.
+- **`script_ran`'s command parser lags `python_not_run`'s** (ticket 21, **/code-review at the end of Stage 3**, finding 4). It still misreads `/usr/bin/env python3 scripts/x.py`, `PATH=/usr/bin:/bin python3 scripts/x.py` and `if python3 scripts/x.py; then …`, so it can falsely fail a correct run of a shipped script. Sharing `_program` and the whole-word lexer would fix it, but changes cowsay's scoring, so it belongs in `.scratch/change-viz/follow-ups.md`.
 
 ## Acceptance criteria
 
