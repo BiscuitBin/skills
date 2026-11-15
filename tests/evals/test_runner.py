@@ -364,6 +364,54 @@ def test_a_by_name_case_with_no_installed_copy_to_name_fails_closed(tmp_path: Pa
     assert "installed nothing to invoke by name" in trial["status_reason"]
 
 
+NOT_RUN_CASE: dict[str, Any] = {
+    "id": "behaviour-moo",
+    "kind": "behaviour",
+    "prompt": TRIGGER,
+    "should_trigger": True,
+    "assertions": [{"type": "python_not_run"}],
+}
+
+
+def test_python_not_run_is_scored_in_both_arms_against_the_trials_workspace(
+    tmp_path: Path,
+) -> None:
+    class Planting(ClaudeCode):
+        def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401
+            raw = super().run(prompt, trial, homes, **kwargs)
+            # After the preflight, whose inventory would refuse it, and before scoring.
+            if trial.root.name.startswith("baseline"):
+                (trial.workspace / "__pycache__").mkdir()
+            return raw
+
+    root = fake_root(tmp_path, [NOT_RUN_CASE])
+    with serve(GOOD) as server:
+        adapter = Planting(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+        exit_code = run_suite(settings(root, server.url, adapter=adapter, baseline=True))
+    data = results(root)
+    assert exit_code == 0, json.dumps(data, indent=2)
+    by_arm = {trial["arm"]: trial for trial in data["trials"]}
+    # The real CLI's own run logs no python call.
+    assert by_arm["skill"]["assertions"] == [
+        {
+            "type": "python_not_run",
+            "class": "outcome",
+            "result": "passed",
+            "evidence": (
+                "no python call logged, none named in a command, no bytecode in the workspace"
+            ),
+        }
+    ]
+    assert by_arm["baseline"]["assertions"] == [
+        {
+            "type": "python_not_run",
+            "class": "outcome",
+            "result": "failed",
+            "evidence": "bytecode in the workspace: __pycache__",
+        }
+    ]
+
+
 def run_cli(*args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "skills_tooling.evals", "run", *args],

@@ -43,6 +43,7 @@ ASSERTION_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "final_contains_script_output": ({"script", "args"}, set()),
     "output_contains": ({"value"}, set()),
     "output_matches": ({"pattern"}, set()),
+    "python_not_run": (set(), set()),
 }
 # Skill-use assertions show the skill was used; the baseline arm never scores
 # them. The rest are outcome assertions, scored in both arms.

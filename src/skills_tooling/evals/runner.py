@@ -234,6 +234,7 @@ def _score(
             skill=settings.skill,
             skill_dir=settings.root / "skills" / settings.skill,
             installed=installed if skill_arm else None,
+            workspace=trial.workspace,
         )
         scored.append(
             {

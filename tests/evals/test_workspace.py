@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,7 @@ from skills_tooling.evals import fixture, results, workspace
 from skills_tooling.evals.adapter import PythonCall
 from skills_tooling.evals.claude_code import ClaudeCode
 from skills_tooling.evals.codex import Codex, pinned_executable
+from tests.evals.test_assertions import not_run, quiet, trace
 from tests.evals.test_fixture import FIRST, load
 from tests.evals.test_runner import TOKEN, fake_root
 
@@ -267,6 +269,88 @@ def test_python_calls_skips_a_record_without_a_numeric_status(tmp_path: Path) ->
         )
     )
     assert workspace.python_calls(trial) == (PythonCall("/w", ("script.py",)),)
+
+
+def agent_sh(trial: TrialPaths, command: str) -> None:
+    """Run command as the agent's shell would: the trial's PATH, HOME and TMPDIR, no stdin."""
+    subprocess.run(
+        ["/bin/sh", "-c", command],
+        cwd=trial.workspace,
+        env={
+            "PATH": workspace.child_path(trial),
+            "HOME": str(trial.home),
+            "TMPDIR": str(trial.tmp),
+        },
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def trial_with_script(tmp_path: Path, name: str) -> TrialPaths:
+    trial = workspace.create_trial(tmp_path, "run", name)
+    script = trial.workspace / "x.py"
+    script.write_text("#!/usr/bin/env python3\n")
+    script.chmod(0o755)
+    return trial
+
+
+def test_python_not_run_fails_on_what_the_real_wrapper_logged(tmp_path: Path) -> None:
+    trial = trial_with_script(tmp_path, "ran")
+    agent_sh(trial, "./x.py")
+    agent_sh(trial, "python3 -c pass")
+    calls = workspace.python_calls(trial)
+    assert [call.argv for call in calls] == [("./x.py",), ("-c", "pass")]
+    result = not_run(trace(commands=[], python_calls=calls), trial.workspace)
+    assert (result.passed, result.evidence) == (
+        False,
+        f"python ran: ./x.py in {trial.workspace}, exit 0 and 1 more",
+    )
+    fresh = workspace.create_trial(tmp_path, "run", "git-only")
+    agent_sh(fresh, "git --version")
+    observed = replace(quiet("git --version"), python_calls=workspace.python_calls(fresh))
+    assert not_run(observed, fresh.workspace).passed
+
+
+def test_python_not_run_fails_on_a_script_run_past_the_wrapper(tmp_path: Path) -> None:
+    trial = trial_with_script(tmp_path, "reset-path")
+    command = "PATH=/usr/bin:/bin ./x.py"
+    # Its #! line finds the system's python3, if any, and the wrapper logs nothing.
+    agent_sh(trial, command)
+    assert workspace.python_calls(trial) == ()
+    result = not_run(quiet(f"sh -c '{command}'"), trial.workspace)
+    assert (result.passed, result.evidence) == (
+        False,
+        f"a command runs a python script: sh -c '{command}'",
+    )
+
+
+@pytest.mark.parametrize(
+    "adapter",
+    [ClaudeCode(ROOT / "node_modules/.bin/claude"), Codex(pinned_executable(ROOT))],
+    ids=["claude", "codex"],
+)
+def test_a_trials_python_writes_bytecode_as_python_not_run_expects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, adapter: Adapter
+) -> None:
+    # Bytecode in the workspace is one of python_not_run's witnesses, so neither the
+    # child's environment nor the wrapper may turn it off.
+    monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
+    trial = workspace.create_trial(tmp_path, "run", "case")
+    env = dict(adapter.prepare_homes(trial).env)
+    assert "PYTHONDONTWRITEBYTECODE" not in env
+    code = "import sys; print(sys.dont_write_bytecode, sys.flags.dont_write_bytecode)"
+    printed = subprocess.run(
+        ["python3", "-c", code],  # noqa: S607 -- the trial's PATH finds its wrapper
+        cwd=trial.workspace,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert printed.stdout == "False 0\n"
+    assert " -B" not in (trial.bin / "python3").read_text()
 
 
 def test_workspace_is_its_own_ignored_git_root(tmp_path: Path) -> None:

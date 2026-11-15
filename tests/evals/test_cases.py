@@ -113,6 +113,13 @@ def test_assertions_are_classed_as_skill_use_or_outcome(tmp_path: Path) -> None:
     ]
 
 
+def test_python_not_run_loads_with_no_fields_as_an_outcome_assertion(tmp_path: Path) -> None:
+    case = behaviour(assertions=[{"type": "python_not_run"}])
+    write_suite(tmp_path, {"skill_name": "cowsay", "evals": [case]})
+    [loaded] = load_suite(tmp_path, "cowsay").cases
+    assert [(a.type, a.skill_use) for a in loaded.assertions] == [("python_not_run", False)]
+
+
 @pytest.mark.parametrize(
     ("case", "expected"),
     [
@@ -170,6 +177,10 @@ def test_assertions_are_classed_as_skill_use_or_outcome(tmp_path: Path) -> None:
         ),
         (behaviour(assertions=[{"type": "output_matches", "pattern": "("}]), "does not compile"),
         (behaviour(assertions=[{"type": "output_contains"}]), "missing 'value'"),
+        (
+            behaviour(assertions=[{"type": "python_not_run", "pattern": "x"}]),
+            "assertions[0]: unknown key 'pattern'",
+        ),
         (
             behaviour(assertions=[{"type": "script_ran", "script": "../../../etc/passwd"}]),
             "must be a file inside the skill",

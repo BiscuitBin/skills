@@ -121,8 +121,35 @@ Each type is a **skill-use** assertion (`skill_triggered`, `script_ran`), which 
 | `final_contains_script_output` | `script`, `args` | The harness runs the shipped script itself (`python -I`, outside the workspace, stdin `/dev/null`, `HOME` and `TMPDIR` pointing at a throwaway directory, at most 30 seconds) and its output, minus the final newline, appears in the final message as a run of whole, unaltered lines. A trailing `\r` per line is ignored; nothing else is. |
 | `output_contains` | `value` | The final message contains `value`. |
 | `output_matches` | `pattern` | Python `re.search(pattern, final_message)` matches. The schema rejects a pattern that does not compile. |
+| `python_not_run` | none | No witness shows that Python ran. A pass is a lower bound: no recorded run, by these three witnesses, not proof that nothing ran. (1) The trial's `python3` and `python` wrappers logged no call. (2) No Bash command, failed or not, runs an interpreter. Each is split into simple commands as for `script_ran`, but at blanks and operators only, as the shell splits words, so `PATH=/usr/bin:/bin python3 x.py` counts. A simple command's program is its first word past the keywords and grouping words `if`, `then`, `elif`, `else`, `while`, `until`, `do`, `!` and `{`, a `(` that opens a word, the prefixes `env`, `exec`, `command`, `time` and `nohup`, bare or by path, with their options, and `NAME=value` words. It fails when the program's name is `python`, `python3` or `python3.N`, bare or by path, or ends in `.py`: a script whose `#!` line starts the interpreter, past the wrapper once `PATH` is reset. `command -v` and `command -V` only look a name up, so they pass. The string a `sh`, `bash`, `zsh`, `dash` or `ksh` runs with `-c`, alone or in a cluster such as `-lc`, is read the same way, three shells deep. A command the lexer cannot split, or a string nested deeper, fails if its text holds an interpreter's name that is not part of a longer name such as `cpython-314` or `.python-version`. (3) The trial's workspace, outside its `.git/`, holds no directory named `__pycache__` and no file ending in `.pyc`. The walk never follows a link, and a path it cannot list or stat fails the assertion, because scoring runs before the runner restores access to what the agent locked. |
 
 `script` must be a file inside the skill directory.
+
+**`python_not_run`'s evidence.** On a pass, `no python call logged, none named in a command, no bytecode in the workspace`. On a fail, the first witness that shows a run, in the order above:
+
+- `python ran: <arguments> in <cwd>, exit <n>`, for the first logged call, followed by `and <n> more` when there are others;
+- `a command runs python: <command>`, `a command runs a python script: <command>`, or `a command names python and could not be split: <command>`;
+- `bytecode in the workspace: <path>`, or `could not read <path>`, relative to the workspace.
+
+A trial with no commands is still read by the log and the workspace, and passes when both are clean.
+
+**Limits of `python_not_run`.**
+
+- **Runs it does not see.** An interpreter reached past the wrapper, in a form the command check (2) cannot read, that leaves no bytecode, passes:
+  - `eval`, a shell function, a leading redirection, a command substitution or backticks inside another command (`echo $(/usr/bin/python3 x.py)`), or a program that starts another, such as `xargs /usr/bin/python3`, `find -exec /usr/bin/python3` or `timeout 5 /usr/bin/python3`;
+  - a prefix option that takes a value, such as `env -u NAME /usr/bin/python3`, whose value is read as the program;
+  - an interpreter by another name, such as `python2` or `pypy3`, or an installed entry point whose `#!` line names one by path, such as `pytest`;
+  - a script file that calls `/usr/bin/python3`, or that changes `PATH` first;
+  - a script whose name does not end in `.py`, or one reached through `xargs` or `find -exec`, run with a reset `PATH`, because its `#!` line then finds the interpreter past the wrapper and the command check goes by the program's name only;
+  - a tool that finds an interpreter itself, such as `uv run`, when it does not pick the wrapper;
+  - a `.py` script run with a reset `PATH` inside a command the lexer cannot split, because the fallback looks only for an interpreter's name.
+
+  A script run as `__main__` writes no bytecode, nor does a run with `-B` or `PYTHONDONTWRITEBYTECODE`, and bytecode moved or deleted afterwards escapes the bytecode check (3).
+- **The log is the agent's to write.** It is `tmp/python-exec.log`, in the agent's `TMPDIR`, as for `script_ran`. A call killed with SIGKILL leaves no record, because the wrapper logs when the call ends.
+- **Only Python.** Project code in another language, and a reimplementation of the project's logic with other tools, run no Python.
+- **False fails.** Any Python fails it, a skill's own script and `python3 --version` included. A here-doc body is read as commands, because one fed to `sh` runs, so `cat <<'EOF'` with a body line `python3 x.py`, or one that starts with a name ending in `.py`, fails. A program ending in `.py` fails by name, whether or not it exists.
+- **The lexer gap.** `command_list` returns no commands when quotes do not balance, a here-doc body with an apostrophe included, and for a command that is only a comment. The command check then scans the raw text for an interpreter's name and fails on one, even when it is only data, such as `# python3 x.py`. The lexer also reads a `#` inside a word as the start of a comment, so the rest of that line goes unread: `echo a#b && /usr/bin/python3 x.py` passes. A backslash-newline joins the lines, as in the shell.
+- **The bytecode check depends on two settings.** The trial's environment does not set `PYTHONDONTWRITEBYTECODE`, and the wrapper passes no `-B`. `test_workspace.py` pins both, for each agent.
 
 ### Fixtures
 
