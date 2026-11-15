@@ -1,0 +1,7 @@
+# item|count, one record per line
+rice|2
+flour|1
+
+# restocked
+rice|3
+beans|4

@@ -49,6 +49,727 @@
       "prompt": "Describe what this branch changes.",
       "should_trigger": false,
       "fixture": "wordstat-top"
+    },
+    {
+      "id": "behaviour-describe-add-weekdays",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "daygap-weekdays",
+      "expected_output": "The add-weekdays branch described with a Low, two-way risk line under the why: --weekdays is opt-in, output without it is unchanged, and a revert is enough because daygap keeps no data.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_contains",
+          "value": "--weekdays"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*^\\*\\*Risk:[\\s\\S]*^\\*\\*Risk:)(?!(?:[ \\t]{0,3}(?:```|~~~)[^\\n]*\\n(?:(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*[ \\t]{0,3}(?:```|~~~)[^\\n]*(?:\\n|\\Z)|(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^#{2,6}[ \\t][^\\n]*(?i:\\brisks?\\b|\\bdanger))(?:(?!^[ \\t]{0,3}(?:```|~~~))[\\s\\S])*?^##[ \\t]+Why the change[ \\t]*\\n(?:[ \\t]*\\n)*(?:(?!\\*\\*Risk:)[^\\s#][^\\n]*\\n)+(?:[ \\t]*\\n)+\\*\\*Risk:[ \\t]+(?:\\U0001F7E2\\ufe0f?[ \\t]+Low|\\U0001F7E1\\ufe0f?[ \\t]+Medium|\\U0001F534\\ufe0f?[ \\t]+High)\\*\\*[ \\t]+\\u00b7[ \\t]+\\*\\*Door:[ \\t]+(?:one|two)-way\\*\\*[ \\t]+\\u00b7[ \\t]+\\*\\*Blast radius:[ \\t]+(?!`?(?![~$])(?=[^\\s*`,]*(?:/|\\.(?:py|sql|md|toml|ya?ml|json|txt|cfg|ini|js|ts)\\b))[^\\s*`,]+`?,?(?:[ \\t]+(?:and[ \\t]+)?`?(?![~$])(?=[^\\s*`,]*(?:/|\\.(?:py|sql|md|toml|ya?ml|json|txt|cfg|ini|js|ts)\\b))[^\\s*`,]+`?,?)*\\*\\*)[^\\s*]+(?:[ \\t]+[^\\s*]+){0,7}\\*\\*[ \\t]*\\n(?:[ \\t]*\\n)*- Why (?:low|medium|high):[ \\t]+\\S[^\\n]*\\n(?:[ \\t]+(?![-*+][ \\t]|\\d{1,9}[.)][ \\t])\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*- Walk it back:[ \\t]+\\S[^\\n]*\\n(?:[ \\t]+(?![-*+][ \\t]|\\d{1,9}[.)][ \\t])\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*(?:(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?##[ \\t]+Special things to note[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^\\*\\*Risk:[^\\n]*\\*\\*Door:[ \\t]+two-way\\*\\*"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^\\*\\*Risk:[ \\t]+\\U0001F7E2\\ufe0f?[ \\t]+Low\\*\\*[^\\n]*\\n(?:[ \\t]*\\n)*- Why low:"
+        }
+      ],
+      "expectations": [
+        "The description says that daygap's output without --weekdays is the same as before the branch.",
+        "The first bullet under the risk line, the one that starts 'Why', gives as its reason that nothing changes for anyone who does not pass the new --weekdays option, for example because the option is opt-in or because output without it is unchanged.",
+        "The bullet that starts 'Walk it back:' says that reverting the branch is enough, because daygap keeps no data."
+      ]
+    },
+    {
+      "id": "behaviour-describe-retire-wishlist",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "readlog-drop-wishlist",
+      "expected_output": "The retire-wishlist branch described with a High, one-way risk line: migration 003 drops the wishlist table on each log's next run, a revert does not bring the wishes back, and the nearest recovery is the .bak copy readlog makes before migrating.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_contains",
+          "value": "wishlist"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*^\\*\\*Risk:[\\s\\S]*^\\*\\*Risk:)(?!(?:[ \\t]{0,3}(?:```|~~~)[^\\n]*\\n(?:(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*[ \\t]{0,3}(?:```|~~~)[^\\n]*(?:\\n|\\Z)|(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^#{2,6}[ \\t][^\\n]*(?i:\\brisks?\\b|\\bdanger))(?:(?!^[ \\t]{0,3}(?:```|~~~))[\\s\\S])*?^##[ \\t]+Why the change[ \\t]*\\n(?:[ \\t]*\\n)*(?:(?!\\*\\*Risk:)[^\\s#][^\\n]*\\n)+(?:[ \\t]*\\n)+\\*\\*Risk:[ \\t]+(?:\\U0001F7E2\\ufe0f?[ \\t]+Low|\\U0001F7E1\\ufe0f?[ \\t]+Medium|\\U0001F534\\ufe0f?[ \\t]+High)\\*\\*[ \\t]+\\u00b7[ \\t]+\\*\\*Door:[ \\t]+(?:one|two)-way\\*\\*[ \\t]+\\u00b7[ \\t]+\\*\\*Blast radius:[ \\t]+(?!`?(?![~$])(?=[^\\s*`,]*(?:/|\\.(?:py|sql|md|toml|ya?ml|json|txt|cfg|ini|js|ts)\\b))[^\\s*`,]+`?,?(?:[ \\t]+(?:and[ \\t]+)?`?(?![~$])(?=[^\\s*`,]*(?:/|\\.(?:py|sql|md|toml|ya?ml|json|txt|cfg|ini|js|ts)\\b))[^\\s*`,]+`?,?)*\\*\\*)[^\\s*]+(?:[ \\t]+[^\\s*]+){0,7}\\*\\*[ \\t]*\\n(?:[ \\t]*\\n)*- Why (?:low|medium|high):[ \\t]+\\S[^\\n]*\\n(?:[ \\t]+(?![-*+][ \\t]|\\d{1,9}[.)][ \\t])\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*- Walk it back:[ \\t]+\\S[^\\n]*\\n(?:[ \\t]+(?![-*+][ \\t]|\\d{1,9}[.)][ \\t])\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*(?:(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?##[ \\t]+Special things to note[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^\\*\\*Risk:[^\\n]*\\*\\*Door:[ \\t]+one-way\\*\\*"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^\\*\\*Risk:[ \\t]+\\U0001F534\\ufe0f?[ \\t]+High\\*\\*[^\\n]*\\n(?:[ \\t]*\\n)*- Why high:"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^- Walk it back:(?=(?:[^\\n]|\\n(?=[ \\t]+\\S))*?\\.bak\\b)"
+        }
+      ],
+      "expectations": [
+        "The description says that the first time readlog runs against an existing log after this change, a migration drops the wishlist table.",
+        "The description says that reverting the branch does not bring the deleted wishes back.",
+        "The first bullet under the risk line, the one that starts 'Why', names the migration that drops the wishlist table as the step that cannot be undone.",
+        "The bullet that starts 'Walk it back:' says that a revert does not restore the deleted wishes, and names as the nearest recovery the copy of the log with .bak added to its name, such as ~/.readlog.db.bak."
+      ]
+    },
+    {
+      "id": "behaviour-describe-add-weekdays-2",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "daygap-release",
+      "expected_output": "The add-weekdays branch described with a Medium, one-way risk line whose blast radius names daygap's installers: merging publishes 1.4.0 to PyPI through the release workflow, which a revert does not take back.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_contains",
+          "value": "1.4.0"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*^\\*\\*Risk:[\\s\\S]*^\\*\\*Risk:)(?!(?:[ \\t]{0,3}(?:```|~~~)[^\\n]*\\n(?:(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*[ \\t]{0,3}(?:```|~~~)[^\\n]*(?:\\n|\\Z)|(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^#{2,6}[ \\t][^\\n]*(?i:\\brisks?\\b|\\bdanger))(?:(?!^[ \\t]{0,3}(?:```|~~~))[\\s\\S])*?^##[ \\t]+Why the change[ \\t]*\\n(?:[ \\t]*\\n)*(?:(?!\\*\\*Risk:)[^\\s#][^\\n]*\\n)+(?:[ \\t]*\\n)+\\*\\*Risk:[ \\t]+(?:\\U0001F7E2\\ufe0f?[ \\t]+Low|\\U0001F7E1\\ufe0f?[ \\t]+Medium|\\U0001F534\\ufe0f?[ \\t]+High)\\*\\*[ \\t]+\\u00b7[ \\t]+\\*\\*Door:[ \\t]+(?:one|two)-way\\*\\*[ \\t]+\\u00b7[ \\t]+\\*\\*Blast radius:[ \\t]+(?!`?(?![~$])(?=[^\\s*`,]*(?:/|\\.(?:py|sql|md|toml|ya?ml|json|txt|cfg|ini|js|ts)\\b))[^\\s*`,]+`?,?(?:[ \\t]+(?:and[ \\t]+)?`?(?![~$])(?=[^\\s*`,]*(?:/|\\.(?:py|sql|md|toml|ya?ml|json|txt|cfg|ini|js|ts)\\b))[^\\s*`,]+`?,?)*\\*\\*)[^\\s*]+(?:[ \\t]+[^\\s*]+){0,7}\\*\\*[ \\t]*\\n(?:[ \\t]*\\n)*- Why (?:low|medium|high):[ \\t]+\\S[^\\n]*\\n(?:[ \\t]+(?![-*+][ \\t]|\\d{1,9}[.)][ \\t])\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*- Walk it back:[ \\t]+\\S[^\\n]*\\n(?:[ \\t]+(?![-*+][ \\t]|\\d{1,9}[.)][ \\t])\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*(?:(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?##[ \\t]+Special things to note[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^\\*\\*Risk:[^\\n]*\\*\\*Door:[ \\t]+one-way\\*\\*"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^\\*\\*Risk:[ \\t]+\\U0001F7E1\\ufe0f?[ \\t]+Medium\\*\\*[^\\n]*\\n(?:[ \\t]*\\n)*- Why medium:"
+        }
+      ],
+      "expectations": [
+        "The description says that merging this branch publishes (or would publish) daygap 1.4.0 to PyPI, through the project's release workflow.",
+        "The description says that daygap's output without --weekdays is the same as before the branch.",
+        "The first bullet under the risk line, the one that starts 'Why', says both that merging publishes daygap 1.4.0 and that nothing changes for anyone who does not pass the new --weekdays option, for example because the option is opt-in or because output without it is unchanged.",
+        "The bullet that starts 'Walk it back:' says that reverting the branch does not take daygap 1.4.0 back off PyPI.",
+        "The words after 'Blast radius:' on the risk line name the people who receive the published daygap release, such as everyone who installs or upgrades it, not only the people who pass --weekdays."
+      ]
+    },
+    {
+      "id": "behaviour-describe-fix-due-today",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "desk-due-today",
+      "expected_output": "A short description of the fix-due-today branch under the three headings, whose outline is one led-in diff sketch of the comparison in is_overdue, and no Mermaid diagram.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_contains",
+          "value": "overdue"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^##[ \\t]+Special things to note[ \\t]*\\n(?:[ \\t]*\\n)*(?:[-*+][ \\t]+\\S[^\\n]*\\n(?:(?:[ \\t]*\\n)*[ \\t]+\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*){1,3}(?:(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "\\A[\\s\\S]{0,1500}\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)|^##[ \\t]+Change outline[ \\t]*$).)*^##[ \\t]+Change outline[ \\t]*$(?:(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^[ \\t]{0,3}(```|~~~)[^\\n]*\\n(?:(?!^[ \\t]{0,3}\\1).)*?^[ \\t]{0,3}\\1[`~]*[ \\t]*$){1,1}(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?im)\\A(?![\\s\\S]*?^[ \\t]{0,3}(?:```|~~~)[ \\t]*mermaid\\b)"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)^##[ \\t]+Change outline[ \\t]*$(?:(?!^##[ \\t]).)*?^[ \\t]{0,3}(```|~~~)[ \\t]*diff[ \\t]*\\n(?:(?!^[ \\t]{0,3}\\1).)*?^-[^\\n]*>=[^\\n]*\\n\\+(?![^#\\n]*>=)[^#\\n]*>"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*?^##[ \\t]+Special things to note[ \\t]*$(?:(?!^##[ \\t])[\\s\\S])*?^[-*+][ \\t](?:[^\\n]|\\n(?:[ \\t]*\\n)*[ \\t]+(?=\\S)){351,})"
+        }
+      ],
+      "expectations": [
+        "The first diagram or code block under the 'Change outline' heading shows the comparison in is_overdue changing from >= to >.",
+        "Under the 'Change outline' heading, every diagram or code block is directly preceded by its own lead-in: one line of prose that says what the block shows.",
+        "The description says that a loan is no longer marked overdue on its due date, only after it."
+      ]
+    },
+    {
+      "id": "behaviour-describe-split-modules",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "desk-split",
+      "expected_output": "The split-modules branch under the three headings, whose outline leads with a file tree drawn as a diff: desk.py keeps main, and the replay, the overdue check and the report move into lending/.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_contains",
+          "value": "events.py"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^##[ \\t]+Special things to note[ \\t]*\\n(?:[ \\t]*\\n)*(?:[-*+][ \\t]+\\S[^\\n]*\\n(?:(?:[ \\t]*\\n)*[ \\t]+\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*){1,3}(?:(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "\\A[\\s\\S]{0,2500}\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)^##[ \\t]+Change outline[ \\t]*$(?:(?!^##[ \\t]|^[ \\t]{0,3}(?:```|~~~)).)*?^[ \\t]{0,3}(```|~~~)[ \\t]*(?:diff|text)[ \\t]*\\n(?=(?:(?!^[ \\t]{0,3}\\1).)*?\\blending\\b)(?:(?!^[ \\t]{0,3}\\1).)*?^\\+(?!\\+\\+[ \\t]|[ \\t]*(?:#|from[ \\t]|import[ \\t]))[^\\n]*\\b(?:events|rules|report)\\.py\\b(?:(?!^[ \\t]{0,3}\\1).)*?^\\+(?!\\+\\+[ \\t]|[ \\t]*(?:#|from[ \\t]|import[ \\t]))[^\\n]*\\b(?:events|rules|report)\\.py\\b"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)|^##[ \\t]+Change outline[ \\t]*$).)*^##[ \\t]+Change outline[ \\t]*$(?:(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^[ \\t]{0,3}(```|~~~)[^\\n]*\\n(?:(?!^[ \\t]{0,3}\\1).)*?^[ \\t]{0,3}\\1[`~]*[ \\t]*$){1,2}(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*?^##[ \\t]+Special things to note[ \\t]*$(?:(?!^##[ \\t])[\\s\\S])*?^[-*+][ \\t](?:[^\\n]|\\n(?:[ \\t]*\\n)*[ \\t]+(?=\\S)){351,})"
+        }
+      ],
+      "expectations": [
+        "The first diagram or code block under the 'Change outline' heading shows code moving out of desk.py into a new lending package that holds events.py, rules.py and report.py.",
+        "Under the 'Change outline' heading, every diagram or code block is directly preceded by its own lead-in: one line of prose that says what the block shows.",
+        "The description warns that is_overdue can no longer be imported from desk, because it now lives in lending.rules."
+      ]
+    },
+    {
+      "id": "behaviour-describe-add-holds",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "desk-holds",
+      "expected_output": "The add-holds branch under the three headings, whose outline holds a led-in Mermaid state, flow or sequence diagram of the new held state, at most one more block, and no file list.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_contains",
+          "value": "held"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^##[ \\t]+Special things to note[ \\t]*\\n(?:[ \\t]*\\n)*(?:[-*+][ \\t]+\\S[^\\n]*\\n(?:(?:[ \\t]*\\n)*[ \\t]+\\S[^\\n]*\\n)*(?:[ \\t]*\\n)*){1,3}(?:(?:[-*_][ \\t]*){3,}\\n(?:[ \\t]*\\n)*)?##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "\\A[\\s\\S]{0,3500}\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)^##[ \\t]+Change outline[ \\t]*$(?:(?!^##[ \\t]).)*?^[ \\t]{0,3}(?:```|~~~)[ \\t]*mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*(?:flowchart|graph|sequenceDiagram|stateDiagram(?:-v2)?)\\b"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)|^##[ \\t]+Change outline[ \\t]*$).)*^##[ \\t]+Change outline[ \\t]*$(?:(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^[ \\t]{0,3}(```|~~~)[^\\n]*\\n(?:(?!^[ \\t]{0,3}\\1).)*?^[ \\t]{0,3}\\1[`~]*[ \\t]*$){1,2}(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?!.*?^[ \\t]{0,3}(```|~~~)(?![ \\t]*mermaid\\b)[^\\n]*\\n(?:(?!^[ \\t]{0,3}\\1|^(?!(?:-{3}|\\+{3})[ \\t])[ \\t+\\-*|`\\u2502\\u251c\\u2514\\u2500]*(?:desk\\.py|test_desk\\.py|README\\.md|events\\.txt)\\b).)*?^(?!(?:-{3}|\\+{3})[ \\t])[ \\t+\\-*|`\\u2502\\u251c\\u2514\\u2500]*(desk\\.py|test_desk\\.py|README\\.md|events\\.txt)\\b(?:(?!^[ \\t]{0,3}\\1).)*?^(?!(?:-{3}|\\+{3})[ \\t])[ \\t+\\-*|`\\u2502\\u251c\\u2514\\u2500]*(?!\\2\\b)(?:desk\\.py|test_desk\\.py|README\\.md|events\\.txt)\\b)"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*?^##[ \\t]+Special things to note[ \\t]*$(?:(?!^##[ \\t])[\\s\\S])*?^[-*+][ \\t](?:[^\\n]|\\n(?:[ \\t]*\\n)*[ \\t]+(?=\\S)){351,})"
+        }
+      ],
+      "expectations": [
+        "The first diagram or code block under the 'Change outline' heading shows that a copy returned while a member has a hold on it moves to a new held state instead of becoming available.",
+        "Under the 'Change outline' heading, every diagram or code block is directly preceded by its own lead-in: one line of prose that says what the block shows.",
+        "The description says that a copy kept for a member can be lent only to that member."
+      ]
+    },
+    {
+      "id": "behaviour-describe-fingerprint-branch",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "fingerprint-notes",
+      "expected_output": "The ignore-blank-lines branch described from reading alone: nothing in the project is run, and a statement of what --check reports for a file with a blank line or trailing whitespace carries '(read from the code, not run)' in its own sentence.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "python_not_run"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "\\A(?![\\s\\S]*\\(observed:)"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "\\A(?:[ \\t]{0,3}(?:```|~~~)[^\\n]*(?:\\n(?![ \\t]{0,3}(?:```|~~~))[^\\n]*)*(?:\\n[ \\t]{0,3}(?:```|~~~)[^\\n]*(?:\\n|\\Z)|\\Z)|(?![ \\t]{0,3}(?:```|~~~))(?:(?=[^\\n]*\\((?:read from the code, not run\\)|observed: ))|(?![^\\n]*(?:\\b(?i:tests?|test suite|checks?)|`[^`\\n]{0,80}--check[^`\\n]{0,80}`)[ \\t]+(?i:all[ \\t]+|still[ \\t]+|now[ \\t]+)?(?i:pass(?:es|ed)?(?![ \\t]+(?:it|them|(?:each|every|the|a|an|its|this|that|these|those|both)[ \\t]+[\\w`().-]+)[ \\t]+(?:to|into)\\b)|succeed(?:s|ed)?)\\b))[^\\n]*(?:\\n|\\Z))*\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^(?![ \\t]*(?:(?:[-*+]|\\d+[.)])[ \\t]*)?\\(read from the code, not run\\))[^\\n]*\\S[ \\t]*\\(read from the code, not run\\)"
+        }
+      ],
+      "expectations": [
+        "The description says the branch changes how a fingerprint is computed: blank lines, and whitespace at the end of a line, are now left out before the text is hashed.",
+        "The description makes at least one statement about what fingerprint.py prints, or what its --check reports, for a file that has a blank line or trailing whitespace, and the words of that same sentence, or of the one-line lead-in just above a block that shows it, say that the statement comes from reading the code and was not run, for example '(read from the code, not run)'. A remark elsewhere in the description that nothing was run does not count, and neither does a word such as 'would' or 'should' on its own."
+      ]
+    },
+    {
+      "id": "behaviour-describe-and-run-check",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes. Also run python3 fingerprint.py --check fingerprints.txt and show what it reports.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "fingerprint-notes",
+      "expected_output": "The ignore-blank-lines branch described under the three headings, with the --check run quoted as it printed, marked as observed by running that command, and reported as failed because notes/plan.txt no longer matches.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_contains",
+          "value": "notes/plan.txt: FAILED (recorded 1e27ebc4400f, now 9f15e51fe9f9)"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)^(?![ \\t]*(?:(?:[-*+]|\\d+[.)])[ \\t]*)?\\(observed:)[^\\n]*\\S[ \\t]*\\(observed: ran `[^`\\n]*fingerprint\\.py --check[ =](?:\\./)?fingerprints\\.txt[^`\\n]*`[^()\\n]*\\)"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        }
+      ],
+      "expectations": [
+        "The description says the branch changes how a fingerprint is computed: blank lines, and whitespace at the end of a line, are now left out before the text is hashed.",
+        "Outside any code block, a sentence of the description says that fingerprint.py --check fingerprints.txt failed when run on this branch, because notes/plan.txt no longer matches its recorded fingerprint.",
+        {
+          "text": "A command runs fingerprint.py with --check fingerprints.txt, and its output holds the line 'notes/plan.txt: FAILED (recorded 1e27ebc4400f, now 9f15e51fe9f9)'.",
+          "needs_transcript": true
+        }
+      ]
+    },
+    {
+      "id": "behaviour-describe-uncommitted",
+      "kind": "behaviour",
+      "prompt": "Describe everything I haven't committed yet.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "hikelog-wip",
+      "expected_output": "A scope line saying the 2 branch commits are left out and the staged, unstaged and untracked changes are included, then the three headings: --year, --miles, the new summary.sh, and tracks/ridge-loop.fit by name and size only.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A\\*\\*Scope:\\*\\*[ \\t]+`?longest-hike`?[ \\t]+against[ \\t]+`?main`?[ \\t]*\u00b7[ \\t]*commits:[ \\t]+2[ \\t]+left[ \\t]+out[ \\t]*\u00b7[ \\t]*staged:[ \\t]+included[ \\t]*\u00b7[ \\t]*unstaged:[ \\t]+included[ \\t]*\u00b7[ \\t]*untracked:[ \\t]+included\\b[^\\n]*\\n[ \\t]*\\n"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_contains",
+          "value": "--year"
+        },
+        {
+          "type": "output_contains",
+          "value": "--miles"
+        },
+        {
+          "type": "output_contains",
+          "value": "summary.sh"
+        },
+        {
+          "type": "output_contains",
+          "value": "ridge-loop.fit"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)ridge-loop\\.fit[^\\n]{0,120}?(?<![\\d.,])\\b352[ \\t-]?(?:bytes?|B)\\b|(?<![\\d.,])\\b352[ \\t-]?(?:bytes?|B)\\b[^\\n]{0,120}?ridge-loop\\.fit"
+        }
+      ],
+      "expectations": [
+        "The description says that the changes add a --year option that counts only the hikes whose date falls in the given year.",
+        "The description says that the changes add a --miles option that prints distances in miles instead of kilometres.",
+        "The description says that summary.sh is a new file: a script that prints the summary for the 2025 hikes with distances in miles.",
+        "The description says that tracks/ridge-loop.fit is a new binary file and that its contents are not shown."
+      ]
+    },
+    {
+      "id": "behaviour-describe-staged",
+      "kind": "behaviour",
+      "prompt": "Describe only what I have staged.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "hikelog-wip",
+      "expected_output": "A scope line saying only the staged changes are included, with the 2 commits and the unstaged and untracked changes left out, then the three headings describing --year alone.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A\\*\\*Scope:\\*\\*[ \\t]+`?longest-hike`?[ \\t]+against[ \\t]+`?main`?[ \\t]*\u00b7[ \\t]*commits:[ \\t]+2[ \\t]+left[ \\t]+out[ \\t]*\u00b7[ \\t]*staged:[ \\t]+included[ \\t]*\u00b7[ \\t]*unstaged:[ \\t]+left[ \\t]+out[ \\t]*\u00b7[ \\t]*untracked:[ \\t]+left[ \\t]+out\\b[^\\n]*\\n[ \\t]*\\n"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_contains",
+          "value": "--year"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)\\A(?![\\s\\S]*(?:\\bmiles?\\b|_mile\\b|\\bmi\\b|\\dmi\\b|\\bdistance\\())"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)\\A(?![\\s\\S]*(?:summary\\.sh|ridge-loop|\\btracks/))"
+        }
+      ]
+    },
+    {
+      "id": "behaviour-describe-changes-plan-routes",
+      "kind": "behaviour",
+      "prompt": "Describe the changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "hikelog-level",
+      "expected_output": "One line: the scope line with no commits ahead of main and no staged, unstaged or untracked changes, saying there is nothing to describe. No heading and no visual.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*^[ \\t]{0,3}#{1,6}[ \\t])(?![\\s\\S]*^[ \\t]{0,3}(?:```|~~~))[\\s\\S]{1,400}\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A\\*\\*Scope:\\*\\*[ \\t]+`?plan-routes`?[ \\t]+against[ \\t]+`?main`?[ \\t]*\u00b7[ \\t]*commits:[ \\t]+none[ \\t]*\u00b7[ \\t]*staged:[ \\t]+none[ \\t]*\u00b7[ \\t]*unstaged:[ \\t]+none[ \\t]*\u00b7[ \\t]*untracked:[ \\t]+none\\b[^\\n]*[ \\t\\n]*\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)\\A(?![\\s\\S]*(?:!\\[|<(?:img|svg|picture)\\b|\\*\\*risk\\b|\\brisk[ \\t]*:|\\bdoor[ \\t]*:|\\bblast[ \\t]+radius[ \\t]*:))"
+        }
+      ]
+    },
+    {
+      "id": "behaviour-describe-changes-longest-hike",
+      "kind": "behaviour",
+      "prompt": "Describe the changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "hikelog-wip",
+      "expected_output": "With no source named: a scope line saying the 2 branch commits are included and the staged, unstaged and untracked changes are left out, then the three headings describing --longest.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A\\*\\*Scope:\\*\\*[ \\t]+`?longest-hike`?[ \\t]+against[ \\t]+`?main`?[ \\t]*\u00b7[ \\t]*commits:[ \\t]+2[ \\t]+included[ \\t]*\u00b7[ \\t]*staged:[ \\t]+left[ \\t]+out[ \\t]*\u00b7[ \\t]*unstaged:[ \\t]+left[ \\t]+out[ \\t]*\u00b7[ \\t]*untracked:[ \\t]+left[ \\t]+out\\b[^\\n]*\\n[ \\t]*\\n"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_contains",
+          "value": "--longest"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)\\A(?![\\s\\S]*(?:--year\\b|(?<![\\w-])years?(?![\\w-])|\\bmiles?\\b|_mile\\b|\\bmi\\b|\\dmi\\b|\\bdistance\\())"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)\\A(?![\\s\\S]*(?:summary\\.sh|ridge-loop|\\btracks/))"
+        }
+      ]
+    },
+    {
+      "id": "behaviour-branch-and-uncommitted",
+      "kind": "behaviour",
+      "prompt": "Describe this branch together with everything I haven't committed yet.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "hikelog-wip",
+      "expected_output": "A scope line with the 2 commits and the staged, unstaged and untracked changes all included, then the three headings covering --longest, --year, --miles, the new summary.sh, and tracks/ridge-loop.fit by name and size only.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A\\*\\*Scope:\\*\\*[ \\t]+`?longest-hike`?[ \\t]+against[ \\t]+`?main`?[ \\t]*\u00b7[ \\t]*commits:[ \\t]+2[ \\t]+included[ \\t]*\u00b7[ \\t]*staged:[ \\t]+included[ \\t]*\u00b7[ \\t]*unstaged:[ \\t]+included[ \\t]*\u00b7[ \\t]*untracked:[ \\t]+included\\b[^\\n]*\\n[ \\t]*\\n"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        },
+        {
+          "type": "output_contains",
+          "value": "--longest"
+        },
+        {
+          "type": "output_contains",
+          "value": "--year"
+        },
+        {
+          "type": "output_contains",
+          "value": "--miles"
+        },
+        {
+          "type": "output_contains",
+          "value": "summary.sh"
+        },
+        {
+          "type": "output_contains",
+          "value": "ridge-loop.fit"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)ridge-loop\\.fit[^\\n]{0,120}?(?<![\\d.,])\\b352[ \\t-]?(?:bytes?|B)\\b|(?<![\\d.,])\\b352[ \\t-]?(?:bytes?|B)\\b[^\\n]{0,120}?ridge-loop\\.fit"
+        }
+      ],
+      "expectations": [
+        "The description says that the branch adds a --longest option that names the longest hike in the log with its trail, distance and date.",
+        "The description says that the changes add a --year option that counts only the hikes whose date falls in the given year.",
+        "The description says that the changes add a --miles option that prints distances in miles instead of kilometres.",
+        "The description says that summary.sh is a new file: a script that prints the summary for the 2025 hikes with distances in miles.",
+        "The description says that tracks/ridge-loop.fit is a new binary file and that its contents are not shown."
+      ]
+    },
+    {
+      "id": "behaviour-describe-changes-try-ideas",
+      "kind": "behaviour",
+      "prompt": "Describe the changes.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "hikelog-fresh",
+      "expected_output": "With no source named and no commits ahead of main: a scope line with commits none and the unstaged change included, then the three headings describing the new trails line.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A\\*\\*Scope:\\*\\*[ \\t]+`?try-ideas`?[ \\t]+against[ \\t]+`?main`?[ \\t]*\u00b7[ \\t]*commits:[ \\t]+none[ \\t]*\u00b7[ \\t]*staged:[ \\t]+none[ \\t]*\u00b7[ \\t]*unstaged:[ \\t]+included[ \\t]*\u00b7[ \\t]*untracked:[ \\t]+none\\b[^\\n]*\\n[ \\t]*\\n"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?!^[ \\t]{0,3}(?:```|~~~)).)*?^##[ \\t]+Why the change[ \\t]*$.*?^##[ \\t]+Special things to note[ \\t]*$.*?^##[ \\t]+Change outline[ \\t]*$"
+        }
+      ],
+      "expectations": [
+        "The description says that hikes.py now also prints how many different trails the log holds, so a trail walked more than once is counted once."
+      ]
+    },
+    {
+      "id": "behaviour-describe-staged-try-ideas",
+      "kind": "behaviour",
+      "prompt": "Describe only what I have staged.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "hikelog-fresh",
+      "expected_output": "One line: the scope line with no commits ahead of main, nothing staged, the unstaged change left out and no untracked files, saying nothing is staged. No heading and no visual.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*^[ \\t]{0,3}#{1,6}[ \\t])(?![\\s\\S]*^[ \\t]{0,3}(?:```|~~~))[\\s\\S]{1,400}\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A\\*\\*Scope:\\*\\*[ \\t]+`?try-ideas`?[ \\t]+against[ \\t]+`?main`?[ \\t]*\u00b7[ \\t]*commits:[ \\t]+none[ \\t]*\u00b7[ \\t]*staged:[ \\t]+none[ \\t]*\u00b7[ \\t]*unstaged:[ \\t]+left[ \\t]+out[ \\t]*\u00b7[ \\t]*untracked:[ \\t]+none\\b[^\\n]*[ \\t\\n]*\\Z"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)\\A(?![\\s\\S]*(?:!\\[|<(?:img|svg|picture)\\b|\\*\\*risk\\b|\\brisk[ \\t]*:|\\bdoor[ \\t]*:|\\bblast[ \\t]+radius[ \\t]*:))"
+        }
+      ]
+    },
+    {
+      "id": "behaviour-describe-pr-4817",
+      "kind": "behaviour",
+      "prompt": "Describe pull request #4817.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "wordstat-top",
+      "expected_output": "One line saying pull request #4817 cannot be read, with the one cause met: gh is missing, or gh is not logged in. Then an offer to describe the checked-out add-top-words branch instead. No description of either, and nothing about what the branch changes.",
+      "assertions": [
+        { "type": "skill_triggered" },
+        { "type": "output_contains", "value": "add-top-words" },
+        { "type": "output_matches", "pattern": "(?<![\\w-])gh(?![\\w-])" },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*^[ \\t]{0,3}#{1,6}(?:[ \\t]|$))"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "\\A\\s*+(?:\\S[^\\n]*+\\n\\s*+){0,2}\\S[^\\n]*+\\s*+\\Z"
+        },
+        { "type": "output_matches", "pattern": "\\A(?![\\s\\S]*--top)" },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)\\?|\\b(?:want|would you|shall i|should i|reply|say (?:the word|yes|so)|let me know|if you(?:\\Wd| would)? like)\\b|\\bi(?:\\Wll| will)\\b|\\bi can\\b(?!\\Wt\\b| not\\b)"
+        }
+      ],
+      "expectations": [
+        "The answer says that pull request #4817 could not be read, and names in a single sentence the one cause it met: either gh is not installed or not found, or gh is installed but not logged in to GitHub.",
+        "The answer offers to describe the checked-out add-top-words branch instead of pull request #4817, and leaves the choice to the person: it asks whether to, or says what to reply.",
+        {
+          "text": "A command in the command list runs gh or looks it up, such as gh pr view 4817, gh auth status, command -v gh or which gh.",
+          "needs_transcript": true
+        },
+        {
+          "text": "The final message gives one cause for not reading pull request #4817, and the command list shows that cause: a lookup of gh, such as command -v gh or which gh, that finds no path, or a command not found result for gh, shows that gh is not installed or not on the PATH; output from gh asking for gh auth login shows that gh is installed but not logged in.",
+          "needs_transcript": true
+        }
+      ]
+    },
+    {
+      "id": "behaviour-describe-branch-pr",
+      "kind": "behaviour",
+      "prompt": "What does the open pull request for this branch change?",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "wordstat-top",
+      "expected_output": "One line saying the add-top-words branch's pull request cannot be read, with the one cause met: gh is missing, or gh is not logged in. Then an offer to describe the branch against local main instead, naming main. No description, and nothing about what the branch changes.",
+      "assertions": [
+        { "type": "skill_triggered" },
+        { "type": "output_contains", "value": "add-top-words" },
+        { "type": "output_matches", "pattern": "(?<![\\w-])gh(?![\\w-])" },
+        {
+          "type": "output_matches",
+          "pattern": "(?m)\\A(?![\\s\\S]*^[ \\t]{0,3}#{1,6}(?:[ \\t]|$))"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "\\A\\s*+(?:\\S[^\\n]*+\\n\\s*+){0,2}\\S[^\\n]*+\\s*+\\Z"
+        },
+        { "type": "output_matches", "pattern": "\\A(?![\\s\\S]*--top)" },
+        {
+          "type": "output_matches",
+          "pattern": "(?i)\\?|\\b(?:want|would you|shall i|should i|reply|say (?:the word|yes|so)|let me know|if you(?:\\Wd| would)? like)\\b|\\bi(?:\\Wll| will)\\b|\\bi can\\b(?!\\Wt\\b| not\\b)"
+        },
+        { "type": "output_matches", "pattern": "(?<![\\w/-])main(?![\\w-])" }
+      ],
+      "expectations": [
+        "The answer says that the pull request for the add-top-words branch could not be read, and names in a single sentence the one cause it met: either gh is not installed or not found, or gh is installed but not logged in to GitHub.",
+        "The answer offers to describe the add-top-words branch against the local main branch instead, and leaves the choice to the person: it asks whether to, or says what to reply.",
+        {
+          "text": "A command in the command list runs gh or looks it up, such as gh pr view, gh pr status, gh auth status, command -v gh or which gh.",
+          "needs_transcript": true
+        },
+        {
+          "text": "The final message gives one cause for not reading the add-top-words branch's pull request, and the command list shows that cause: a lookup of gh, such as command -v gh or which gh, that finds no path, or a command not found result for gh, shows that gh is not installed or not on the PATH; output from gh asking for gh auth login shows that gh is installed but not logged in.",
+          "needs_transcript": true
+        }
+      ]
+    },
+    {
+      "id": "behaviour-describe-with-flowchart",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes, with a Mermaid flowchart of the path one line of the input now takes through the functions that handle it, and of what a malformed line now prints.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "pantry-comments",
+      "expected_output": "A description of the skip-comment-lines branch whose Mermaid flowchart follows a line through read_records and parse_line to the numbered error a malformed line now prints, with every label in a form GitHub's Mermaid parses.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?>^[ \\t]{0,3}(`{3,}+|~{3,}+)[^\\n]*\\n.*?^[ \\t]{0,3}\\1[`~]*[ \\t]*\\n)|^(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^[ \\t]{0,3}```mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*(?:flowchart|graph)\\b(?:(?!^[ \\t]{0,3}```).)*?\\bparse_line\\b"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?!(?:(?>^[ \\t]{0,3}(`{3,}+|~{3,}+)[^\\n]*\\n.*?^[ \\t]{0,3}\\1[`~]*[ \\t]*\\n)|^(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^[ \\t]{0,3}```mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*(?:flowchart|graph)\\b(?:^[ \\t]*%%(?!\\{)[^\\n]*\\n|\"[^\"\\n]*\"|(?!^[ \\t]{0,3}```|^[ \\t]*%%(?!\\{))[^\"])*?(?:\\[(?![\\[\"(/\\\\])[^\\]\"\\n]*?[(){}|\\[\"]|\\((?![(\\[\"])[^)\"\\n]*?[({}|\\[\"]|\\{(?![{\"])[^}\"\\n]*?[(){|\\[\"]|(?:[->=]|[-=][ox])[ \\t]*\\|(?!\")[^|\"\\n]*?[(){}\\[\"]))"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?!(?:(?>^[ \\t]{0,3}(`{3,}+|~{3,}+)[^\\n]*\\n.*?^[ \\t]{0,3}\\1[`~]*[ \\t]*\\n)|^(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^[ \\t]{0,3}```mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*(?:flowchart|graph)\\b(?:^[ \\t]*%%(?!\\{)[^\\n]*\\n|\"[^\"\\n]*\"|(?!^[ \\t]{0,3}```|^[ \\t]*%%(?!\\{))[^\"])*?(?:\\[\"[^\"\\n]*\"(?![ \\t]*\\])|\\(\"[^\"\\n]*\"(?![ \\t]*\\))|\\{\"[^\"\\n]*\"(?![ \\t]*\\})|(?:[->=]|[-=][ox])[ \\t]*\\|\"[^\"\\n]*\"(?![ \\t]*\\|)))"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?!(?:(?>^[ \\t]{0,3}(`{3,}+|~{3,}+)[^\\n]*\\n.*?^[ \\t]{0,3}\\1[`~]*[ \\t]*\\n)|^(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^[ \\t]{0,3}```mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*sequenceDiagram\\b(?:(?!^[ \\t]{0,3}```).)*?^(?![ \\t]*%%)[ \\t]*(?:(?i:note)[ \\t][^\\n:]*:|[^\\n:]*?(?:->>|->|-x|-\\)|<<->>)[^\\n:]*:|(?i:loop|alt|else|opt|par|par_over|and|critical|option|break|box|rect|title|participant|actor)(?![^ \\t\\n]))(?:#[A-Za-z0-9]+;|[^#;\\n])*+(?:#|;(?![ \\t]*$)))"
+        }
+      ],
+      "expectations": [
+        "The flowchart has a step that skips a line of the input that is blank or is a comment.",
+        "The flowchart shows parse_line raising an error that gives the line's number."
+      ]
+    },
+    {
+      "id": "behaviour-describe-with-sequence",
+      "kind": "behaviour",
+      "prompt": "Describe what this branch changes, with a Mermaid sequence diagram of the calls one run of pantry.py now makes, from main down to parse_line.",
+      "should_trigger": true,
+      "by_name": true,
+      "fixture": "pantry-comments",
+      "expected_output": "A description of the skip-comment-lines branch whose Mermaid sequence diagram shows main, sum_counts, read_records and parse_line, with no message text that GitHub's Mermaid cuts short or splits.",
+      "assertions": [
+        {
+          "type": "skill_triggered"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?:(?>^[ \\t]{0,3}(`{3,}+|~{3,}+)[^\\n]*\\n.*?^[ \\t]{0,3}\\1[`~]*[ \\t]*\\n)|^(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^[ \\t]{0,3}```mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*sequenceDiagram\\b(?:(?!^[ \\t]{0,3}```).)*?\\bread_records\\b"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?!(?:(?>^[ \\t]{0,3}(`{3,}+|~{3,}+)[^\\n]*\\n.*?^[ \\t]{0,3}\\1[`~]*[ \\t]*\\n)|^(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^[ \\t]{0,3}```mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*sequenceDiagram\\b(?:(?!^[ \\t]{0,3}```).)*?^(?![ \\t]*%%)[ \\t]*(?:(?i:note)[ \\t][^\\n:]*:|[^\\n:]*?(?:->>|->|-x|-\\)|<<->>)[^\\n:]*:|(?i:loop|alt|else|opt|par|par_over|and|critical|option|break|box|rect|title|participant|actor)(?![^ \\t\\n]))(?:#[A-Za-z0-9]+;|[^#;\\n])*+(?:#|;(?![ \\t]*$)))"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?!(?:(?>^[ \\t]{0,3}(`{3,}+|~{3,}+)[^\\n]*\\n.*?^[ \\t]{0,3}\\1[`~]*[ \\t]*\\n)|^(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^[ \\t]{0,3}```mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*(?:flowchart|graph)\\b(?:^[ \\t]*%%(?!\\{)[^\\n]*\\n|\"[^\"\\n]*\"|(?!^[ \\t]{0,3}```|^[ \\t]*%%(?!\\{))[^\"])*?(?:\\[(?![\\[\"(/\\\\])[^\\]\"\\n]*?[(){}|\\[\"]|\\((?![(\\[\"])[^)\"\\n]*?[({}|\\[\"]|\\{(?![{\"])[^}\"\\n]*?[(){|\\[\"]|(?:[->=]|[-=][ox])[ \\t]*\\|(?!\")[^|\"\\n]*?[(){}\\[\"]))"
+        },
+        {
+          "type": "output_matches",
+          "pattern": "(?ms)\\A(?!(?:(?>^[ \\t]{0,3}(`{3,}+|~{3,}+)[^\\n]*\\n.*?^[ \\t]{0,3}\\1[`~]*[ \\t]*\\n)|^(?![ \\t]{0,3}(?:```|~~~))[^\\n]*\\n)*?^[ \\t]{0,3}```mermaid[ \\t]*\\n(?:[ \\t]*(?:%%[^\\n]*)?\\n)*[ \\t]*(?:flowchart|graph)\\b(?:^[ \\t]*%%(?!\\{)[^\\n]*\\n|\"[^\"\\n]*\"|(?!^[ \\t]{0,3}```|^[ \\t]*%%(?!\\{))[^\"])*?(?:\\[\"[^\"\\n]*\"(?![ \\t]*\\])|\\(\"[^\"\\n]*\"(?![ \\t]*\\))|\\{\"[^\"\\n]*\"(?![ \\t]*\\})|(?:[->=]|[-=][ox])[ \\t]*\\|\"[^\"\\n]*\"(?![ \\t]*\\|)))"
+        }
+      ],
+      "expectations": [
+        "The sequence diagram shows read_records skipping a line that is blank or is a comment.",
+        "The sequence diagram shows parse_line being called with the line's number as well as its text."
+      ]
     }
   ]
 }

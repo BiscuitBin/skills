@@ -1,0 +1,20 @@
+{
+  "branch": "fix-due-today",
+  "main": [
+    {
+      "tree": "start",
+      "message": "Add the lending desk report"
+    },
+    {
+      "tree": "tested",
+      "message": "Test the replay, the overdue check and the report"
+    }
+  ],
+  "commits": [
+    {
+      "tree": "fixed",
+      "message": "Count a loan as overdue only after its due date"
+    }
+  ],
+  "executable": ["desk.py", "test_desk.py"]
+}

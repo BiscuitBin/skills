@@ -1,0 +1,24 @@
+{
+  "branch": "add-weekdays",
+  "main": [
+    {
+      "tree": "start",
+      "message": "Count the days between two dates"
+    },
+    {
+      "tree": "leap",
+      "message": "Test a span across a leap day"
+    }
+  ],
+  "commits": [
+    {
+      "tree": "weekdays",
+      "message": "Add --weekdays to count Monday to Friday"
+    },
+    {
+      "tree": "documented",
+      "message": "Document --weekdays"
+    }
+  ],
+  "executable": ["daygap.py", "test_daygap.py"]
+}

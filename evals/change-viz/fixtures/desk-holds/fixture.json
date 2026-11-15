@@ -1,0 +1,28 @@
+{
+  "branch": "add-holds",
+  "main": [
+    {
+      "tree": "start",
+      "message": "Add the lending desk report"
+    },
+    {
+      "tree": "tested",
+      "message": "Test the replay, the overdue check and the report"
+    }
+  ],
+  "commits": [
+    {
+      "tree": "holds",
+      "message": "Keep a returned copy for the member who asked for it"
+    },
+    {
+      "tree": "holds-tested",
+      "message": "Test holds on copies that come back"
+    },
+    {
+      "tree": "holds-documented",
+      "message": "Document the hold action"
+    }
+  ],
+  "executable": ["desk.py", "test_desk.py"]
+}

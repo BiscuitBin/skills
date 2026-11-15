@@ -182,4 +182,4 @@ The brief's R1 copy is left as reviewed.
 Landed: the Renovate change and its test, `ae6fc72`.
 The same implementation review covered `ae6fc72`; it raised no finding against it (ticket 21's notes hold the record).
 
-Freeze commit: TBD; evals_sha256: TBD.
+**Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.

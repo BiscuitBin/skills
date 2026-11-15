@@ -182,4 +182,4 @@ Landed: `python_not_run`, test first, `871249d`, with its review fixes in the ne
 | Q1 | answer | `env -S 'python3 -c pass'` escapes | invalid | Already a documented limit (a prefix option's value read as the program) |
 | Q8, Q10 | answer | The GitHub paragraph mixes what T1 and T2 test with what is inferred | invalid | The paragraph already says the tests check only the `PATH`, the lookup and the exit status |
 
-Freeze commit: TBD; evals_sha256: TBD.
+**Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.

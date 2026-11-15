@@ -1,0 +1,5 @@
+# date action copy [member due]
+2026-05-01 lend c1 ana 2026-05-03
+2026-05-01 lend c2 ben 2026-05-10
+2026-05-02 lend c3 cal 2026-05-02
+2026-05-02 return c2

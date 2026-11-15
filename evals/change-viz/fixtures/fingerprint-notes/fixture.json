@@ -1,0 +1,12 @@
+{
+  "branch": "ignore-blank-lines",
+  "main": [
+    { "tree": "start", "message": "Print a fingerprint for each file" },
+    { "tree": "checked", "message": "Add --check to compare files with recorded fingerprints" }
+  ],
+  "commits": [
+    { "tree": "relaxed", "message": "Ignore blank lines and trailing spaces in fingerprints" },
+    { "tree": "noted", "message": "Say in the README what a fingerprint ignores" }
+  ],
+  "executable": ["fingerprint.py", "test_fingerprint.py"]
+}

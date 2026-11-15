@@ -189,4 +189,4 @@ After the fixes:
 - **Under the user-local 3.14.8,** `patterns_24.py` gives 101 rows and 166 checks with 0 mismatches, and 20 limit rows. `cross-check/combined.py` reports no unexpected result.
 - **Under 3.9.6,** the fixture rebuild is byte-equal, and `doc_check.py` gives 0 mismatches.
 
-Freeze commit: TBD; evals_sha256: TBD.
+**Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.
