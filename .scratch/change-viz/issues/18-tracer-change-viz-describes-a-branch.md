@@ -346,9 +346,11 @@ Fixture facts for the hand read. The first four were observed at apply time; the
 - **A remote's default that counts more, above 0** (review round 2, finding 1). When a branch counts fewer against `origin/main` than against the branch `origin/HEAD` names, and more than 0, it is described against `origin/main`, though a pull request against the remote's default would carry more. In the round-2 probe's Case 7, a hotfix cut from `origin/main` counts 1 against it and 3 against `origin/develop`. `af11c72` covers only the case where the count is 0. The triage judged `origin/main` the right base for a git-flow hotfix.
 - **`show <commit>` and `log -p` ran text conversion: fixed in `b89df20`** (found by the probe for review finding 1a). `1cc134c` flagged only `git diff`. In the probe, with text conversion caching on, `git --no-optional-locks show HEAD` and `log -p -1` wrote `refs/notes/textconv/x`. They did not run `diff.external`. The skill prescribes neither, since its `show` reads are of a file at a commit and its `log` has no `-p`, but its list of reads allows `show` and `log`. Since `b89df20`, `SKILL.md` gives the flags to every read that prints or searches a diff, `log -S` and `-G` included, and leaves `-v` off `status`, which rejects them (**Follow-up fix, `b89df20`**). What remains: with the flags, `-G` skips a binary file it would have read through a converter, and both probes ran on Apple Git 2.50.1 only.
 - **A remote named `upstream` is taken as the fork's parent** (stage-2 re-review, finding 1, case U1). If it is someone else's repository whose `main` holds some of the branch's commits, it counts fewer and wins. Those commits are then left out of the description, with no question asked. No read-only check tells it apart from a real parent: the refs have the same shape. A request that names the base avoids it.
-- **A fork's parent under another name** (stage-2 /code-review, finding 1). A parent remote not named `upstream`, or a parent whose default is neither `main` nor `master`, is not a candidate, so a branch cut from it is still counted against the fork's own `main`.
+- **A fork's parent under another name** (stage-2 /code-review, finding 1; c397d04 /code-review, F2). A parent remote not named `upstream`, or a parent whose default is neither `main` nor `master`, is not a candidate, so a branch cut from it is counted against another candidate, often the fork's lagging default, with no question asked (`ai_tmp/stage2-code-review/scratch/triage-F2/probe.out`). Git 2.48 and later create `upstream/HEAD` on fetch, but counting it would also mean rewording the reference's fork check, which names only `main` and `master`. A request that names the base avoids it.
 - **A fork with commits of its own asks more often** (stage-2 re-review, the cost of `6db0d6f`). In a fork whose `main` holds commits `upstream` lacks, a branch cut from `upstream/main` for a pull request upstream now asks for the base, where it was described against `upstream/main` without a question. How often a fork's `main` holds its own commits was not assessed.
 - **A configured `core.fsmonitor` runs under step 1's `status`** (stage-2 /code-review, finding 6). With a hook it runs the hook; with `true` it starts the daemon, which leaves `.git/fsmonitor--daemon/` and a socket. No other prescribed read runs it, and it moves no ref, index entry or working-tree file. Only the person's own config sets it, and their own `git status` does the same, so the skill text does not change. This is the triage's judgement, confirmed by the lead on 2026-11-11 by the test that put 1b out of scope.
+- **A configured clean filter runs under step 1's `status`** (c397d04 /code-review, F3). For a tracked file whose timestamps changed, `status` runs the filter that `.gitattributes` names for it, on every run, because `--no-optional-locks` keeps the refreshed index from being saved. git-lfs then copies the file into `.git/lfs/objects` if its cache lacks it, and writes nothing if the cache holds it. No other prescribed read runs a filter, and no ref, index entry or working-tree file moves. With the filter off, `status` lists the file as modified, or fails when `required` is set, as git-lfs sets it. So the skill text does not change, by the test that put finding 6 out of scope. Ticket 22's working-tree reads run filters on every changed file and inherit the question. Probe: `ai_tmp/stage2-code-review/scratch/F3/`, Apple Git 2.50.1 only.
+- **A configured `log.showSignature` runs a signing program under step 2's `log`** (c397d04 /code-review, F9). For each signed commit, `log` runs `gpg.program` or `gpg.ssh.program` once or twice, and prints a signature line above that commit. `show` of a commit does the same. Probe: `ai_tmp/stage2-code-review/scratch/F9-repro.sh`. The other prescribed reads run nothing, nothing under `.git` changed, and `--no-show-signature` stops it. Only the person's own config sets it, and their own `git log` does the same, so the skill text does not change, by the test that put 1b and finding 6 out of scope.
 
 #### Next
 
@@ -1606,3 +1608,35 @@ What follows from them:
 
 1. `/code-review` at the end of Stage 2.
 2. Stage 3: cases for tickets 19 to 24, a design review for each, and Hand-off 3.
+
+### /code-review at the end of Stage 2 (2026-11-14)
+
+- **Reviewer:** `/code-review` at high effort, Claude Code (`claude-opus-5-5`), on `git diff main...HEAD -- skills/change-viz` at `dc607d5` (`c397d04`'s text). It reported nine findings, four of them reproduced in scratch repositories on Apple Git 2.50.1.
+- **Triage:** workflow `stage2-code-review-triage`. It had one agent per finding, each reproducing the finding in a scratch repository, then a skeptic on each finding judged valid, then one fix plan. No skeptic refuted a verdict. The records are in `ai_tmp/stage2-code-review/`: `triage-F*.md`, `fix-plan.md`, and `fixplan/` with the edited copies.
+
+| # | Finding | Verdict | Action |
+| --- | --- | --- | --- |
+| F1 | `for-each-ref refs/heads/main` also prints branches under that name, such as `main/old` | valid, low | `SKILL.md:27`: drop them, since none is a default branch |
+| F2 | Step 1 never counts a parent whose default is neither `main` nor `master` | valid, low | Recorded only, under **Residual risk** (the fork's-parent bullet) |
+| F3 | `status` runs a configured clean filter on a touched file | out of scope, low | Recorded under **Residual risk**. Carried to 22 |
+| F4 | `rev-parse --verify --quiet <name>` also resolves a tag | valid, low | `reading-the-branch.md:8`: `refs/heads/<name>`, "not for a tag of the same name" |
+| F5 | Files opened only for context are read from a dirty working tree | valid, low | `SKILL.md:40`: "read every file you open as committed, changed or not". Searching a dirty tree is carried to 22 |
+| F6 | `git show <fork>:<new path>` fails for a renamed file | valid, low | `SKILL.md:41`: at `<fork>` a renamed file has its old path, from `--name-status`. `reading-the-branch.md:23` (from the skeptic): give a renamed file both paths when you read the diff a path at a time |
+| F7 | With no remote, step 1 counts another local `main` or `master` that the reference says not to | valid, low | `SKILL.md:30` and `reading-the-branch.md:16`: the reference is read when "the current branch was itself a candidate", and with no remote there is no base, even beside a local `main` or `master` |
+| F8 | Untracked litter such as `?? .DS_Store` takes one of the three note slots | out of scope, low | Carried to 22 |
+| F9 | `log.showSignature` runs a signing program under step 2's `log` | out of scope, none | Recorded under **Residual risk** |
+
+- **The lead's changes to the plan:**
+  - The rename line for a path-at-a-time read went into the reference, not `SKILL.md`. That is the plan's lean option, and `SKILL.md:41` already points to the old path.
+  - F5's "even one you open or search only for context" became "read every file you open as committed, changed or not". `git show` cannot search, and search over a dirty tree is ticket 22's.
+- **Residual, not fixed** (`fix-plan.md`, **Residual**):
+  - F1: a remote `HEAD` naming `origin/main/x` would be dropped.
+  - F4: when a branch and a tag share the bare name, git prints "refname … is ambiguous" on the first `rev-list`.
+  - F6: a rename git does not detect shows as a delete and an add.
+  - F7: no remote, on `main`, with `master` as the right base, now asks where it could have been described.
+- **Checks on the edited text:**
+  - P1 to P4 pass 8 of 8 (`ai_tmp/green-apply/patterns.py`).
+  - `evals_sha256` is still `78828f74…`. `skill_sha256` is now `abfe006e…`, where `c397d04`'s was `6550509c…`. So the GREEN rerun above is the record of `c397d04`'s text, and the Stage 3 RED pass runs on this one.
+  - The body is 103 lines, 13,604 bytes, about 3,401 tokens.
+  - `just validate-skills` gives only the expected `extension-portability` warning. No word added is in `evals/change-viz/` (`fix-plan.md`, **Teach-to-test**).
+- **Cross-model review:** Codex `gpt-6-astra` reviews this commit next, as AGENTS.md requires, and is recorded below.
