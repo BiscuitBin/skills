@@ -7,6 +7,7 @@ import platform
 import re
 import shutil
 import sys
+from collections import deque
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -548,21 +549,23 @@ def _commands(events: list[dict[str, Any]]) -> list[Command]:
     Claude Code keeps a Bash call with no result.
     """
     commands: list[Command] = []
-    # Where each started command sits in `commands`, until its item.completed arrives.
-    running: dict[str, int] = {}
+    # Where each started command sits in `commands`, until its item.completed arrives,
+    # first started first. An item with no id is paired by its command's text.
+    running: dict[tuple[str, str], deque[int]] = {}
     for event in events:
         item = event.get("item")
         if not isinstance(item, dict) or item.get("type") != "command_execution":
             continue
-        key = str(item.get("id"))
+        item_id = item.get("id")
+        key = ("id", str(item_id)) if item_id else ("command", str(item.get("command", "")))
         if event.get("type") == "item.started":
-            running[key] = len(commands)
+            running.setdefault(key, deque()).append(len(commands))
             commands.append(Command(unwrap(str(item.get("command", ""))), ok=False, output=""))
         elif event.get("type") == "item.completed":
-            if (index := running.pop(key, None)) is None:
-                commands.append(_command(item))
+            if waiting := running.get(key):
+                commands[waiting.popleft()] = _command(item)
             else:
-                commands[index] = _command(item)
+                commands.append(_command(item))
     return commands
 
 

@@ -182,4 +182,18 @@ Landed: `python_not_run`, test first, `871249d`, with its review fixes in the ne
 | Q1 | answer | `env -S 'python3 -c pass'` escapes | invalid | Already a documented limit (a prefix option's value read as the program) |
 | Q8, Q10 | answer | The GitHub paragraph mixes what T1 and T2 test with what is inferred | invalid | The paragraph already says the tests check only the `PATH`, the lookup and the exit status |
 
+#### /code-review at the end of Stage 3 (2026-11-15)
+
+Over `c3a1222..8aac5ae`, at the high level, focused on the harness. Seven findings, each reproduced by the reviewer with a probe; fixes test first, in `ai_tmp/stage3/code-review/apply/`.
+
+| # | Finding | Verdict | Action |
+| --- | --- | --- | --- |
+| 1 | `_shell_string` reads `-o` only as a whole word, so `bash -euo pipefail -c '/usr/bin/python3 x.py'` and `--rcfile f -c` hide the run | valid | Each `o` or `O` in a cluster takes the next word unless it is an option (bash's `-noprofile -c` stays read); `--rcfile` and `--init-file`, and bash's one-dash forms, take a value. Eight rows |
+| 2 | No `case`, `coproc` or `function` among the keywords, so a run in a `case` arm or after `coproc` is unseen, and the Limits do not say so | valid in part | `coproc` added. Reading past a `case` arm's pattern was tried and reverted: the lexer splits a pattern at `\|`, so `case $f in *.py\|*.pyi) echo x;; esac` would false-fail a read-only trial. A bare `python3` in an arm still reaches the wrapper, so the miss is an interpreter by path. `case` arms and a named `coproc` are now Limits; `function` bodies already were |
+| 3 | Codex items with no id share one key, so one command is lost and another doubled | valid (Codex gives ids; defensive) | An item with no id is paired with its start by command text, oldest first. A test with the id missing, empty and null |
+| 4 | `script_ran`'s parser lacks the new reading of prefixes, assignments and keywords | out of scope | Changing it changes cowsay's scoring. Carried to the follow-ups (ticket 25) |
+| 5 | `evaluate()`'s `workspace` parameter shadows the `workspace` module | valid | Renamed `trial_workspace` at every caller |
+| 6 | The bytecode test does not check `sys.pycache_prefix` | valid | The test sets `PYTHONPYCACHEPREFIX` in the parent and asserts the child has neither it nor a prefix; no leak was found (both adapters build the environment from scratch). A Limits line for `-X pycache_prefix` |
+| 7 | The bytecode walk's `list.pop(0)` is quadratic | valid | `deque.popleft()`, same order |
+
 **Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.

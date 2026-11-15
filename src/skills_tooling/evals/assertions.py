@@ -8,6 +8,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -27,10 +28,12 @@ OPERATOR_PIECE = re.compile(r"&&|\|\||;;|\|&|[;&|\n]")
 PREFIXES = {"env", "exec", "command", "time", "nohup"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 # Shell words that can come before a command's program, which python_not_run looks past.
-KEYWORDS = {"if", "then", "elif", "else", "while", "until", "do", "!", "{"}
+KEYWORDS = {"if", "then", "elif", "else", "while", "until", "do", "!", "{", "coproc"}
 # Shells whose -c string python_not_run reads as commands, this many shells deep.
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
 SHELL_DEPTH = 3
+# A shell's long options that take a file; bash reads them after one dash too.
+SHELL_FILE_OPTIONS = {"--rcfile", "--init-file", "-rcfile", "-init-file"}
 # An interpreter's name in text that cannot be split into commands: PYTHON, bare or
 # ending a path, but not part of a longer name such as cpython-314 or .python-version.
 PYTHON_WORD = re.compile(r"(?<![\w.-])python(?:3(?:\.\d+)?)?(?![\w.-])")
@@ -263,10 +266,16 @@ def _shell_string(options: list[str]) -> str | None:
     reads = False
     while options and options[0][:1] in ("-", "+") and options[0] not in ("-", "--"):
         word, options = options[0], options[1:]
-        if word in ("-o", "+o", "-O", "+O"):  # these take an option's name
+        if word in ("-o", "+o", "-O", "+O") or word in SHELL_FILE_OPTIONS:  # these take a value
             options = options[1:]
-        elif not word.startswith(("+", "--")) and "c" in word:
-            reads = True
+        elif not word.startswith("--"):
+            # In a cluster each o or O takes the next word (-euo pipefail), unless that word
+            # is an option, as after bash's one-dash long options (-noprofile -c).
+            for _ in range(sum(flag in "oO" for flag in word[1:])):
+                if options and options[0][:1] not in ("-", "+"):
+                    options = options[1:]
+            if word.startswith("-") and "c" in word:
+                reads = True
     if options[:1] == ["--"]:
         options = options[1:]
     return options[0] if reads and options else None
@@ -323,9 +332,9 @@ def _bytecode(root: Path) -> str | None:
     The walk never follows a link. It fails closed, because scoring runs before the
     runner restores access, so a directory the agent locked could hide bytecode.
     """
-    pending = [root]
+    pending = deque([root])
     while pending:
-        directory = pending.pop(0)
+        directory = pending.popleft()
         try:
             entries = sorted(directory.iterdir())
         except OSError:
@@ -369,7 +378,7 @@ def evaluate(  # noqa: PLR0913 -- one keyword per part of the trial an assertion
     skill: str,
     skill_dir: Path,
     installed: Path | None,
-    workspace: Path | None = None,
+    trial_workspace: Path | None = None,
 ) -> AssertionResult:
     final = trace.final_message
     kind = assertion.type
@@ -380,10 +389,10 @@ def evaluate(  # noqa: PLR0913 -- one keyword per part of the trial an assertion
         return _script_ran(assertion, trace, skill_dir, installed)
     if kind == "python_not_run":
         # Required, so no caller can skip the bytecode check by leaving it out.
-        if workspace is None:
-            msg = "python_not_run needs the trial's workspace"
+        if trial_workspace is None:
+            msg = "python_not_run needs the trial's workspace (trial_workspace)"
             raise ValueError(msg)
-        return _python_not_run(trace, workspace)
+        return _python_not_run(trace, trial_workspace)
     if kind == "final_contains_script_output":
         expected = expected_script_output(skill_dir, assertion.script or "", assertion.args or ())
         passed = contains_lines(final, expected)

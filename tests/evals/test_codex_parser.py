@@ -163,12 +163,50 @@ def test_a_command_that_never_completed_is_kept_as_failed(tmp_path: Path) -> Non
         skill="cowsay",
         skill_dir=SKILL_DIR,
         installed=None,
-        workspace=workspace,
+        trial_workspace=workspace,
     )
     assert (result.passed, result.evidence) == (
         False,
         "a command runs python: /usr/bin/python3 -c pass",
     )
+
+
+def command_event(command: str, extra: dict[str, Any], *, completed: bool) -> dict[str, Any]:
+    """An item.started or item.completed event for a command that prints its name."""
+    return {
+        "type": "item.completed" if completed else "item.started",
+        "item": {
+            **extra,
+            "type": "command_execution",
+            "command": command,
+            "aggregated_output": f"{command}\n" if completed else "",
+            "exit_code": 0 if completed else None,
+            "status": "completed" if completed else "in_progress",
+        },
+    }
+
+
+@pytest.mark.parametrize("extra", [{}, {"id": ""}, {"id": None}], ids=["none", "empty", "null"])
+def test_commands_without_an_id_are_each_kept_once(tmp_path: Path, extra: dict[str, Any]) -> None:
+    # Codex gives each item an id; one without must not take another command's place.
+    def run(*steps: tuple[str, bool]) -> list[Command]:
+        events = [command_event(c, extra, completed=done) for c, done in steps]
+        path = tmp_path / "transcript.jsonl"
+        lines = [{"type": "turn.started"}, *events, {"type": "turn.completed"}]
+        path.write_text("".join(json.dumps(e) + "\n" for e in lines))
+        return parse_stream(raw_run(path, ())).commands
+
+    # Paired by command text, first started first.
+    assert run(("pwd", False), ("ls", False), ("pwd", True)) == [
+        Command("pwd", ok=True, output="pwd\n"),
+        Command("ls", ok=False, output=""),
+    ]
+    assert run(("pwd", False), ("pwd", False), ("pwd", True), ("pwd", True)) == [
+        Command("pwd", ok=True, output="pwd\n"),
+        Command("pwd", ok=True, output="pwd\n"),
+    ]
+    # A completion with no start is kept as it arrives.
+    assert run(("ls", True)) == [Command("ls", ok=True, output="ls\n")]
 
 
 def test_codexs_implicit_event_alone_is_not_a_trigger(tmp_path: Path) -> None:

@@ -335,12 +335,17 @@ def test_a_trials_python_writes_bytecode_as_python_not_run_expects(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, adapter: Adapter
 ) -> None:
     # Bytecode in the workspace is one of python_not_run's witnesses, so neither the
-    # child's environment nor the wrapper may turn it off.
+    # child's environment nor the wrapper may turn it off or write it elsewhere.
     monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(tmp_path / "elsewhere"))
     trial = workspace.create_trial(tmp_path, "run", "case")
     env = dict(adapter.prepare_homes(trial).env)
     assert "PYTHONDONTWRITEBYTECODE" not in env
-    code = "import sys; print(sys.dont_write_bytecode, sys.flags.dont_write_bytecode)"
+    assert "PYTHONPYCACHEPREFIX" not in env
+    code = (
+        "import sys; "
+        "print(sys.dont_write_bytecode, sys.flags.dont_write_bytecode, sys.pycache_prefix)"
+    )
     printed = subprocess.run(
         ["python3", "-c", code],  # noqa: S607 -- the trial's PATH finds its wrapper
         cwd=trial.workspace,
@@ -349,7 +354,7 @@ def test_a_trials_python_writes_bytecode_as_python_not_run_expects(
         text=True,
         check=True,
     )
-    assert printed.stdout == "False 0\n"
+    assert printed.stdout == "False 0 None\n"
     assert " -B" not in (trial.bin / "python3").read_text()
 
 

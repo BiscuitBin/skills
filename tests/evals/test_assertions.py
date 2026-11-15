@@ -320,7 +320,7 @@ def not_run(observed: Trace, root: Path) -> AssertionResult:
         skill="cowsay",
         skill_dir=SKILL_DIR,
         installed=INSTALLED,
-        workspace=root,
+        trial_workspace=root,
     )
 
 
@@ -330,7 +330,7 @@ def quiet(*commands: str) -> Trace:
 
 
 def test_python_not_run_needs_the_trials_workspace() -> None:
-    with pytest.raises(ValueError, match="workspace"):
+    with pytest.raises(ValueError, match="trial_workspace"):
         evaluate(NOT_RUN, quiet(), skill="cowsay", skill_dir=SKILL_DIR, installed=INSTALLED)
 
 
@@ -408,6 +408,7 @@ def test_python_not_run_fails_on_a_command_that_runs_an_interpreter(
         "{ /usr/bin/python3 x.py; }",
         "! /usr/bin/python3 x.py",
         "if ! env -i /usr/bin/python3 x.py; then :; fi",
+        "coproc /usr/bin/python3 x.py",
     ],
 )
 def test_python_not_run_finds_an_interpreter_after_a_keyword_or_in_a_group(
@@ -427,6 +428,17 @@ def test_python_not_run_finds_an_interpreter_after_a_keyword_or_in_a_group(
         "ksh -c 'true; /usr/bin/python3 x.py'",
         "bash -ce '/usr/bin/python3 x.py'",
         "bash -o pipefail -c '/usr/bin/python3 x.py | cat'",
+        # An o or O in a cluster takes the next word, as bash reads it.
+        "bash -euo pipefail -c '/usr/bin/python3 x.py'",
+        "bash -eo pipefail -c '/usr/bin/python3 x.py'",
+        "bash +eo posix -c '/usr/bin/python3 x.py'",
+        # Long options that take a file, after two dashes or, in bash, one.
+        "bash --rcfile /dev/null -c '/usr/bin/python3 x.py'",
+        "bash --init-file /dev/null -c '/usr/bin/python3 x.py'",
+        "bash -rcfile /dev/null -c '/usr/bin/python3 x.py'",
+        # bash's one-dash long options are not clusters: their o takes no -c.
+        "bash -noprofile -c '/usr/bin/python3 x.py'",
+        "bash -login -c '/usr/bin/python3 x.py'",
         # Codex's own wrapper, had the adapter not removed it.
         '/bin/zsh -c "PATH=/usr/bin python3 x.py"',
         "sh -c \"bash -c '/usr/bin/python3 x.py'\"",
@@ -499,6 +511,10 @@ def test_python_not_run_fails_closed_on_a_command_the_lexer_cannot_split(
         "git --no-optional-locks diff main...HEAD -- \\\n  fingerprint.py README.md",
         "grep -n python3 README.md",
         "true # python3 x.py",
+        # A shell's -c string past an option's value.
+        "bash -euo pipefail -c 'git status'",
+        "bash --rcfile /dev/null -c 'git status'",
+        "case $x in a) git status;; esac",
         # A lookup runs nothing.
         "command -v python3",
         "command -V python3",
