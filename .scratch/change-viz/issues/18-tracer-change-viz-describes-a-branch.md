@@ -1601,6 +1601,7 @@ Asked after the hand read, with the lead's recommendation first. The maintainer 
 What follows from them:
 
 - **E7 stays an open gap on Codex.** The `c397d04` text is the text that goes into Stage 3. `CONTRIBUTING.md` §3 records a benchmark only once the skill passes on each agent, so ticket 25's `just eval-record` waits until E7 passes on Codex or the maintainer decides how to record it. Ticket 25's **What is known** says so.
+  - Since D5 (2026-11-16), the gap is [ticket 29](29-codex-says-which-way-a-count-moves.md), and the release benchmark records E7 as it is.
 - **Running code stays unaddressed by the text.** Ticket 21 (evidence) and ticket 22 (local changes) are where it comes up next: 21 labels what was run against what was read, and 22 reads a working tree that a test run would change.
 - **No ticket 18 box changes,** by the lead's decision of 2026-11-12 (`:1118`).
 

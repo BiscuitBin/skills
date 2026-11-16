@@ -36,27 +36,36 @@ Inferred, not tried:
 - [ ] It reads the pull request's title, base, head, changed files, diff and checks with `gh`, and describes the diff against the pull request's own base. The scope it reports names the pull request and that base.
 - [ ] Check status appears as evidence, marked as observed in CI, with failing and pending checks named. If ticket 21 has landed, it uses that ticket's label.
 - [ ] For a pull request that is not checked out, the skill says how much of the surrounding code it could read. How it reads that code without changing the working tree is settled at the design checkpoint.
+  - Changed by D6 (2026-11-16): how it reads the code is now settled, since a pull request is read only with `gh` GET calls (`gh pr view`, `gh pr diff`, `gh pr checks`, `gh api --method GET`), code around the change is read from the pull request's own refs, never by checking it out, and code from a source that is not checked out is never run.
 - [ ] It never writes to GitHub or to the repository: no `gh pr edit`, `comment`, `review`, `merge`, `close` or `checkout`, and no `gh api` call with a writing method. The skill says why, so an agent does not reach for a write to "finish the job".
 - [ ] Without `gh`, or with `gh` and no login, the skill says which of the two it met, in one line, and offers the current branch instead. It does not guess at the pull request's contents.
 - [ ] The fallback is the eval case: a request naming a pull request, on a fixture branch. It asserts by pattern that the answer names `gh` and offers the branch.
   - It passes where `gh` is missing: a local run on macOS.
   - It passes where `gh` is present but not logged in: a run on a Linux host with `gh` in `/usr/bin`, which may mean a dispatch of the live-eval job.
+    - Changed by D5 (2026-11-16): this run moves to [ticket 27](27-gh-without-a-login-on-a-linux-host.md), which does not block the release.
   - If Codex cannot be scored on one of these because the failed `gh` call marks the trial an `infra_error`, the completion notes say so with the run that showed it.
 - [ ] The completion notes record what the baseline arm did on the fallback case. It may well pass: an agent without the skill, given the same request, is likely to report that `gh` is unavailable and turn to the branch. The case is then a guard against the skill guessing at a pull request it could not read, not a measured gap, and the notes say so. This ticket's real evidence is the live path below.
+  - Changed by D5 (2026-11-16): that evidence moves with the live path to [ticket 26](26-pull-requests-read-live-with-a-read-only-token.md).
 - [ ] The live path is verified by hand on the four pull requests above and recorded here: the command, the agent, and where each output is saved under `ai_tmp/`.
+  - Changed by D5 (2026-11-16): the live path moves to [ticket 26](26-pull-requests-read-live-with-a-read-only-token.md), which does not block the release.
 - [ ] "Never writes" is checked by hand: every `gh` and `git` command in those four transcripts is listed here, and none writes. No eval assertion can show this, and the notes say so.
+  - Changed by D5 (2026-11-16): this check moves with the live path to [ticket 26](26-pull-requests-read-live-with-a-read-only-token.md).
 - [ ] The pull request's own base is shown working on a pull request whose base is not the default branch, if one of the four qualifies or another public one is at hand. Otherwise the notes say it was not shown.
+  - Changed by D5 (2026-11-16): this moves with the live path to [ticket 26](26-pull-requests-read-live-with-a-read-only-token.md).
 
 ### Every `change-viz` ticket
 
 These repeat in tickets 18 to 24 so that each can be read alone.
 
 - [ ] Eval cases are written and baselined before the skill text changes (RED, then GREEN), and each rubric is frozen before its live run (`CONTRIBUTING.md` §2 and §3). The baseline and skill-arm run ids on Claude Code and Codex are recorded here.
+  - Changed by D1 (2026-11-16): RED is folded into the final GREEN `--baseline` run, whose baseline arm shows the cases discriminate.
 - [ ] Live evals are handed to the maintainer as absolute-path `just eval` commands. The agent reads `eval-results/` and never holds the token.
+  - Changed by D2 (2026-11-16): the agent may now run Codex live evals with `--no-grader` on the project's Codex login and read the outputs against the expectations itself; Claude Code runs and the graded final runs stay with the maintainer.
 - [ ] Fixtures are a neutral project: no `skill` or `skills` wording anywhere in them, and none of Codex's sandbox-denial keywords (`operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock`, `failed to write file`) in output a failing command could print.
 - [ ] Every "does not" outcome names how it is checked. A blinded expectation cannot be negative, so the check is an `output_matches` pattern, a transcript read by hand, or a limit stated in the completion notes.
 - [ ] The skill explains why, not just what, and `SKILL.md` stays well under the validator's 500-line limit, with detail in `references/`.
 - [ ] The skill's `plugin.json` version is higher than the one on `main` (ticket 18 keeps the scaffold's `0.1.0`), `just format` has run, the changes are committed, and then `just check` passes.
+  - Changed by D4 (2026-11-16): the version is set once, to `0.2.0`, after tickets 19 to 24 have all landed, so this ticket's own commit leaves it unchanged.
 
 ## Out of scope
 
@@ -129,6 +138,7 @@ From design §5.
   - **Residual:** the runner does not scrub a GitHub token from transcripts.
   - After each RED and GREEN run on both agents, `rg -l -e '\bgh[opsur]_[A-Za-z0-9]{20,}' -e '\bgithub_pat_[A-Za-z0-9_]{20,}'` runs over that run's `eval-results/` and `.eval-workspaces/` folders. A hit means the token is revoked at once, and only file names are recorded.
 - **Open: the `gh` login state during the passes (row 5c).** For both agents' RED and GREEN passes, the keychain `gh` login is either logged out or a read-only fine-grained token. The maintainer chooses before RED, and this ticket records which.
+  - Settled on 2026-11-16: see **Row 5c** under **Stage 4 decisions (2026-11-16)** below.
 - **Open: pushing.** T1 and T2's Ubuntu rows wait for a push. If that comes after RED, these notes record three things: that `:69`'s Linux half was met after RED, the CI run that met it, and why RED did not depend on it.
 - **Owed before Hand-off 4's live path:** a cross-model review of design §2, §3 and question 8's answer (row 1a). Ticket 21 also asks the live path for one run request on a pull request that is not checked out.
 - **Follow-up:** credential isolation in the harness, by sandboxing Claude Code's Bash or scrubbing tokens in the runner (row 5d).
@@ -188,3 +198,21 @@ Landed: T1 and T2 and their docs, `b4733c7`. They pass locally on macOS; the Ubu
 The same implementation review covered `b4733c7`; its one point on the GitHub paragraph was triaged invalid (ticket 21's notes hold the record).
 
 **Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.
+
+### Stage 4 decisions (2026-11-16)
+
+From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**. The bare `:N` cites in these notes, this section's included, are to this file at `741510e`; the sub-bullets added for these decisions have moved the lines since.
+
+- **D1:** there is no separate RED run. The baseline-arm predictions under **RED predictions** are read against the final GREEN `--baseline` run's baseline arm. `c3a1222`'s skill text is never run, so the predictions for its skill arm stay unmeasured.
+- **D2:** the agent iterates on this ticket's cases with Codex `--no-grader` runs, and reads each expectation by hand. Claude Code runs and the graded final runs stay with the maintainer.
+- **D4:** the version is set once, to `0.2.0`, for the whole pull request.
+- **D5:** the live path (`:46` to `:48`) moves to [ticket 26](26-pull-requests-read-live-with-a-read-only-token.md), and the Linux run (`:43`) to [ticket 27](27-gh-without-a-login-on-a-linux-host.md). Neither blocks the release.
+  - Until ticket 26, no run exercises the pull request read path (**What no trial exercises**).
+  - Row 1a's review of design §2, §3 and question 8's answer is still owed, no later than ticket 26's runs.
+- **D6:** question 8 is adopted, which settles the `gh` allowlist that **Decisions that bind this ticket** left to Stage 4. A pull request is read only with `gh` GET calls: `gh pr view`, `gh pr diff`, `gh pr checks` and `gh api --method GET`. Code around the change is read from the pull request's own refs, never by checking it out. Code from a source that is not checked out is never run.
+- **D7:** pushing is allowed, which settles the push half of the **Still open** row. `741510e` was pushed on 2026-11-16, before any live run, and CI run 43966207277, whose `just check` holds T1 and T2, passed on `ubuntu-24.04` and `macos-15`. So **Open: pushing** is closed.
+- **Row 5c, the `gh` login during the passes (plan, 2026-11-16):**
+  - During the agent's Codex `--no-grader` iteration passes, the host `gh` stays logged in as the maintainer, because the agent does not log the maintainer out.
+  - A Codex trial cannot reach that login as built (`ai_tmp/stage3/prefreeze/gh.md`). The `HOME`-repointing risk recorded there is Claude Code's unsandboxed Bash, which these passes never run.
+  - Each Codex run's results and workspaces get the token scan, by file name (**Residual risk**).
+  - For the graded final runs of both agents, the closing-session runbook has the maintainer run `gh auth logout` first, and log in again after.

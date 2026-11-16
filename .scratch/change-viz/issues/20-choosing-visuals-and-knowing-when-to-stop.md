@@ -59,11 +59,14 @@ As of 2026-11-10.
 These repeat in tickets 18 to 24 so that each can be read alone.
 
 - [ ] Eval cases are written and baselined before the skill text changes (RED, then GREEN), and each rubric is frozen before its live run (`CONTRIBUTING.md` §2 and §3). The baseline and skill-arm run ids on Claude Code and Codex are recorded here.
+  - Changed by D1 (2026-11-16): RED is folded into the final GREEN `--baseline` run, whose baseline arm shows the cases discriminate.
 - [ ] Live evals are handed to the maintainer as absolute-path `just eval` commands. The agent reads `eval-results/` and never holds the token.
+  - Changed by D2 (2026-11-16): the agent may now run Codex live evals with `--no-grader` on the project's Codex login and read the outputs against the expectations itself; Claude Code runs and the graded final runs stay with the maintainer.
 - [ ] Fixtures are a neutral project: no `skill` or `skills` wording anywhere in them, and none of Codex's sandbox-denial keywords (`operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock`, `failed to write file`) in output a failing command could print.
 - [ ] Every "does not" outcome names how it is checked. A blinded expectation cannot be negative, so the check is an `output_matches` pattern, a transcript read by hand, or a limit stated in the completion notes.
 - [ ] The skill explains why, not just what, and `SKILL.md` stays well under the validator's 500-line limit, with detail in `references/`.
 - [ ] The skill's `plugin.json` version is higher than the one on `main` (ticket 18 keeps the scaffold's `0.1.0`), `just format` has run, the changes are committed, and then `just check` passes.
+  - Changed by D4 (2026-11-16): the version is set once, to `0.2.0`, after tickets 19 to 24 have all landed, so this ticket's own commit leaves it unchanged.
 
 ## Out of scope
 
@@ -129,6 +132,7 @@ From design §6. The base rates come from 2 Claude Code and 4 Codex messages on 
 
 - **Guards.** The split may pass on Claude Code, and the holds may pass on Codex. A case that passes at RED is recorded as a guard for that agent, and no case changes after RED.
 - **GREEN.** This design asks Hand-off 4 for `--trials 3` at GREEN.
+  - Changed by the approved plan (Phase 4 step 5, 2026-11-16): the final runs use `--baseline --trials 1`, so n = 1 per case and arm is recorded as a limit, and three-trial reruns are left to a follow-up.
 
 #### Residual risk and what is carried
 
@@ -189,3 +193,12 @@ Severity is Codex's, then the triage's. A dash means none was given.
 3.14.8 was not run.
 
 **Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.
+
+### Stage 4 decisions (2026-11-16)
+
+From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**.
+
+- **D1:** there is no separate RED run. The baseline-arm predictions under **RED predictions** are read against the final GREEN `--baseline` run's baseline arm. `c3a1222`'s skill text is never run, so the predictions for its skill arm, the table included, stay unmeasured.
+- **D2:** the agent iterates on this ticket's cases with Codex `--no-grader` runs, and reads each expectation by hand. Claude Code runs and the graded final runs stay with the maintainer.
+- **D4:** the version is set once, to `0.2.0`, for the whole pull request.
+- **Trials (plan Phase 4 step 5, approved by the maintainer on 2026-11-16):** the final runs use `--baseline --trials 1`, not the `--trials 3` that **RED predictions** asks for at GREEN. So n = 1 per case and arm is recorded as a limit, and three-trial reruns are left to a follow-up.

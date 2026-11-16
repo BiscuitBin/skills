@@ -44,6 +44,7 @@ Recalled by the planning agent, not checked. Each line is **to verify** against 
 ## Acceptance criteria
 
 - [ ] Every line of the "to verify" list above is checked against GitHub's documentation or a real render, and marked confirmed, corrected or dropped, with the source. The list in this ticket is updated to match.
+  - Changed by D3 (2026-11-16): for a Mermaid line, a render by the official Mermaid CLI pinned at Mermaid 12.2.0 stands in for a GitHub render, and the GitHub render moves to [ticket 28](28-render-proof-in-a-github-post.md).
 - [ ] The skill bundles a reference under `references/` holding only verified rules, each with the reason and a right and a wrong example. `SKILL.md` says when to read it.
 - [ ] The rules cover what the skill actually emits: each Mermaid diagram type it uses, tables, `diff` and `text` fences, the risk line, and the length limit.
 - [ ] The design checkpoint decides between rules only, and rules plus a small bundled checker: a standard-library Python script that reads a draft and reports the constructs known to break. If the checker is built:
@@ -54,22 +55,29 @@ Recalled by the planning agent, not checked. Each line is **to verify** against 
   - `compatibility` says the skill needs Python 3.
 - [ ] If the checker is not built, an eval case uses a fixture that tempts a known break, such as function names with parentheses in a flow diagram, and a pattern rejects the broken form.
 - [ ] Rendering is shown for real. Recorded outputs of the skill, at least one per diagram type it uses plus a table and the risk line if ticket 19 has landed, are posted in one GitHub comment or pull request description, and every block renders. The link, and a note of anything that failed and was fixed, are recorded here.
+  - Changed by D5 (2026-11-16): the post moves to [ticket 28](28-render-proof-in-a-github-post.md), which does not block the release.
 - [ ] The place and the exact text of that post are approved by the maintainer first, or the maintainer posts it.
+  - Changed by D5 (2026-11-16): this moves with the post to [ticket 28](28-render-proof-in-a-github-post.md).
 
 ### Every `change-viz` ticket
 
 These repeat in tickets 18 to 24 so that each can be read alone.
 
 - [ ] Eval cases are written and baselined before the skill text changes (RED, then GREEN), and each rubric is frozen before its live run (`CONTRIBUTING.md` §2 and §3). The baseline and skill-arm run ids on Claude Code and Codex are recorded here.
+  - Changed by D1 (2026-11-16): RED is folded into the final GREEN `--baseline` run, whose baseline arm shows the cases discriminate.
 - [ ] Live evals are handed to the maintainer as absolute-path `just eval` commands. The agent reads `eval-results/` and never holds the token.
+  - Changed by D2 (2026-11-16): the agent may now run Codex live evals with `--no-grader` on the project's Codex login and read the outputs against the expectations itself; Claude Code runs and the graded final runs stay with the maintainer.
 - [ ] Fixtures are a neutral project: no `skill` or `skills` wording anywhere in them, and none of Codex's sandbox-denial keywords (`operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock`, `failed to write file`) in output a failing command could print.
 - [ ] Every "does not" outcome names how it is checked. A blinded expectation cannot be negative, so the check is an `output_matches` pattern, a transcript read by hand, or a limit stated in the completion notes.
 - [ ] The skill explains why, not just what, and `SKILL.md` stays well under the validator's 500-line limit, with detail in `references/`.
 - [ ] The skill's `plugin.json` version is higher than the one on `main` (ticket 18 keeps the scaffold's `0.1.0`), `just format` has run, the changes are committed, and then `just check` passes.
+  - Changed by D4 (2026-11-16): the version is set once, to `0.2.0`, after tickets 19 to 24 have all landed, so this ticket's own commit leaves it unchanged.
 
 ## Out of scope
 
 Rendering anywhere but GitHub pull request descriptions and comments, HTML and image output, a full Mermaid parser, and a rendering check in `just check` or CI.
+
+- Changed by D3 (2026-11-16): the repository's Mermaid check, `just check-mermaid`, may run in `just check` and CI; it is a dev tool of this repository, not a checker bundled with the skill.
 
 ## Review checkpoints
 
@@ -190,3 +198,16 @@ After the fixes:
 - **Under 3.9.6,** the fixture rebuild is byte-equal, and `doc_check.py` gives 0 mismatches.
 
 **Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.
+
+### Stage 4 decisions (2026-11-16)
+
+From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**. The bare `:N` cites in these notes, this section's included, are to this file at `741510e`; the sub-bullets added for these decisions have moved the lines since.
+
+- **D1:** there is no separate RED run. The baseline-arm predictions under **RED predictions** are read against the final GREEN `--baseline` run's baseline arm. `c3a1222`'s skill text is never run, so the predictions for its skill arm stay unmeasured.
+- **D2:** the agent iterates on this ticket's cases with Codex `--no-grader` runs, and reads each expectation by hand. Claude Code runs and the graded final runs stay with the maintainer.
+- **D3:** there is no GitHub Preview. Mermaid validity is checked offline with the official Mermaid CLI, `@mermaid-js/mermaid-cli`, pinned at Mermaid 12.2.0. That is the version GitHub's viewer bundle hard-codes, in one snapshot taken on 2026-11-10. The check is a repository dev tool, `scripts/check-mermaid.mjs`, behind `just check-mermaid` (plan Phase 1).
+  - It is a repository check, not a checker bundled with the skill, so row 7 ("rules only") still holds for the skill.
+  - The 13-block probe the Preview step was for (the **Pending** row above; `decisions.md`, **Ticket 24, question 3**) now runs through that tool (plan Phase 1, use 1). If a block contradicts a frozen PF2, PF3 or PS2 pattern, the pattern is fixed and re-frozen before any Codex iteration, with a new `evals_sha256`. C4's remedy (**Residual risk**) assumed a RED run, which D1 removes.
+  - Its limit: GitHub does not publish its Mermaid version, so the check is against the pinned one.
+- **D4:** the version is set once, to `0.2.0`, for the whole pull request.
+- **D5:** the render proof (`:56`) and its approval (`:57`) move to [ticket 28](28-render-proof-in-a-github-post.md), which does not block the release. The state diagram the proof needs (**Residual risk**, **At Stage 4**) goes with it.

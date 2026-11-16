@@ -42,6 +42,7 @@ As of 2026-11-10.
 - [ ] When the request asks for it, the skill runs what was asked (the project's checks, or the changed command), quotes the real output, trimmed but not reworded, and labels it as observed in this run, with the command.
 - [ ] A command that fails when run is reported as failed, with its output. The description is still written.
 - [ ] On a change source that is not checked out, the skill stays read-only even when asked, and says so. This is the implementing agent's reading of the options the maintainer was shown; confirm it at the design checkpoint.
+  - Changed by D6 (2026-11-16): the maintainer confirmed this reading, so the design checkpoint no longer settles it; code from a source that is not checked out is never run, even when asked.
 - [ ] Eval cases, one per mode:
   - **Read-only:** a fixture whose change alters a command's output. The case asserts the label by pattern, and the description marks the outcome as read from the code.
   - **On request:** the same kind of fixture, with a request that asks for the command to be run. The case asserts the fixture's real output, which is something a reader could not produce from the code alone, such as a computed digest.
@@ -53,11 +54,14 @@ As of 2026-11-10.
 These repeat in tickets 18 to 24 so that each can be read alone.
 
 - [ ] Eval cases are written and baselined before the skill text changes (RED, then GREEN), and each rubric is frozen before its live run (`CONTRIBUTING.md` §2 and §3). The baseline and skill-arm run ids on Claude Code and Codex are recorded here.
+  - Changed by D1 (2026-11-16): RED is folded into the final GREEN `--baseline` run, whose baseline arm shows the cases discriminate.
 - [ ] Live evals are handed to the maintainer as absolute-path `just eval` commands. The agent reads `eval-results/` and never holds the token.
+  - Changed by D2 (2026-11-16): the agent may now run Codex live evals with `--no-grader` on the project's Codex login and read the outputs against the expectations itself; Claude Code runs and the graded final runs stay with the maintainer.
 - [ ] Fixtures are a neutral project: no `skill` or `skills` wording anywhere in them, and none of Codex's sandbox-denial keywords (`operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock`, `failed to write file`) in output a failing command could print.
 - [ ] Every "does not" outcome names how it is checked. A blinded expectation cannot be negative, so the check is an `output_matches` pattern, a transcript read by hand, or a limit stated in the completion notes.
 - [ ] The skill explains why, not just what, and `SKILL.md` stays well under the validator's 500-line limit, with detail in `references/`.
 - [ ] The skill's `plugin.json` version is higher than the one on `main` (ticket 18 keeps the scaffold's `0.1.0`), `just format` has run, the changes are committed, and then `just check` passes.
+  - Changed by D4 (2026-11-16): the version is set once, to `0.2.0`, after tickets 19 to 24 have all landed, so this ticket's own commit leaves it unchanged.
 
 ## Out of scope
 
@@ -215,3 +219,14 @@ The case-context reading in the commit that applies these has had no cross-model
 Before RED, `python_not_run` was replayed over all 33 recorded change-viz trials (`ai_tmp/stage3/replay/report.md`). Its command check agrees with **Figures** on every trial: Claude Code ran Python in 0 of 12, and Codex in 7 of 13 without the skill text and 2 of 8 skill arms. Every other trial that names a `.py` file only reads it. Two of the nine runs deleted their own bytecode, so the bytecode witness alone would have missed them, but the command check caught all nine. No recorded command uses `case`, so the case-context reading is still exercised only by its tests. In fake-API trials, the pinned Codex 0.163.0 logged no `python3` call of its own.
 
 **Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.
+
+### Stage 4 decisions (2026-11-16)
+
+From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**. The bare `:N` cites in these notes, this section's included, are to this file at `741510e`; the sub-bullets added for these decisions have moved the lines since.
+
+- **D1:** there is no separate RED run. The baseline-arm predictions under **RED predictions** are read against the final GREEN `--baseline` run's baseline arm. `c3a1222`'s skill text is never run, so the predictions for its skill arm stay unmeasured.
+- **D2:** the agent iterates on this ticket's cases with Codex `--no-grader` runs, and reads each expectation by hand. Claude Code runs and the graded final runs stay with the maintainer.
+- **D4:** the version is set once, to `0.2.0`, for the whole pull request.
+- **D6:** question 8 is adopted. A pull request is read only with `gh` GET calls: `gh pr view`, `gh pr diff`, `gh pr checks` and `gh api --method GET`. Code around the change is read from the pull request's own refs, never by checking it out. Code from a source that is not checked out is never run, even when asked.
+  - This confirms `:44`, which the `decisions.md:3` bullet under **Decisions that bind this ticket** left unconfirmed.
+- **D5, through ticket 23:** the one run request on a pull request that is not checked out (**Residual risk**, the not-checked-out rule) moves with 23's live path to [ticket 26](26-pull-requests-read-live-with-a-read-only-token.md). Until then, no live run checks the rule.

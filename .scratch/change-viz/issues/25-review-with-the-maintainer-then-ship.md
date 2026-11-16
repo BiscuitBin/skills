@@ -24,6 +24,7 @@ As of 2026-11-10.
 - **The skill is by-name-only**, so skill-creator's description optimisation does not apply.
 - **Benchmarks:** `just eval-record` writes one iteration from one run per agent, and both runs must share the same `skill_sha256` and `evals_sha256` (ADR 0014).
 - **Codex E7 is an open gap** (ticket 18, **GREEN rerun on `c397d04`** and **The maintainer's decisions (2026-11-14)**). E7 passed in 1 of 3 graded Codex trials, and 0 of 3 by hand: the notes name the new counting rule, but not that the printed counts can be lower. Under `CONTRIBUTING.md` §3, `just eval-record` waits until E7 passes on Codex, or until the maintainer decides how to record it.
+  - Changed by D5 (2026-11-16): the maintainer has decided how to record it, with Codex's E7 shown as it is, and the gap is [ticket 29](29-codex-says-which-way-a-count-moves.md).
 - **`script_ran`'s command parser lags `python_not_run`'s** (ticket 21, **/code-review at the end of Stage 3**, finding 4). It still misreads `/usr/bin/env python3 scripts/x.py`, `PATH=/usr/bin:/bin python3 scripts/x.py` and `if python3 scripts/x.py; then …`, so it can falsely fail a correct run of a shipped script. Sharing `_program` and the whole-word lexer would fix it, but changes cowsay's scoring, so it belongs in `.scratch/change-viz/follow-ups.md`.
 
 ## Acceptance criteria
@@ -31,14 +32,17 @@ As of 2026-11-10.
 - [ ] The skill is run on the changes behind each of the four pull requests, and on each fixture the suite uses:
   - knarr and rove are cloned under `ai_tmp/`, and the two skills pull requests are read from a clone there too, so nothing here changes this checkout.
   - Each is run as a branch against its base and, where `gh` works, as a pull request.
+    - Changed by D5 (2026-11-16): the pull request runs move to [ticket 26](26-pull-requests-read-live-with-a-read-only-token.md), so here each change is run only as a branch against its base, with `gh` stubbed.
   - The runs use the project's pinned agent CLIs through `just run`, with the skill installed into the clone as a user would install it. Nothing is written to the maintainer's own agent homes.
   - Each output is saved under `ai_tmp/`, beside the pull request's original description.
 - [ ] The maintainer reads each output beside the original and gives feedback. Their words are recorded here, by output.
 - [ ] Each piece of feedback is applied by finding the general reason behind it and changing what the skill explains. No rule is added that only makes sense for one of the four. The notes say, for each, what changed and why it generalises, or why it was not applied.
 - [ ] After the changes, the outputs are regenerated and the maintainer confirms the result, or a second round is recorded.
 - [ ] The full suite passes on Claude Code and Codex with `--baseline`, and the two runs are recorded as a benchmark iteration with `just eval-record`. The file it writes is committed, and `just eval-report change-viz` builds.
+  - Changed by D5 (2026-11-16): E7 on Codex need not pass, since the benchmark records it as it is and the gap is [ticket 29](29-codex-says-which-way-a-count-moves.md).
 - [ ] A cross-model review covers the whole skill as a user would install it: `SKILL.md`, every reference, any script, the eval suite and the fixtures. It is not limited to this ticket's diff.
 - [ ] The version is set for release, by semver, and agreed with the maintainer: whether this is `1.0.0` or stays below it.
+  - Changed by D4 (2026-11-16): the maintainer chose `0.2.0`, one bump for the whole pull request (`CONTRIBUTING.md:89-95`).
 - [ ] Docs are current: `README.md`, `docs/reference/distribution.md`, and anything the earlier tickets changed in `docs/reference/evals.md`, `GLOSSARY.md` and the ADRs. Each term the tickets added is used the same way everywhere.
 - [ ] Follow-ups are written to `.scratch/change-viz/follow-ups.md`, including:
   - richer output formats (HTML, artifacts), as this skill's option or as a separate skill that composes with it
@@ -55,4 +59,21 @@ Building either follow-up, new behaviours the maintainer's feedback asks for tha
 Use the `cross-model-review` dev skill.
 
 - **Maintainer checkpoint:** the review of the outputs, above. Do not record the benchmark iteration or start the whole-skill review until the maintainer has confirmed the regenerated outputs.
+  - Changed by D8 (2026-11-16): the whole-skill review runs before the maintainer's session, on the full Stage 4 text, and only the feedback's changes are reviewed in the session; the benchmark still waits for the maintainer's confirmation.
 - **Implementation checkpoint:** before marking done, review the whole skill against the acceptance criteria of tickets 18 to 24 as well as this one. Pay particular attention to instructions added for one of the four pull requests, to rules that contradict each other across references, and to anything the skill tells an agent to do without saying why.
+
+## Completion notes
+
+### Stage 4 decisions (2026-11-16)
+
+From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**. The plan is `ai_tmp/stage4/plan.md`.
+
+- **D2:** the agent makes the Codex outputs on the four changes itself, on the project's Codex login, and runs Codex live evals with `--no-grader`. The maintainer runs Claude Code and the graded final runs, in one closing session.
+- **D4:** ship at `0.2.0`, one bump for the whole pull request (`CONTRIBUTING.md:89-95`).
+- **D5:** these become follow-up tickets, not release blockers:
+  - [26](26-pull-requests-read-live-with-a-read-only-token.md): ticket 23's live `gh` path on the four pull requests, with a read-only token;
+  - [27](27-gh-without-a-login-on-a-linux-host.md): ticket 23's Linux "`gh` present, not logged in" case, through the `live-evals` dispatch;
+  - [28](28-render-proof-in-a-github-post.md): ticket 24's render proof, as a GitHub post;
+  - [29](29-codex-says-which-way-a-count-moves.md): the Codex E7 gap. The benchmark is recorded with Codex's E7 shown as it is.
+- **D7:** the agent may push `change-viz`, edit PR #19's title and description, and take it out of draft at the end. The merge stays with the maintainer (**Out of scope**).
+- **D8:** the whole-skill cross-model review runs before the session, on the full Stage 4 text. Only the feedback's changes are reviewed in the session. This relaxes the maintainer checkpoint's ordering for the review, not for the benchmark.
