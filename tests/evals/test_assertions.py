@@ -381,6 +381,8 @@ def test_python_not_run_fails_on_any_call_the_wrapper_logged(tmp_path: Path) -> 
         "/usr/bin/python3</dev/null",
         # An escaped backslash ends the line: it does not continue it.
         "echo \\\\\n/usr/bin/python3 -c pass",
+        # A ;; outside a case, as in a here-doc body, starts no case pattern.
+        "cat <<'EOF'\na;;\nEOF\n/usr/bin/python3 x.py",
     ],
 )
 @pytest.mark.parametrize("ok", [True, False])
@@ -409,6 +411,11 @@ def test_python_not_run_fails_on_a_command_that_runs_an_interpreter(
         "! /usr/bin/python3 x.py",
         "if ! env -i /usr/bin/python3 x.py; then :; fi",
         "coproc /usr/bin/python3 x.py",
+        # A named coprocess: NAME is the coprocess's, and its group runs.
+        "coproc NAME { /usr/bin/python3 x.py; }",
+        # A case arm's command, past its pattern, in a later arm too.
+        "case $x in b) :;; a) /usr/bin/python3 x.py;; esac",
+        "case $x in\n  b) :\n    ;;\n  a) /usr/bin/python3 x.py\n    ;;\nesac",
     ],
 )
 def test_python_not_run_finds_an_interpreter_after_a_keyword_or_in_a_group(
@@ -432,6 +439,9 @@ def test_python_not_run_finds_an_interpreter_after_a_keyword_or_in_a_group(
         "bash -euo pipefail -c '/usr/bin/python3 x.py'",
         "bash -eo pipefail -c '/usr/bin/python3 x.py'",
         "bash +eo posix -c '/usr/bin/python3 x.py'",
+        # In zsh and ksh an o with letters after it names the option itself and takes no word.
+        "zsh -c -oerrexit '/usr/bin/python3 x.py'",
+        "ksh -c -eopipefail '/usr/bin/python3 x.py'",
         # Long options that take a file, after two dashes or, in bash, one.
         "bash --rcfile /dev/null -c '/usr/bin/python3 x.py'",
         "bash --init-file /dev/null -c '/usr/bin/python3 x.py'",
@@ -514,7 +524,36 @@ def test_python_not_run_fails_closed_on_a_command_the_lexer_cannot_split(
         # A shell's -c string past an option's value.
         "bash -euo pipefail -c 'git status'",
         "bash --rcfile /dev/null -c 'git status'",
+        "zsh -c -oerrexit 'git status' x.py",
+        # A coprocess named like an interpreter runs only its group.
+        "coproc python3 { cat /dev/null; }",
         "case $x in a) git status;; esac",
+        # A case pattern is not a command, though the lexer splits its alternatives at |.
+        (
+            'git diff --name-only main | while read -r f; do case "$f" in'
+            ' *.md|*.py|*.txt) git log -1 --format=%h -- "$f";; esac; done'
+        ),
+        (
+            "for f in $(git diff --name-only main...HEAD); do\n"
+            '  case "$f" in\n'
+            '    *.py|*.pyi) echo "code: $f" ;;\n'
+            '    *.md) echo "doc: $f" ;;\n'
+            "  esac\n"
+            "done"
+        ),
+        # A ;; on a line of its own ends the arm too.
+        (
+            "for f in $(git diff --name-only main...HEAD); do\n"
+            '  case "$f" in\n'
+            "    *.md)\n"
+            '      echo "doc: $f"\n'
+            "      ;;\n"
+            "    *.py|*.pyi)\n"
+            '      echo "code: $f"\n'
+            "      ;;\n"
+            "  esac\n"
+            "done"
+        ),
         # A lookup runs nothing.
         "command -v python3",
         "command -V python3",
@@ -526,6 +565,8 @@ def test_python_not_run_fails_closed_on_a_command_the_lexer_cannot_split(
         "cat>x.py <<'EOF'\nprint(1)\nEOF",
         # Commands the lexer cannot split, with no interpreter word: longer names are not one.
         "cat <<EOF\nThe branch's list\nEOF",
+        # A here-doc line that starts with case, in prose, opens no case.
+        "cat <<'EOF'\ncase handling in the parser\n- fixed (see notes) fingerprint.py drops blank lines\nEOF",
         "cat .python-version cpython-314.pyc mypython; echo it's",
     ],
 )
@@ -653,3 +694,5 @@ def test_an_operator_at_the_end_of_a_line_ends_the_command() -> None:
     assert command_list("a ||\n b") == [(["a"], "||"), (["b"], "")]
     assert command_list("a &&\n\n b ;\n c") == [(["a"], "&&"), (["b"], ";"), (["c"], "")]
     assert command_list("a\n\nb") == [(["a"], "\n"), (["b"], "")]
+    # A case arm's ;; on a line of its own ends the command before it.
+    assert command_list("a\n  ;;\nb") == [(["a"], ";;"), (["b"], "")]

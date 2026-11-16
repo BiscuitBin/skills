@@ -27,10 +27,14 @@ OPERATOR_PIECE = re.compile(r"&&|\|\||;;|\|&|[;&|\n]")
 # Words that run the command after them; leading NAME=value assignments are skipped too.
 PREFIXES = {"env", "exec", "command", "time", "nohup"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+# A shell NAME, as a named coprocess's: coproc NAME { …; }.
+SHELL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # Shell words that can come before a command's program, which python_not_run looks past.
 KEYWORDS = {"if", "then", "elif", "else", "while", "until", "do", "!", "{", "coproc"}
 # Shells whose -c string python_not_run reads as commands, this many shells deep.
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
+# Shells in which an o with letters after it names the option in the rest of its word.
+ATTACHED_OPTION_SHELLS = {"zsh", "ksh"}
 SHELL_DEPTH = 3
 # A shell's long options that take a file; bash reads them after one dash too.
 SHELL_FILE_OPTIONS = {"--rcfile", "--init-file", "-rcfile", "-init-file"}
@@ -115,6 +119,9 @@ def command_list(command: str, *, whole_words: bool = False) -> list[tuple[list[
             if (operator := _operator(token)) is not None:
                 if current:
                     found.append((current, operator))
+                elif operator == ";;" and found:
+                    # A case arm's ;; on a line of its own ends the command before it.
+                    found[-1] = (found[-1][0], operator)
                 current = []
             else:
                 current.append(token)
@@ -246,6 +253,8 @@ def _program(words: list[str]) -> list[str]:
         name = Path(word).name  # /usr/bin/env is env
         if word.startswith("("):
             words = [word[1:], *rest] if word != "(" else rest
+        elif word == "coproc" and _named_coprocess(rest):
+            words = rest[1:]  # NAME is the coprocess's, not a program
         elif word in KEYWORDS:
             words = rest
         elif name in PREFIXES or ASSIGNMENT.fullmatch(word):
@@ -258,7 +267,62 @@ def _program(words: list[str]) -> list[str]:
     return words
 
 
-def _shell_string(options: list[str]) -> str | None:
+def _named_coprocess(rest: list[str]) -> bool:
+    """Whether coproc's words name the coprocess: NAME, then a bare `{` or a subshell's `(`.
+
+    A `{` that opens a longer word is brace expansion, as in `coproc python3 {a,b}`.
+    """
+    return (
+        len(rest) > 1
+        and SHELL_NAME.fullmatch(rest[0]) is not None
+        and (rest[1] == "{" or rest[1].startswith("("))
+    )
+
+
+def _past_pattern(words: list[str]) -> list[str] | None:
+    """The words after the `)` that closes a case pattern, or None when the pattern goes on."""
+    end = next((i for i, word in enumerate(words) if ")" in word), None)
+    if end is None:
+        return None
+    tail = words[end].split(")", 1)[1]  # an arm's command may be glued to it: a)cmd
+    return ([tail] if tail else []) + words[end + 1 :]
+
+
+def _programs(found: list[tuple[list[str], str]]) -> Iterator[list[str]]:
+    """Each simple command from its program on, as _program gives it, past case patterns.
+
+    After `case WORD in`, and after `;;` while a case is open, the words through the
+    one holding the pattern's closing `)` are the pattern, which the lexer may have split
+    at `|` or a newline; the rest is the arm's command. `esac` closes the case.
+    """
+    pattern = False  # in a case pattern, before its closing )
+    cases = 0  # open cases: a ;; outside one, as in a here-doc body, starts no pattern
+    for words, operator in found:
+        command = words
+        if pattern and words[0] == "esac":
+            pattern, cases, command = False, max(cases - 1, 0), words[1:]
+        elif pattern:
+            arm = _past_pattern(words)
+            if arm is None:
+                continue  # an alternative split off at |, or a pattern on its own line
+            pattern, command = False, arm
+        program = _program(command)
+        if program[:1] == ["esac"]:
+            cases = max(cases - 1, 0)
+        elif program[:1] == ["case"] and "in" in program[2:]:
+            after = program[program.index("in", 2) + 1 :]
+            arm = _past_pattern(after)
+            # A pattern follows `in`: on the next line, closed by a ), or split off at |.
+            # Otherwise the line is not a case, such as prose in a here-doc body.
+            if not after or arm is not None or operator == "|":
+                cases += 1
+                pattern, program = arm is None, _program(arm or [])
+        if operator == ";;" and cases:
+            pattern = True
+        yield program
+
+
+def _shell_string(shell: str, options: list[str]) -> str | None:
     """For a shell's words after its name, the string its -c runs; None when it has none.
 
     The c may sit in a cluster (-lc, -ce), and the string is the first word past the options.
@@ -269,12 +333,19 @@ def _shell_string(options: list[str]) -> str | None:
         if word in ("-o", "+o", "-O", "+O") or word in SHELL_FILE_OPTIONS:  # these take a value
             options = options[1:]
         elif not word.startswith("--"):
-            # In a cluster each o or O takes the next word (-euo pipefail), unless that word
-            # is an option, as after bash's one-dash long options (-noprofile -c).
-            for _ in range(sum(flag in "oO" for flag in word[1:])):
+            flags = word[1:]
+            if shell in ATTACHED_OPTION_SHELLS and "o" in flags[:-1]:
+                # zsh and ksh: -oerrexit names the option itself, so it takes no word,
+                # and the letters after the o are its name, not flags.
+                flags, takes = flags[: flags.index("o")], 0
+            else:
+                # In a cluster each o or O takes the next word (-euo pipefail).
+                takes = sum(flag in "oO" for flag in flags)
+            # Unless that word is an option, as after bash's one-dash long options (-noprofile -c).
+            for _ in range(takes):
                 if options and options[0][:1] not in ("-", "+"):
                     options = options[1:]
-            if word.startswith("-") and "c" in word:
+            if word.startswith("-") and "c" in flags:
                 reads = True
     if options[:1] == ["--"]:
         options = options[1:]
@@ -297,8 +368,7 @@ def _runs_python(command: str, depth: int = 0) -> str | None:
     if not found and command.strip():
         # Unbalanced quotes, as in a here-doc body with an apostrophe: fail closed.
         return _names_python(command)
-    for words, _ in found:
-        program = _program(words)
+    for program in _programs(found):
         if not program:
             continue
         # A redirection may be glued to the program's word: python3<<EOF, ./x.py>out.
@@ -309,7 +379,7 @@ def _runs_python(command: str, depth: int = 0) -> str | None:
         # A Command has no cwd, so this goes by name.
         if name.endswith(".py"):
             return "a command runs a python script"
-        string = _shell_string(program[1:]) if name in SHELLS else None
+        string = _shell_string(name, program[1:]) if name in SHELLS else None
         if string is not None:
             # Past SHELL_DEPTH shells, the string is read like one the lexer cannot split.
             how = _runs_python(string, depth + 1) if depth < SHELL_DEPTH else _names_python(string)

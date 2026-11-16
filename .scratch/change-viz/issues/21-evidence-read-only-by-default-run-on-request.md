@@ -196,4 +196,18 @@ Over `c3a1222..8aac5ae`, at the high level, focused on the harness. Seven findin
 | 6 | The bytecode test does not check `sys.pycache_prefix` | valid | The test sets `PYTHONPYCACHEPREFIX` in the parent and asserts the child has neither it nor a prefix; no leak was found (both adapters build the environment from scratch). A Limits line for `-X pycache_prefix` |
 | 7 | The bytecode walk's `list.pop(0)` is quadratic | valid | `deque.popleft()`, same order |
 
+#### Cross-model review of the /code-review fixes (`5f0131c`)
+
+Codex `gpt-6-astra`, read-only, over `42576f6..5f0131c`, with a separate triage that reproduced each finding (`ai_tmp/stage3/code-review/brief.md`, `codex.md`, `triage.md`; fixes test first in `apply2/`).
+
+| # | Severity (Codex → triage) | Claim | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | high → low | The new cluster rule skips the real `-c` string in zsh and ksh, where `-oerrexit` names the option in its own word | valid, a regression | In zsh and ksh, an `o` with letters after it takes no word, and those letters are not flags. Bash, sh and dash unchanged. Three rows |
+| 2 | high → low | A named coprocess, `coproc python3 { cat /dev/null; }`, false-fails | valid, a regression | A coprocess's NAME is skipped when a bare `{` or a `(` follows it. Two rows; the Limits clause is gone |
+| 3 | medium | Read-only loops still false-fail on a case pattern, `case "$f" in *.md\|*.py\|*.txt)`, which the revert did not cover | valid, predates the diff | The command check now keeps case context: after `case WORD in`, and after `;;` while a case is open, it skips the pattern through its `)`, and `esac` closes the case. A line opens a case only when a pattern follows `in`, so a prose line in a here-doc does not. `command_list` gives an own-line `;;` to the command before it; its other callers reject `;;` and a newline alike. The applier compared 30 case layouts, run against bash 3.2 and 5.3, before and after: no new false fail apart from one contrived prose line, now listed under False fails with the remaining misses |
+| 4 | – | The id-less pairing test passes with last-in-first-out pairing too | valid, a test gap | The two completions now print different output, and the test checks the first start gets the first; a mutant run shows it now fails under last-in-first-out pairing |
+| 5 | – | The bytecode test checks less than the docs claim | invalid | The docs claim only the three settings the test pins |
+
+The case-context reading in the commit that applies these has had no cross-model review of its own. It goes into the brief of ticket 21's Stage 4 implementation review, before GREEN, where a false fail would matter.
+
 **Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.
