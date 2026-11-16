@@ -210,4 +210,8 @@ Codex `gpt-6-astra`, read-only, over `42576f6..5f0131c`, with a separate triage 
 
 The case-context reading in the commit that applies these has had no cross-model review of its own. It goes into the brief of ticket 21's Stage 4 implementation review, before GREEN, where a false fail would matter.
 
+#### Replay over the recorded trials (`39dcfc4`)
+
+Before RED, `python_not_run` was replayed over all 33 recorded change-viz trials (`ai_tmp/stage3/replay/report.md`). Its command check agrees with **Figures** on every trial: Claude Code ran Python in 0 of 12, and Codex in 7 of 13 without the skill text and 2 of 8 skill arms. Every other trial that names a `.py` file only reads it. Two of the nine runs deleted their own bytecode, so the bytecode witness alone would have missed them, but the command check caught all nine. No recorded command uses `case`, so the case-context reading is still exercised only by its tests. In fake-API trials, the pinned Codex 0.163.0 logged no `python3` call of its own.
+
 **Frozen** in the Stage 3 freeze commit, which adds the batch's 11 fixtures (225 files) and 19 cases to `evals/change-viz/`: `evals_sha256` `d3890efe69ae903d6fc240aa70588b9af5ae8c8de52d686259e7a478c2ebb5be`. Before it was committed, every reviewed pattern was rerun on the pinned Python 3.14.8, and through the harness's own `evaluate()`, with 0 mismatches over 2,713 rows (`ai_tmp/stage3/build/step5/`). Ticket 18's two cases and `wordstat-top` are byte for byte unchanged.
