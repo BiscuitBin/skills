@@ -105,7 +105,12 @@ def test_the_allow_scripts_key_names_the_installed_claude_code(
     package = json.loads((ROOT / "package.json").read_text())
     pinned = package["devDependencies"]["@anthropic-ai/claude-code"]
     assert by_dep["@anthropic-ai/claude-code"] == [pinned]
-    assert list(package["allowScripts"]) == [f"@anthropic-ai/claude-code@{pinned}"]
+    # Puppeteer's postinstall is denied by name, which covers every version, so
+    # a puppeteer bump needs no copy; `just install-browser` installs the browser.
+    assert package["allowScripts"] == {
+        f"@anthropic-ai/claude-code@{pinned}": True,
+        "puppeteer": False,
+    }
 
 
 def rules_for(**match: list[str]) -> list[dict[str, Any]]:

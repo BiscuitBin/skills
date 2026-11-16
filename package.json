@@ -2,7 +2,7 @@
   "name": "skills-dev-tools",
   "version": "0.1.0",
   "private": true,
-  "description": "Pinned, project-local dev tools for BiscuitBin/skills: the Claude Code and Codex CLIs, Prettier, markdownlint and the skills installer.",
+  "description": "Pinned, project-local dev tools for BiscuitBin/skills: the Claude Code and Codex CLIs, Prettier, markdownlint, the skills installer and the Mermaid CLI with its headless browser driver.",
   "license": "MIT",
   "packageManager": "npm@11.17.0",
   "engines": {
@@ -11,12 +11,19 @@
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "2.1.309",
+    "@mermaid-js/mermaid-cli": "12.2.0",
     "@openai/codex": "0.163.0",
     "markdownlint-cli2": "0.24.0",
     "prettier": "3.9.10",
+    "puppeteer": "25.16.0",
     "skills": "1.7.4"
   },
+  "overrides": {
+    "dompurify": "3.4.17",
+    "mermaid": "12.2.0"
+  },
   "allowScripts": {
-    "@anthropic-ai/claude-code@2.1.309": true
+    "@anthropic-ai/claude-code@2.1.309": true,
+    "puppeteer": false
   }
 }
