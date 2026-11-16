@@ -202,3 +202,24 @@ From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**.
 - **D2:** the agent iterates on this ticket's cases with Codex `--no-grader` runs, and reads each expectation by hand. Claude Code runs and the graded final runs stay with the maintainer.
 - **D4:** the version is set once, to `0.2.0`, for the whole pull request.
 - **Trials (plan Phase 4 step 5, approved by the maintainer on 2026-11-16):** the final runs use `--baseline --trials 1`, not the `--trials 3` that **RED predictions** asks for at GREEN. So n = 1 per case and arm is recorded as a limit, and three-trial reruns are left to a follow-up.
+
+### Stage 4: skill text (2026-11-16)
+
+Written second, on ticket 24's `deb129f` (plan Phase 2; the order put 24 first so its no-hard-wrap rule landed before 21). The running log is `ai_tmp/stage4/progress.md`.
+
+- **What the text now teaches** (design §1 and §8):
+  - `SKILL.md`: the smallest set of views, each chosen by the kind of structure the change alters, with four shapes and the reason for each (a small change: a diff sketch of the lines in their function; a restructure: a file tree as a diff; a behaviour change: the Mermaid diagram built for it, plus the diff behind it when needed; several changes: a view per change, at most four). A view the request names is drawn first, and nothing the request asks for is cut (ticket 24's clause is folded in). The stop rule: stop once each change the why or a note rests on is drawn, cut repeats, never end on a catalogue, one sketch per block. The ceilings (decision 6) as limits, not targets, with the reason and what to drop at a ceiling. Each note is at most 350 characters. An answer that is not a description has no headings and no ceiling (decision 2b). An outcome table sits beside a fenced view, never in its place. A lead-in names what the whole visual draws.
+  - `references/views.md`: a view table and nine invented examples (a webhook-sending service), one per view, with sections on what earns a second view and what to cut.
+  - `references/example.md`: one sentence ties its flowchart and diff to the behaviour-change shape.
+  - **Departures from §8:** the component tree is not its own view (**Out of scope**); the ceiling says "every line counted" rather than naming the risk and scope lines, which tickets 19 and 22 add; a small change's `- None.` is not restated.
+- **Checks:** ban scan 0 hard hits, every `hand` hit in old text and its allowed sense (20-11 "hold" as a verb, 20-12 "copy", 21-x "blank line" in layout); a hand read found no fixture structure in the examples; `just validate-skills` 0 errors; `just check-mermaid` 16 blocks, 0 failed. `SKILL.md` is 128 lines, about 4,385 tokens: it leaves little room under the 5,000-token aim for tickets 19, 21, 22 and 23.
+- **Live run (D2):** run `20261116T232220Z-609b`, Codex, skill arm, no grader, one trial per case, tree dirty. All three cases pass every pattern assertion and, read by hand by a fresh reader who did not read the skill text, every expectation (`ai_tmp/stage4/t20/r1/read.md`). One round.
+
+  | Case | Shape | Length / ceiling | Notes (characters) | Views |
+  | --- | --- | --- | --- | --- |
+  | `behaviour-describe-fix-due-today` | small change | 787 / 1,500 | 157 | one `diff` sketch |
+  | `behaviour-describe-split-modules` | restructure | 1,065 / 2,500 | 207 | one `diff` file tree |
+  | `behaviour-describe-add-holds` | behaviour change | 861 / 3,500 | 125, 97 | one `stateDiagram-v2` (renders on the pinned Mermaid) |
+
+  - **Close calls, passed and recorded:** B3: the note says "only the member named on the hold may lend it", with the verb backwards, while the diagram's edge `Held --> OnLoan: lend to held member` gives the right direction. R1: the file tree marks the unchanged `main()` as added. F1: one `diff` fence also holds the new test's hunk, from a second file. A strict grader could fail B3.
+  - **Unscored:** the holds lead-in claims reporting the diagram does not draw; three `--> [*]` edges match nothing in the code, and `return` out of `Held` is missing; the first note of the fix and of the holds restates the why rather than warning. No trial ran an interpreter or wrote anything.

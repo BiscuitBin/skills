@@ -1,6 +1,6 @@
 # A complete description
 
-An invented change, to show the whole shape: a static site builder that now rebuilds only the pages whose source changed. Describe the change in front of you in its own terms; this one's choice of views fits this change, not every change.
+An invented change, to show the whole shape: a static site builder that now rebuilds only the pages whose source changed. Describe the change in front of you in its own terms; this one's choice of views fits this change, not every change. It is a behaviour change, a new path through the build, so it draws a flowchart and the diff sketch behind it, where a change of a few lines would need only the diff sketch.
 
 ---
 
