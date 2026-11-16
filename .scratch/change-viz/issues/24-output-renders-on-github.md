@@ -211,3 +211,26 @@ From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**. The bare 
   - Its limit: GitHub does not publish its Mermaid version, so the check is against the pinned one.
 - **D4:** the version is set once, to `0.2.0`, for the whole pull request.
 - **D5:** the render proof (`:56`) and its approval (`:57`) move to [ticket 28](28-render-proof-in-a-github-post.md), which does not block the release. The state diagram the proof needs (**Residual risk**, **At Stage 4**) goes with it.
+
+### Stage 4: skill text (2026-11-16)
+
+Written first of the six, on `31f13ac`. The plan is `ai_tmp/stage4/plan.md`; the running log is `ai_tmp/stage4/progress.md`.
+
+- **What the text now teaches** (design §8):
+  - `references/rendering-on-github.md` (new): each rule with its reason and an invented right and wrong example, for flowcharts (A.1 to A.4, A.2a, and A.2's corrected reason), sequence diagrams (B.1 to B.4 and B.2a, with a line-ending `;` allowed), state diagrams (C.1 to C.3), tables, fences and the `diff` fence's colours, line breaks, the risk line, mentions, issue numbers and closing words, and the length limit. `<br/>`, `<details>` and newer syntax are written as limits. Evidence labels go on prose lines, never in a diagram label (item 10). It says the Mermaid rules are checked against 12.2.0, and that GitHub does not publish its version.
+  - Two rules from the probe, beyond design §8: `#`, then a word or number, then `;` is read as an entity code, so a literal `#` is `#35;` and a literal `;` is `#59;`; and `<…>` in a flowchart node label is read as HTML and vanishes, so `<` and `>` are `#lt;` and `#gt;`.
+  - `SKILL.md`: the wrapped-bullet exception is gone, so each paragraph, bullet and lead-in is one line, with the reason (item 4); a view the request names is drawn first (item 7); and the reference is read before any Mermaid diagram or table, with the reason in general terms (item 3).
+  - `references/example.md` quotes its edge labels (item 5), and `references/views.md` points to the reference for the `diff` fence's colours (item 6).
+  - `github-rules-24.md` gains §7: A.2a, B.2a and the A.2 and B.2 corrections, with their grammar lines.
+  - No version bump (D4) and no `compatibility` change (no bundled checker).
+- **The probe** (`ai_tmp/stage4/mermaid/probe-result.md`), through `just check-mermaid --labels` on Mermaid 12.2.0: all 13 blocks agree with PF2, PF3 and PS2's grammar reading, in both directions. The heads never probed (`opt`, `par_over`, `rect`) agree too. No pattern is re-frozen, and `evals_sha256` stays `d3890efe…`.
+  - **A limit found beyond the 13:** PS2 exempts any `#[A-Za-z0-9]+;` as an entity, and Mermaid decodes every such run, so PS2 passes `#42;` (shown as another character) and `#word;` (shown as `&word;`). It needs a `;` straight after an issue number or a name, which no recorded output has. The lead left PS2 frozen, since none of the 13 blocks contradicts it, and the reference now teaches the rule.
+  - Two forms PS2 rejects render whole (`;` joining two statements, a `#` after a `rect` colour). Both were already listed as false flags.
+- **Checks:**
+  - ban scan: 0 hard hits; the `hand` hits in the new reference are five uses of "blank line" (21-x) in its layout sense;
+  - `just validate-skills`: 0 errors, the `extension-portability` warning only;
+  - `SKILL.md`: 113 lines, about 3,600 tokens;
+  - `just check-mermaid --labels` over the skill: every block renders, and every label shows as written. Each of the reference's 20 wrong examples, rendered alone, fails or is cut as the text says (`ai_tmp/stage4/t24/wrong-examples.log`).
+- **Live run (D2):** run `20261116T225422Z-047b`, Codex, skill arm, no grader, one trial per case, tree dirty (the text was uncommitted). Both cases pass all five pattern assertions. A fresh reader, who did not read the skill text, read F-E1, F-E2, S-E1 and S-E2 by hand: all four pass (`ai_tmp/stage4/t24/r1/read.md`). F-E2 is the closest: its fact spans five flowchart nodes. Both diagrams render on the pinned Mermaid with every label whole, and undoing their entities fails PF3 and PS2. No false claim about the fixture, no write and no interpreter run. One round.
+  - **Unscored:** both lead-ins describe less than their diagram draws, and the sequence case's notes hold no warning, though the flowchart case's caught a real one (a bad count still raises an uncaught `ValueError`). These are ticket 20's and 18's behaviours, carried to their texts.
+- **Carried:** the reference's risk-line example must match ticket 19's canonical block when 19 lands.

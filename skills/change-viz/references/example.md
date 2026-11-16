@@ -20,8 +20,8 @@ The path each page now takes through a build: only a page whose source does not 
 ```mermaid
 flowchart LR
     A["Page source"] --> B{"Same hash as the record?"}
-    B -->|yes| C["Keep the page already built"]
-    B -->|no| D["Render with its layout"]
+    B -->|"yes"| C["Keep the page already built"]
+    B -->|"no"| D["Render with its layout"]
     D --> E["Write the page and update the record"]
 ```
 

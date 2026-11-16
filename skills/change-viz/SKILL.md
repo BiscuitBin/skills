@@ -68,7 +68,7 @@ One sentence.
 A one-line lead-in, then a visual. Repeat as needed.
 ```
 
-The description is often read raw first, in a terminal or an editor, before anyone renders it. So write it to read cleanly both ways. Outside the fenced blocks, start each line at the left margin. The one exception is a bullet's wrapped line, which is indented under its `-` so the note stays one bullet in the raw text. Put every visual in a fenced block.
+The description is often read raw first, in a terminal or an editor, before anyone renders it. So write it to read cleanly both ways. Outside the fenced blocks, start each line at the left margin, and write each paragraph, bullet and lead-in on one line, however long. A pull request shows every newline as a line break, so a line wrapped by hand breaks mid-sentence there, while a raw reader's editor wraps a long line anyway. Put every visual in a fenced block.
 
 [A complete example](references/example.md) shows the whole shape for an invented change. Read it before you write.
 
@@ -94,7 +94,9 @@ If `git status` listed uncommitted changes to the project's files in step 1, one
 
 Show the shape of the change: how the parts fit together after it, and what each changed part now does. The diff already lists the files and the commits, so a file-by-file or commit-by-commit list repeats it and hides the shape. Tell it in the order that is easiest to follow. That may be the data first, or the entry point first.
 
-Build it from small visuals, at least one, each in a fenced block whose language names what it holds: `mermaid`, `diff`, `text`, or the code's own language. A raw reader then knows what kind of sketch follows. Spend the first visual on the change the why is about. Pick the smallest view that makes the point clear, and read [the views](references/views.md) before you pick: it lists each view, what it shows, and how to draw a diff sketch.
+Build it from small visuals, at least one, each in a fenced block whose language names what it holds: `mermaid`, `diff`, `text`, or the code's own language. A raw reader then knows what kind of sketch follows. Spend the first visual on the change the why is about, unless the request names a view, such as a sequence diagram: then draw that view first, because the person asking has said what they need to see. Pick the smallest view that makes the point clear, and read [the views](references/views.md) before you pick: it lists each view, what it shows, and how to draw a diff sketch.
+
+Before you draw a Mermaid diagram or a table, read [rendering on GitHub](references/rendering-on-github.md). GitHub draws a diagram only when the whole block parses: a block it cannot parse shows an error where the diagram should be, and some characters quietly cut a label short, so the reader loses the very part they came to look at. The reference gives each rule with its reason and a right and a wrong example, and also covers `diff` fences, line breaks, and what GitHub does with `@` names and `#` numbers in the same text.
 
 Put a lead-in just above each block: one line, of one to three sentences, that opens with what the visual draws and then says what to notice, such as "What `fetch()` calls when a retry times out: every retry now shares one deadline". Without a lead-in the reader has to decode a visual before knowing what it draws and why it is there. A pair of blocks, such as a flow and the diff behind it, gets a lead-in each.
 

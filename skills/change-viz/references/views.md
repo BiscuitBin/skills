@@ -14,7 +14,7 @@ Each view shows one kind of structure. You may use one of these or several, and 
 
 ## Diff sketch or whole block
 
-Use a diff sketch when the point is what changes and the surrounding shape already exists. Match its shape to the topic: a file tree for moved files, a call tree for a new call, pseudocode for changed logic. Mark added lines with `+` and removed lines with `-`, and start every other line with a space, as a real diff does, so a reader who knows the notation reads it at a glance.
+Use a diff sketch when the point is what changes and the surrounding shape already exists. Match its shape to the topic: a file tree for moved files, a call tree for a new call, pseudocode for changed logic. Mark added lines with `+` and removed lines with `-`, and start every other line with a space, as a real diff does, so a reader who knows the notation reads it at a glance. The rendering-on-GitHub reference that the main instructions link says which other line starts a `diff` fence colours, and why the marks show no colour in a `text` fence.
 
 Show the whole block instead when most of it is new, or when diff notation would hide ownership or order. A reader then sees the shape they will find in the code.
 
