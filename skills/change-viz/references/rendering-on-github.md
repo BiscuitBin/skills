@@ -250,7 +250,7 @@ This draws `Waiting`, `for` and `upload` as three states, a box named `start`, a
 A table GitHub cannot read shows as lines of raw pipes. This one is right by every rule below:
 
 ```markdown
-The commands the build script now runs, and how each ended:
+The commands the build script now runs, and how each ends (read from the code, not run):
 
 | Command | Result |
 | --- | --- |

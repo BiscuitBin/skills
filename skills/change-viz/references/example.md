@@ -10,13 +10,13 @@ Writers can preview an edit to one page without rebuilding the whole site, becau
 
 **Risk: 🟡 Medium** · **Door: two-way** · **Blast radius: anyone who builds after a layout edit**
 
-- Why medium: the new hash check in the build loop skips unchanged pages, so a build after a layout edit now produces different pages for every existing site, but nothing the change writes outlives a revert.
+- Why medium: the new hash check in the build loop skips unchanged pages, so a build after a layout edit now produces different pages for every existing site (read from the code, not run), but nothing the change writes outlives a revert.
 - Walk it back: a revert is enough, because the old builder renders every page again and ignores `.build-record.json`, the only new file, which stays out of the repository.
 
 ## Special things to note
 
-- An edit to a shared layout no longer reaches pages whose own source is unchanged, so after a layout change those pages keep the old layout until a full rebuild with `--clean`.
-- `.gitignore` keeps the new `.build-record.json` out of the repository, so a build in a fresh checkout, such as a CI job, is no faster: with no record, it still renders every page.
+- An edit to a shared layout no longer reaches pages whose own source is unchanged, so after a layout change those pages keep the old layout until a full rebuild with `--clean` (read from the code, not run).
+- `.gitignore` keeps the new `.build-record.json` out of the repository, so a build in a fresh checkout, such as a CI job, is no faster: with no record, it still renders every page (read from the code, not run).
 
 ## Change outline
 
