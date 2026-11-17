@@ -118,3 +118,20 @@ Ticket 25's implementation checkpoint, run before the maintainer's session as D8
 
 - **The named questions:** no teaching to the test (1); no trivial pass, since every behaviour case's baseline fails an output assertion (5); no further write, unasked run or credential read (6); the `0.2.0` manifests, invocation settings and notices are consistent (7); no defect in the Stage 4 code fixes, by static reading (8).
 - **Claude Code outside the project:** a fake-API check of `run-claude.sh` (`ai_tmp/stage4/probe-rove/result.md`) found that every Claude Code run, with or without rove's plugin setting, writes a socket to `/tmp/cc-socks/<pid>.sock`. AGENTS.md asks for any such write to be recorded; it is the pinned CLI's own, and no setting the harness uses moves it.
+
+### Outputs before the maintainer's session (2026-11-17)
+
+Everything the first acceptance criterion asks that needs no Claude token, made on the skill at `5d4eff9`, the commit the whole-skill review's fixes landed in.
+
+- **The four real changes, on Codex (D2):** each clone under `ai_tmp/real/<change>/repo/` was run as a branch against its base, with `gh` stubbed and `HOME` and `TMPDIR` under `ai_tmp/real/<change>/`, by `ai_tmp/real/run-codex.sh`, on the pinned `codex-cli 0.163.0` with `gpt-5.6-terra`, the eval harness's Codex model. Every run exited 0, invoked the skill, and left its clone as it found it (`codex-before.txt` and `codex-after.txt` identical).
+
+  | Change | Branch, base | Duration | Output |
+  | --- | --- | --- | --- |
+  | knarr-75 | `readme-diagram`, 3 commits, 15 files | 110 s | 2,181 bytes |
+  | skills-1 | `mk-bootstrap-tickets`, 2 commits, 14 files | 91 s | 2,367 bytes |
+  | skills-4 | `ticket/03-cowsay-skill-and-validator`, 4 commits, 31 files | 92 s | 2,514 bytes |
+  | rove-11 | `crawl4AI-smolmachine-prototype`, 7 commits, 13 files | 101 s | 2,777 bytes |
+
+- **The reading pack:** `ai_tmp/real/READ-ME.md`, built by `ai_tmp/real/make_readme.py`, puts each original description beside the Codex output, with the Mermaid checker's verdict and rendered labels, and leaves a place for Claude Code's. `ai_tmp/real/run-claude.sh` makes the Claude Code four, with the pinned CLI and `claude-sonnet-5-5`, in the session.
+- **The fixtures, on Codex:** the final skill-arm pass `eval-results/20261117T064129Z-f47c` (21 trials, `--no-grader`, skill at `5d4eff9`, tree clean, `evals_sha256` `d3890efe…`) passed every pattern assertion and `python_not_run`. Its transcripts were checked case by case (`ai_tmp/stage4/final-skill/transcript_checks.md`): no write, `--no-optional-locks` on every skill-arm `git`, the `-c` prefix on every `git diff`, `gh` only in the two pull request cases and an interpreter only in `behaviour-describe-and-run-check`. The one flag, seven `git show <base>:path` reads without the diff flags in `behaviour-describe-retire-wishlist`, is the checker over-matching: probed with a textconv driver set, `show` of a blob prints it raw unless `--textconv` is given. The baseline arm, which runs no skill text, was last run in the full pass `20261117T032603Z-bae2` at `01b3817`: every behaviour case's baseline failed an output assertion beyond the trigger. That pass's tracer outputs were read by hand against E1 to E8 (`ai_tmp/stage4/full/`), and each ticket's expectations in its own rounds; `f47c`'s were not read again by hand, so a pass here is by pattern, not by the blinded expectations.
+- **Left for the session:** Claude Code's four outputs, the maintainer's read, the graded final runs on both agents and the benchmark. The runbook is `ai_tmp/release/SESSION.md`.
