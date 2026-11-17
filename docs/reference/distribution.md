@@ -39,6 +39,17 @@ sources. It runs the pinned
 `claude plugin validate --strict` for the marketplace and each shipped plugin.
 `just check` includes this recipe.
 
+## Skills invoked by name only
+
+A by-name-only skill, such as `change-viz`, loads only when the user invokes it by name. It sets `disable-model-invocation: true` in `SKILL.md`, which Claude Code and Pi read and Codex ignores ([validator reference](skill-validator.md)), and `policy.allow_implicit_invocation: false` in `agents/openai.yaml`, which Codex reads. Both channels copy the skill's directory as it is, so the settings hold however it was installed. The name to invoke depends on the channel and the agent:
+
+| Installed through | Claude Code | Codex | Pi |
+| --- | --- | --- | --- |
+| The marketplace | `/<plugin>:<name>`, such as `/change-viz:change-viz` | not installed | not installed |
+| `npx skills` | `/<name>` | `$<name>:<name>`, because Codex reads the skill's `.claude-plugin/plugin.json` as a plugin manifest | `/skill:<name>` |
+
+Its evals use [by-name cases](evals.md#by-name-cases), which send each agent its own invocation in the skill arm.
+
 ## Installation round trips
 
 `just test` includes the four required installation round trips plus a combined

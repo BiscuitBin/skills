@@ -1,6 +1,6 @@
 # Evals
 
-The eval harness runs a skill's eval cases against a pinned agent CLI, headless, in several trials and optionally against a baseline, grades rubric expectations with an LLM, and writes a results file and a benchmark. This page covers the case schema, its git fixtures and by-name cases, the adapter interface, isolation, credentials, the contamination check, the grader, the benchmark and the results format. [Eval isolation](../explanation/eval-isolation.md) explains why isolation is built this way and what it does not cover.
+The eval harness runs a skill's eval cases against a pinned agent CLI, headless, in several trials and optionally against a baseline, grades rubric expectations with an LLM, and writes a results file and a benchmark. This page covers the case schema, its fixtures and by-name cases, the adapter interface, isolation, credentials, the contamination check, the grader, the benchmark and the results format. [Eval isolation](../explanation/eval-isolation.md) explains why isolation is built this way and what it does not cover.
 
 ## Commands
 
@@ -216,7 +216,7 @@ So a fixture's commits hash the same in every trial, run and machine. A fixture 
 **Limits.**
 
 - **One mode per path.** `executable` applies to every tree, so a fixture cannot change a file's mode between two commits.
-- **Repository hooks.** Fixture trees are data, so ruff, mypy, pytest, markdownlint, Prettier and the `check-executables-have-shebangs`, `check-shebang-scripts-are-executable` and `check-merge-conflict` hooks skip them. `just lint`'s other hooks still check them: a tree's `.json`, `.toml` and `.yaml` files must parse (`check-json`, `check-toml`, `check-yaml`), so a fixture cannot ship a malformed one, and no file may be over 768 KB, hold a private key, or differ from another only in case.
+- **Repository hooks.** Fixture trees are data, so ruff, mypy, pytest, markdownlint, Prettier and the `check-executables-have-shebangs`, `check-shebang-scripts-are-executable` and `check-merge-conflict` hooks skip them. `just lint`'s other hooks still check them: a tree's `.json`, `.toml` and `.yaml` files must parse (`check-json`, `check-toml`, `check-yaml`), so a fixture cannot ship a malformed one, and no file may be over 768 KB, hold a private key, or differ from another only in case. Renovate skips `evals/*/fixtures/**` (`ignorePaths` in `renovate.json`), so a fixture's pinned versions, such as the actions in its workflows, draw no update pull requests; the harness's own fixtures sit under `tests/`, which Renovate's preset already skips.
 - **Git writes on Codex.** Codex's sandbox does not let the agent write to `.git/`: a `git add` is reported as denied, however long it took to fail, and the trial is an infrastructure error ([run status](#codex)), so a flow that stages or commits cannot be scored on Codex. `git status` and `git diff` work. The tests check both on macOS and Linux.
 - **Deleted files and the grader.** The grader is not told about a fixture file the agent deleted ([grader](#grader)).
 

@@ -1,6 +1,6 @@
 # Skills
 
-The vocabulary for developing, evaluating and distributing agent skills for Claude Code and Codex. Pi can install the skills but is not yet evaluated.
+The vocabulary for developing, evaluating and distributing agent skills for Claude Code and Codex, and for the change descriptions the `change-viz` skill writes. Pi can install the skills but is not yet evaluated.
 
 ## Skills
 
@@ -12,19 +12,73 @@ _Avoid_: Plugin, prompt, command
 A skill used only by agents working on this repository, such as the cross-model review skill. It is never shipped, and it never appears in an eval workspace.
 _Avoid_: Internal skill, private skill
 
+**By-name-only skill**:
+A skill that loads only when the user invokes it by name, never because a request matched its description. `change-viz` is one.
+_Avoid_: Manual skill, explicit-only skill
+
 **Trigger**:
 A trial's recorded evidence that the agent loaded a skill: on its own because the request matched the skill's description, by name because the prompt invoked it (`/<name>` in Claude Code, `$<plugin>:<name>` in Codex), or by a read of its `SKILL.md` that the trace confirms. Not every load leaves such evidence, and a confirmed read can count without printing the skill's text.
 _Avoid_: Activation, firing
 
+## Change descriptions
+
 **Change source**:
-What a `change-viz` description covers: the commits on a branch since its base, uncommitted work, or a pull request.
+One kind of change a `change-viz` description can cover: a branch's commits since its base, uncommitted work, or a pull request.
 _Avoid_: Diff target, diff source
+
+**Scope**:
+The change sources one `change-viz` description covers, with uncommitted work told apart as staged, unstaged and untracked edits. The skill's own text says scope, never change source.
+_Avoid_: Coverage, selection
+
+**Scope line**:
+The first line of a `change-viz` description: what it was read from, such as a branch against its base or a pull request, which the skill calls the line's source, then whether the commits and each kind of uncommitted work are included, left out or absent.
+_Avoid_: Header line, summary line
+
+**Risk call**:
+The line under a `change-viz` description's why sentence that gives the merge a risk level, a door and a blast radius, with two bullets: why that level, and how to walk the merge back.
+_Avoid_: Risk section, risk score
+
+**Door**:
+Whether reverting a merge undoes everything the merge set off: two-way when it does, one-way when something outlives the revert, such as rewritten data or a published release.
+_Avoid_: Reversibility
+
+**Blast radius**:
+Who or what is affected if a change, as written, turns out to be a mistake: the people or things whose results change, never the files that changed.
+_Avoid_: Impact
+
+**Evidence label**:
+The words straight after a runtime claim, a claim about what code does when it runs, that say where the claim comes from: read from the code, or observed in a run, a commit message or a CI check.
+_Avoid_: Provenance tag, source note
+
+**Change outline**:
+The last section of a `change-viz` description, which shows the shape of the change in views, each under its own lead-in.
+_Avoid_: Change list
+
+**View**:
+One kind of visual a change outline is built from, each drawing one kind of structure, such as a diff sketch, a file tree or a Mermaid flowchart.
+_Avoid_: Chart, figure
+
+**Lead-in**:
+The one line above a visual in a change outline, which says what the whole visual draws and then what to notice in it.
+_Avoid_: Caption, intro
+
+**Ceiling**:
+The most characters a `change-viz` description may use, set by the shape of its change: a limit, not a target.
+_Avoid_: Length budget, target
 
 ## Evals
 
 **Eval case**:
 One scenario a skill is tested against: a prompt, the fixture its trials start in if it has one, and the assertions or rubric that decide whether the outcome is right.
 _Avoid_: Test case, scenario, example
+
+**By-name case**:
+An eval case whose skill arm invokes the skill by name, in the agent's own syntax, while the baseline arm and the grader get only the bare request.
+_Avoid_: Slash case, invocation case
+
+**Quiet case**:
+A should-not-trigger case for a by-name-only skill: a plain request that invokes nothing, whose trials must record no trigger.
+_Avoid_: Silent case, unnamed case
 
 **Fixture**:
 A small project with Git history, a branch checked out and any uncommitted edits, that an eval case's trials start in, the same in both arms.

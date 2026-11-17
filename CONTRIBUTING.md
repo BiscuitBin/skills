@@ -34,7 +34,7 @@ If you create a skill by hand instead, `just check` fails until the marketplace 
 
 A skill earns its place by changing what an agent does. Prove the gap before you write the skill:
 
-1. Write the eval cases in `evals/<name>/evals.json`: trigger cases for requests that should and should not load the skill, and behaviour cases whose assertions check the outcome. Delete `"placeholder": true` from each case you write. The [case schema](docs/reference/evals.md#case-schema) lists every field.
+1. Write the eval cases in `evals/<name>/evals.json`: trigger cases for requests that should and should not load the skill, and behaviour cases whose assertions check the outcome. Delete `"placeholder": true` from each case you write. The [case schema](docs/reference/evals.md#case-schema) lists every field. A case whose skill needs a project with history starts its trials in a [fixture](docs/reference/evals.md#fixtures). A skill that runs only when invoked by name uses [by-name cases](docs/reference/evals.md#by-name-cases), with plain requests as its should-not-trigger cases.
 2. Run `just validate-evals`.
 3. Run a baseline, which runs each outcome case a second time with no skill installed:
 
@@ -42,7 +42,7 @@ A skill earns its place by changing what an agent does. Prove the gap before you
    just eval <name> --agent codex --baseline
    ```
 
-   Run it on `--agent claude` too, which needs `CLAUDE_CODE_OAUTH_TOKEN`; Codex needs a login in the project's Codex home (`just run ./node_modules/.bin/codex login`). Rubric `expectations` are graded by Claude, so a case with expectations needs the Claude token on either agent. See [credentials](docs/reference/evals.md#credentials).
+   Run it on `--agent claude` too, which needs `CLAUDE_CODE_OAUTH_TOKEN`; Codex needs a login in the project's Codex home (`just run ./node_modules/.bin/codex login`). Rubric `expectations` are graded by Claude, so a case with expectations needs the Claude token on either agent. `--no-grader` skips the grading and reads no Claude token, so such a case rests on its assertions alone. See [credentials](docs/reference/evals.md#credentials) and [commands](docs/reference/evals.md#commands).
 
 The baseline arm should fail the behaviour cases. If it passes them, the agent already does the job without your skill: change the cases to measure what it gets wrong, or drop the skill.
 
@@ -57,7 +57,7 @@ The baseline arm should fail the behaviour cases. If it passes them, the agent a
    just eval-record <iteration-name> <claude-run-id> <codex-run-id>
    ```
 
-   The run ids are the directory names under `eval-results/`. `just eval-report <name>` builds the report. See [history and report](docs/reference/evals.md#history-and-report).
+   The run ids are the directory names under `eval-results/`. Record graded runs: a `--no-grader` run measures no graded or outcome pass rate for a case with expectations. `just eval-report <name>` builds the report. See [history and report](docs/reference/evals.md#history-and-report).
 
 Live evals call paid models, so they never run in `just check` or PR CI ([ADR 0004](docs/adr/0004-eval-tiers-and-ci.md)). The recorded benchmark is how a reviewer sees the result.
 

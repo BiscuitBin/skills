@@ -2,11 +2,16 @@
 
 Agent skills for Claude Code and Codex, in the [Agent Skills](https://agentskills.io/specification) `SKILL.md` format. This repository is where they are developed, evaluated against both agents, and distributed. Pi can install them through `npx skills`, but they are not yet evaluated on Pi.
 
-The shipped skills are `cowsay`, which makes an ASCII cow say your text with a bundled Python script, and `change-viz`, which describes what a branch changes as Markdown for a pull request and runs only when you invoke it by name. Work is tracked in `.scratch/foundation/issues/`.
+The shipped skills are:
+
+- `cowsay`, which makes an ASCII cow say your text with a bundled Python script.
+- `change-viz`, which describes a change as Markdown for a pull request description or comment: the current branch's commits, its uncommitted work, or a pull request you name. It opens with what it covers, then says why the change exists, how risky it is to merge and what could catch a reviewer out, and outlines the change in small visuals such as Mermaid diagrams and diff sketches. It runs only when you invoke it by name. By default it only reads: it runs none of your project's code and writes no file unless you ask, and it never posts to GitHub.
+
+Work is tracked in `.scratch/<effort>/issues/`, such as `.scratch/change-viz/issues/`.
 
 ## Install
 
-cowsay needs Python 3 to run its bundled script. Run these commands in the project where you want the skills available.
+cowsay needs Python 3 to run its bundled script. change-viz needs Git, and reads a pull request with the [GitHub CLI](https://cli.github.com/), `gh`, signed in to an account that can see it. Run these commands in the project where you want the skills available.
 
 Contributors working from a clone of this repository use [Check the install channels from a checkout](docs/reference/distribution.md#check-the-install-channels-from-a-checkout) instead, because these commands write to your real agent home.
 
@@ -19,7 +24,8 @@ claude plugin install change-viz@biscuitbin-skills --scope project
 ```
 
 These are shell commands for an installed Claude Code CLI. Each skill is its own plugin, so install the ones you want.
-Invoke them with `/cowsay:cowsay Hello there`, and with `/change-viz:change-viz` on the branch you want described.
+Invoke them with `/cowsay:cowsay Hello there`, and with `/change-viz:change-viz` in the checkout you want described.
+On its own, change-viz describes the branch's commits since its base, or the uncommitted work when there are none; name anything else after it, such as `/change-viz:change-viz the staged edits` or `/change-viz:change-viz pull request #12`.
 
 ### npx skills
 
@@ -32,7 +38,7 @@ npx skills@1.7.4 add BiscuitBin/skills --agent pi --yes
 ```
 
 Claude Code discovers each skill in `.claude/skills/<name>`; Codex and Pi use `.agents/skills/<name>`.
-Invoke one with `/<name>` in Claude Code, `$<name>:<name>` in Codex (it reads the skill's plugin manifest, so the name carries a prefix), or `/skill:<name>` in Pi: for example `/cowsay Hello there`, or `$change-viz:change-viz` on the branch you want described. `change-viz` never loads unless invoked this way.
+Invoke one with `/<name>` in Claude Code, `$<name>:<name>` in Codex (it reads the skill's plugin manifest, so the name carries a prefix), or `/skill:<name>` in Pi: for example `/cowsay Hello there`, or `$change-viz:change-viz` in the checkout you want described. `change-viz` never loads unless invoked this way.
 Pi requires project trust before loading project skills.
 List available skills without installing with `npx skills@1.7.4 add BiscuitBin/skills --list`.
 
@@ -52,6 +58,8 @@ The [distribution reference](docs/reference/distribution.md) describes the manif
 **How Python is obtained.** You do not need Python installed. uv downloads the exact version in `.python-version` into `.tools/python`, and never uses a Python found on the host.
 
 **How Node is obtained.** Node is the one runtime you install yourself, at the exact version in `.node-version`. fnm reads `.node-version` as it stands. mise reads it only once you enable that with `mise settings add idiomatic_version_file_enable_tools node`, which changes your global mise config. nvm and Volta do not read it, so name the version yourself: `nvm install "$(cat .node-version)"`, or `volta install "node@$(cat .node-version)"`, which also changes your default Node. With any other version, `npm ci` stops with an engine error.
+
+**How the browser is obtained.** `just check` renders every Mermaid diagram in the shipped skills in a headless Chrome, so `just initialize` downloads the chrome-headless-shell build that the pinned Puppeteer names, about 200 MB, into `.tools/puppeteer`. On Ubuntu 23.10 or later, its sandbox, like Codex's, needs the AppArmor restriction on unprivileged user namespaces lifted, as CI does ([ADR 0018](docs/adr/0018-mermaid-checked-offline-at-githubs-version.md)).
 
 ## Getting started
 
