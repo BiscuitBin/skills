@@ -8,6 +8,11 @@ An invented change, to show the whole shape: a static site builder that now rebu
 
 Writers can preview an edit to one page without rebuilding the whole site, because the builder now renders only the pages whose source changed since the last build.
 
+**Risk: 🟡 Medium** · **Door: two-way** · **Blast radius: anyone who builds after a layout edit**
+
+- Why medium: the new hash check in the build loop skips unchanged pages, so a build after a layout edit now produces different pages for every existing site, but nothing the change writes outlives a revert.
+- Walk it back: a revert is enough, because the old builder renders every page again and ignores `.build-record.json`, the only new file, which stays out of the repository.
+
 ## Special things to note
 
 - An edit to a shared layout no longer reaches pages whose own source is unchanged, so after a layout change those pages keep the old layout until a full rebuild with `--clean`.

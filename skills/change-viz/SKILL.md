@@ -1,10 +1,10 @@
 ---
 name: change-viz
-description: Describes what the current branch changes, as Markdown for a pull request description or comment, with one sentence on why, one to three notes and a change outline built from small visuals such as Mermaid diagrams, diff sketches and file trees. Runs only when invoked by name, never on its own. It reads the branch and writes no file unless asked.
+description: Describes what the current branch changes, as Markdown for a pull request description or comment, with one sentence on why, a merge-risk call, one to three notes and a change outline built from small visuals such as Mermaid diagrams, diff sketches and file trees. Runs only when invoked by name, never on its own. It reads the branch and writes no file unless asked.
 license: MIT
 disable-model-invocation: true
 metadata:
-  credits: 'Adapted from MIT-licensed work by HumanLayer (Copyright (c) 2026 HumanLayer). The full notice is in NOTICE.md.'
+  credits: 'Adapted from MIT-licensed work by HumanLayer (Copyright (c) 2026 HumanLayer) and from Matt Pocock (Copyright (c) 2026 Matt Pocock). The full notices are in NOTICE.md.'
 ---
 
 # Change Viz
@@ -15,7 +15,7 @@ The reader wants three things, in this order: why the branch exists, what could 
 
 ## Leave the repository as you found it
 
-The person asking may have work in progress here, and a description should never change what it describes. So use git only to read: `log`, `diff`, `show`, `status`, `rev-parse`, `rev-list`, `merge-base`, `for-each-ref`, `config --get`, `remote` on its own, and `symbolic-ref --quiet --short` with a single ref, which prints where it points. Put `--no-optional-locks` straight after `git` every time. Without it, `git status` may rewrite `.git/index` to refresh it, which is a write nobody asked for. A `diff` against the working tree, given no commit or only one, can rewrite it even with the flag, so diff two commits, as step 2 does. Give every command that prints or searches a diff `--no-ext-diff --no-textconv` too: `diff`, `show` of a commit, and `log` with `-p`, `-S` or `-G`. The reader sees the plain diff on the pull request, not what a program set up on this machine makes of it, and such a program can write: text conversion with caching on stores its output under a ref. `status -v` prints a diff as well but takes neither flag, so leave `-v` off.
+The person asking may have work in progress here, and a description should never change what it describes. So use git only to read: `log`, `diff`, `show`, `status`, `rev-parse`, `rev-list`, `merge-base`, `for-each-ref`, `ls-tree`, `config --get`, `remote` on its own, and `symbolic-ref --quiet --short` with a single ref, which prints where it points. Put `--no-optional-locks` straight after `git` every time. Without it, `git status` may rewrite `.git/index` to refresh it, which is a write nobody asked for. A `diff` against the working tree, given no commit or only one, can rewrite it even with the flag, so diff two commits, as step 2 does. Give every command that prints or searches a diff `--no-ext-diff --no-textconv` too: `diff`, `show` of a commit, and `log` with `-p`, `-S` or `-G`. The reader sees the plain diff on the pull request, not what a program set up on this machine makes of it, and such a program can write: text conversion with caching on stores its output under a ref. `status -v` prints a diff as well but takes neither flag, so leave `-v` off.
 
 Commands that move a ref, the index or the working tree, or that send anything to a remote, are out of bounds, however handy: `checkout`, `switch`, `stash`, `commit`, `reset`, `restore`, `add`, `clean`, `merge`, `rebase`, `worktree add`, `branch` or `tag` with a name, `fetch`, `pull` and `push`. None of them is needed here: the reads in step 2 reach every version of a file you need, the one before the branch included. If something can only be read with one of these commands, say what you could not read instead.
 
@@ -59,6 +59,11 @@ Use these three headings, in this order, in every description, however small. Th
 
 One sentence.
 
+**Risk: 🟢 Low, 🟡 Medium or 🔴 High** · **Door: one-way or two-way** · **Blast radius: a few words**
+
+- Why low, medium or high: the reason for the level.
+- Walk it back: what undoing the merge takes.
+
 ## Special things to note
 
 - One to three bullets, or `- None.`
@@ -74,7 +79,11 @@ The description is often read raw first, in a terminal or an editor, before anyo
 
 ### Writing the why
 
-One sentence, on its own line under the heading, and nothing else in the section: a reader who stops there should still know why the branch exists. Say what becomes possible once the branch lands, for whoever the change is for: the people who use the project, or the people who work on it. Name the problem it solves as well, if that fits in the same sentence. A purpose tells the reader whether they want the change before they look at how it works. A list of edits does not, and the outline already shows the edits.
+One sentence, on its own line under the heading, then a blank line and the risk call, and nothing else: a reader who stops at the sentence should still know why the branch exists. Say what becomes possible once the branch lands, for whoever the change is for: the people who use the project, or the people who work on it. Name the problem it solves as well, if that fits in the same sentence. A purpose tells the reader whether they want the change before they look at how it works. A list of edits does not, and the outline already shows the edits.
+
+### Writing the risk call
+
+The risk call is the template's risk line and its two bullets. The reader decides how closely to review before any diagram, so the call comes first, in one fixed shape they can find in every description. Rate the change being described as if it alone were merged, by two questions: is the door one-way, because merging sets off something a revert cannot undo, and does anything that already exists behave differently, as written? Two-way and no is Low; two-way and yes, or one-way and no, is Medium; one-way and yes is High. What merging sets off often sits outside the diff, such as a job that runs when the base changes, so read [merge risk](references/merge-risk.md) before you make the call.
 
 ### Writing the notes
 
@@ -121,7 +130,7 @@ Done when each section keeps to its limit, every visual has its own lead-in and 
 
 ## 4. Answer
 
-Your final message is the description itself, starting with `## Why the change`, ready to paste. If finding the base ended in a one-line answer instead, that answer is the whole message. An answer that is not a description, such as that line, has no headings and no length ceiling: headings would promise a description that is not there. Keep the description out of a code fence: a fenced description pastes as raw text, and the reader loses the headings and the diagrams.
+Your final message is the description itself, starting with `## Why the change`, ready to paste. If finding the base ended in a one-line answer instead, that answer is the whole message. An answer that is not a description, such as that line, has no headings, no risk call and no length ceiling: headings and a call would promise a description that is not there. Keep the description out of a code fence: a fenced description pastes as raw text, and the reader loses the headings and the diagrams.
 
 Write as one person to another, in plain words and short sentences. Write about the branch, not about this request or the instructions you are following: the description reaches people who never saw this conversation.
 

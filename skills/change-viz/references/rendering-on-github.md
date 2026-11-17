@@ -327,7 +327,7 @@ Wrong: the same two lines with nothing between them. The GFM spec then reads the
 
 ## The risk line
 
-When the description carries a risk line:
+For the risk line under the why sentence:
 
 - **Write the emoji as characters: 🟢 🟡 🔴.** A shortcode such as `:green_circle:` is a GitHub feature, so a raw reader in a terminal sees the code, not the colour.
 - **Keep the whole line on one line, with each `**…**` span closed on it, and a blank line above it.** A newline would show as a line break in the pull request.
