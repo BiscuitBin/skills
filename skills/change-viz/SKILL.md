@@ -23,6 +23,8 @@ Run none of the project's code beyond what the request asks for or permits: no t
 
 ## 1. Find the base
 
+Only a request naming a pull request that exists, by number, by URL or as this branch's open one, is about one: read [pull requests](references/pull-requests.md) in place of steps 1 and 2. Any other request, even to write this branch's pull request description, calls no `gh`: the checkout has all it needs.
+
 The base is the default branch this branch was cut from. Find it from the refs that exist here, because a checkout may have no remote at all.
 
 1. Name the current branch with `git --no-optional-locks rev-parse --abbrev-ref HEAD`, and list uncommitted changes with `git --no-optional-locks status --porcelain --untracked-files=all`. Do both first, so the list shows the working tree as the author left it.

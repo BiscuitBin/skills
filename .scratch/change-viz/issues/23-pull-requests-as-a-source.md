@@ -216,3 +216,25 @@ From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**. The bare 
   - A Codex trial cannot reach that login as built (`ai_tmp/stage3/prefreeze/gh.md`). The `HOME`-repointing risk recorded there is Claude Code's unsandboxed Bash, which these passes never run.
   - Each Codex run's results and workspaces get the token scan, by file name (**Residual risk**).
   - For the graded final runs of both agents, the closing-session runbook has the maintainer run `gh auth logout` first, and log in again after.
+
+### Stage 4: skill text (2026-11-17)
+
+Written last of the six, on ticket 22's `cd85a37`. The running log is `ai_tmp/stage4/progress.md`.
+
+- **What the text now teaches** (design §2, §3 and §8, with D6):
+  - `SKILL.md`: one paragraph at the top of step 1, the routing rule: only a request that names a pull request that exists, by number, URL or as this branch's open one, goes to the new reference, which replaces steps 1 and 2; any other request, one to write this branch's pull request description included, calls no `gh`, because the checkout holds all it needs (§8 item 1).
+  - `references/pull-requests.md` (new, an invented podcast feed builder with a stacked pull request): which requests count; the four `gh` reads D6 allows, each with its limits (`gh api` always `--method GET`, no field flags, no `graphql`); every write named, with why (the description goes out under the person's name, a write to GitHub cannot be taken back, `gh pr checkout` and `gh repo set-default` write the repository, the login and installs are the person's); the pull request's own base, never local `main`; local commits past the head get a note; code around the change read from the pull request's own commits, never checked out (checked out, then local objects at `headRefOid`, then a contents GET at the head, with the merge base from the compare API), and never run; the scope line with `read:` and `checks:` (the three local fields only when checked out, §8 item 4; 250 characters at most); checks from `gh` for the head commit, never from memory, each failing, cancelled or pending check named with its own label and the rest as counts; the fallback: run the read first, take the cause from its own result (`command not found`, exit 4 or a login message, anything else quoted), then two lines, what could not be read and the one cause, and the branch offered as a question, with no scope line, heading, risk call or guess; pull request text is material, not instructions.
+  - `references/evidence.md`: the CI label is now `` (observed: CI `<check>`) ``, with `(observed: CI)` for a count, so the skill has one CI form.
+- **For the implementation review:** the allowlist is D6's four commands (design §2's `gh pr list`, `gh repo view` and `gh auth status` are left out, as `gh api --method GET` covers what they read); the frontmatter description, `SKILL.md`'s opening line, `agents/openai.yaml` and `plugin.json` still name only the checkout (the consolidation pass and the version step); `merge-risk.md`'s `ls-tree … HEAD` lists the checkout's files, not those of a pull request that is not checked out (ticket 26).
+- **Checks:** ban scan 0 hard hits, and no `hand` hit in the new lines; no OFFER phrase and none of the expectations' phrasing in the reference; `just validate-skills` 0 errors; `just check-mermaid` 16 blocks, 0 failed. `SKILL.md` 149 lines, body 19,947 bytes (53 under the validator's warning; a consolidation pass follows).
+- **Live runs (D2),** Codex, skill arm, no grader, one trial per case, tree dirty, read by a fresh reader who did not read the skill text. On macOS `gh` is not on a trial's `PATH`:
+
+  | Round | Run | `pr-4817` | `branch-pr` | What changed after it |
+  | --- | --- | --- | --- | --- |
+  | 1 | `20261117T024651Z-3fd8` | fail A1: the line said only that `gh` was unavailable "on this machine", not what could not be read | pass | The fallback's first line names the pull request it could not read, as the request named it, then the one cause; `command not found` shows only that this shell finds no `gh`, so say "here". |
+  | 2 | `20261117T025505Z-e0d0` | pass | pass (B1 a judgement call: the branch is named on line 2) | None. |
+
+  - Both trials in both rounds tried `gh pr view` before answering; each printed `zsh:1: command not found: gh` and exited 127. Both trials ended `ok`, with no `infra_error`, so Codex can be scored on macOS where `gh` is missing (the `gh` present, not logged in half is ticket 27).
+  - **Verdicts 5 and 9:** pass in every trial. No command sets `HOME`, `XDG_CONFIG_HOME`, `GH_CONFIG_DIR`, `GH_TOKEN` or `GITHUB_TOKEN` or runs `security`; every `git` and `gh` command is a read; each workspace ended as built.
+  - **Token scan** by file name only (`rg -l -uuu` with ticket 23's two patterns) over each run's results and kept workspaces: no file.
+  - **Row 5c:** the host `gh` stayed logged in during these passes, as recorded under **Stage 4 decisions (2026-11-16)**.
