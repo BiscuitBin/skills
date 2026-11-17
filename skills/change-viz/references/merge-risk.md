@@ -9,11 +9,11 @@ The risk call under the why sentence, the risk line and its two bullets, tells t
 - **Nothing after the line's closing `**`.** Anything more belongs in a bullet.
 - **Then exactly two bullets,** each on one line, with a plain label: `- Why <level>:`, with the level in lower case, then `- Walk it back:`. Neither carries a sub-list.
 - **Once, under the why, with no heading of its own.** A second call, or a risk section at the end, gives the reader two places to look and two answers to reconcile.
-- **Only in a description.** An answer that is not a description, such as a one-line question about the base, carries no call.
+- **Only in a description.** An answer that is not a description, such as a one-line question about the base or the scope line alone when there is nothing to describe, carries no call.
 
 ## What the call rates
 
-Rate the change being described, as if it alone were merged: that is what the description puts in front of the reader. Work the description leaves out, such as uncommitted edits beside the commits it covers, is not part of the call, and neither bullet discusses it.
+Rate what the scope line includes, as if it alone were merged: that is what the description puts in front of the reader. Work the line leaves out, such as uncommitted edits beside the commits it covers, is not part of the call: neither bullet weighs it or names its files.
 
 A change framed as a gain, such as a speed-up or a fix, still gets its call. What merging risks does not depend on how the change is told.
 

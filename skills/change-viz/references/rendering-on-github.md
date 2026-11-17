@@ -313,7 +313,7 @@ Wrong:
 
 ### Separate blocks with a blank line
 
-A blank line renders the same in a `.md` file and in a pull request: put one between the why sentence, the risk line, the notes, each lead-in and each fence. The same text then works pasted into a pull request, a comment or a committed file.
+A blank line renders the same in a `.md` file and in a pull request: put one between the scope line, the why sentence, the risk line, the notes, each lead-in and each fence. The same text then works pasted into a pull request, a comment or a committed file.
 
 Right:
 

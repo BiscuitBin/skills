@@ -95,7 +95,7 @@ The request allows the run it asks for, exactly as asked, in the checked-out tre
 
 Git stays read-only throughout: a run the request asks for widens nothing about the git commands the main instructions allow.
 
-The run uses the files on disk, uncommitted edits included. If step 1 listed uncommitted changes, say so in the sentence that reports the run, outside the label, so the reader knows the output may not be the commits' alone.
+The run uses the files on disk, uncommitted edits included. If the files on disk have work the scope line leaves out, say so in the sentence that reports the run, by kind only, such as "with the unstaged edits on disk", outside the label, so the reader knows the output may not come from the described change alone.
 
 ## Reporting a run
 
