@@ -98,3 +98,23 @@ The plan's one cross-model review of the six tickets' text, after all six had la
 
 - **The named questions:** PS2 left frozen is "defensible under the recorded, bounded probe decision", provided a PS2 pass is never shown as proof a label renders faithfully (question 1); no allowed `gh` form writes GitHub content or repository state (question 4); no rule was lost in the consolidation (question 5); no install or cache escapes the project (question 7). Question 2 became finding 3, question 3 finding 1.
 - **Not re-reviewed on its own:** the fixes go to the whole-skill review (D8), which reads the skill as it then stands.
+
+### Whole-skill cross-model review (D8, 2026-11-17)
+
+Ticket 25's implementation checkpoint, run before the maintainer's session as D8 allows, on the skill as a user installs it at `0.2.0`.
+
+- **Implementer:** Claude Code running `claude-opus-5-5`.
+- **Reviewer:** Codex `gpt-6-astra`, through `review.py run --implementer claude-code`, no fallback, exit 0 on the first run.
+- **Reviewed:** `skills/change-viz/` at `f0b57ce` whole (every file pasted), the marketplace entry, the whole `evals.json` and a list of the 12 fixtures for reading from disk, and the code half of the Stage 4 review's fixes (`git diff 01b3817 f0b57ce -- src scripts tests …`), against tickets 18 to 25 with D1 to D8 and eight named questions. The brief is `ai_tmp/brief-whole-skill.md`.
+- **Findings:** `ai_tmp/review-20261117T061857Z-codex.md` · **Triage:** `ai_tmp/stage4/triage-whole.md`, by a separate agent, which reproduced finding 1 in a throwaway repository.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | The risk call's search for what merging sets off misses automation the base gained after the fork, which no read of the branch sees and the merge runs | valid | `merge-risk.md`: the merged tree keeps the base's version of every file the branch leaves alone, so list what the base changed since the fork (`diff --name-status HEAD...<base>`) and read the files that decide what merging sets off at `<base>`; stated as the one exception to reading in the scope's state. |
+| 2 | medium | The `@`, `#` and closing-word rules apply to every description but sit only in the rendering reference, read before a diagram or table | valid | `SKILL.md` gains one paragraph with the three rules and their reasons; the full form stays in `rendering-on-github.md`. |
+| 3 | medium (triage: low) | `pull-requests.md` forbids any run on a pull request, even one that is checked out, contradicting `evidence.md` | valid | Only code read from a pull request that is not checked out is never run (D6); a checked-out pull request is the checkout, so a requested run follows the evidence rules. The closing session confirms this reading with the maintainer. |
+| 4 | low | The pull request scope line's hard 250 characters cannot hold its mandatory fields with a long base name | valid | "About 250", as for a branch: only the checks shorten, every field stays, and the line may run longer. |
+| 5 | low | PF1 and PS1 fail a tilde-fenced diagram the skill allows | out of scope | A known limit of the frozen rubric, recorded in ticket 24's residuals and `follow-ups.md`. |
+
+- **The named questions:** no teaching to the test (1); no trivial pass, since every behaviour case's baseline fails an output assertion (5); no further write, unasked run or credential read (6); the `0.2.0` manifests, invocation settings and notices are consistent (7); no defect in the Stage 4 code fixes, by static reading (8).
+- **Claude Code outside the project:** a fake-API check of `run-claude.sh` (`ai_tmp/stage4/probe-rove/result.md`) found that every Claude Code run, with or without rove's plugin setting, writes a socket to `/tmp/cc-socks/<pid>.sock`. AGENTS.md asks for any such write to be recorded; it is the pinned CLI's own, and no setting the harness uses moves it.

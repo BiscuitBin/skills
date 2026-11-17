@@ -83,6 +83,8 @@ A one-line lead-in, then a visual. Repeat as needed.
 
 The description is often read raw, in a terminal or editor, before anyone renders it, so write it to read cleanly both ways. Outside the fenced blocks, start each line at the left margin, and write each paragraph, bullet and lead-in on one line, however long. A pull request shows every newline as a line break, so a line wrapped by hand breaks mid-sentence there, while a raw reader's editor wraps a long line anyway. Put every visual but an outcome table in a fenced block.
 
+GitHub acts on some words, so put any `@` word in backticks, since `@name` notifies its owner; write `#` and a number only for a real issue or pull request, which it links; and write a closing word such as `fixes` before one only when the branch's commits already link it, since merging closes it.
+
 [A complete example](references/example.md) shows the whole shape for an invented change. Read it before you write.
 
 Follow each runtime claim, such as what the code prints, with `(read from the code, not run)`, or `` (observed: ran `cmd`) `` after a run the request asked for or permitted: a reader can check structure in the diff, not an outcome. Read [evidence](references/evidence.md) before any run or runtime claim.
@@ -130,7 +132,7 @@ Draw a view the request names, such as a sequence diagram, first, whatever the s
 
 Then stop once each change the why or a note rests on is drawn. A further visual costs attention, so it must show a structure the others leave out; cut a view that repeats another. Never end on a catalogue that lists the files the diff lists or retells the whole change: it repeats the diff, and as the last block it gets the least care. Put one sketch in each block, under its own lead-in, so each lead-in speaks to one thing.
 
-Before you draw a Mermaid diagram or a table, read [rendering on GitHub](references/rendering-on-github.md). GitHub shows an error in place of a diagram whose block does not parse, and some characters quietly cut a label short, so the reader loses the very part they came to look at. It also covers `diff` fences, line breaks, and what GitHub does with `@` names and `#` numbers in the same text.
+Before you draw a Mermaid diagram or a table, read [rendering on GitHub](references/rendering-on-github.md). GitHub shows an error in place of a diagram whose block does not parse, and some characters quietly cut a label short, so the reader loses the very part they came to look at. It also covers `diff` fences and line breaks.
 
 Put a lead-in just above each block: one line, of one to three sentences, that opens with what the whole visual draws and then says what to notice. Without a lead-in the reader has to decode a visual before knowing what it draws and why it is there.
 

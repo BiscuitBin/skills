@@ -48,7 +48,7 @@ A diff shows the lines that changed, and a note on changed behaviour needs the c
 
 The scope line's `read:` field says which you got, so the reader can weigh each note by what stood behind it.
 
-Code read this way is never run, even when the request asks: the rules on evidence say why, and what to write instead.
+Code read from the pull request's commits while it is not checked out, as in 2 and 3, is never run, even when the request asks: the rules on evidence say why, and what to write instead. A pull request that is checked out, as defined above, is the checkout itself, so a run the request asks for follows the rules on evidence as it does for a branch.
 
 ## The scope line
 
@@ -63,7 +63,7 @@ The scope line of a pull request names it, its head and its base, then the field
 - **The three local fields only when it is checked out.** Then `staged:`, `unstaged:` and `untracked:` follow `commits:`, as the rules on local changes give them. Uncommitted work is never in a pull request, so each reads `left out` or `none`. Otherwise leave all three out: the working tree is not the pull request's, so any value there would describe something else. This is the one scope line that drops a field.
 - **`read:`** says how much code beyond the diff you read: `the diff only`, `the diff and <N> files at the head`, or `the diff and the checked-out code`.
 - **`checks:`** comes last, as below.
-- **Keep it to 250 characters,** and keep ` · ` out of every value, so each field stays where the reader looks for it.
+- **Keep it to about 250 characters,** as for a branch, and keep ` · ` out of every value, so each field stays where the reader looks for it. Shorten only the checks, as below: the source and the other fields are fixed, and a field dropped or a name cut to fit leaves the reader guessing. When the fields alone still pass 250 once the checks are folded, keep them all and let the line run longer.
 
 Not checked out, with code read from GitHub:
 
