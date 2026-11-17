@@ -16,6 +16,10 @@
 // Limits: GitHub does not publish its Mermaid version, so this checks against
 // the pinned one. Only fences at the top level are found: a fence inside a
 // block quote, or indented four or more spaces under a list item, is skipped.
+// An HTML comment is skipped, fence-looking lines included, as GitHub skips
+// it. Other HTML blocks, such as a `<pre>` or a `<details>` up to its first
+// blank line, are read as Markdown: a fence in one is checked though GitHub
+// would not render it, and a fence one leaves open can hide a later block.
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { glob } from 'node:fs/promises';
@@ -30,6 +34,7 @@ const MERMAID_CONFIG = { securityLevel: 'antiscript' };
 const MAX_TEXT_SIZE = 50_000;
 
 const OPENER = /^( {0,3})(`{3,}|~{3,})(.*)$/;
+const COMMENT_OPENER = /^ {0,3}<!--/;
 // A frame of the browser-side stack that Puppeteer appends to Mermaid's message.
 const STACK_FRAME = /^\s+at\s|\(https:\/\/mermaid-cli-intercept\.invalid\//;
 
@@ -40,10 +45,15 @@ class UsageError extends Error {}
  * `mermaid`, as CommonMark reads fences: a fence closes only on the same
  * character, at least as long, with nothing after it, so a fence nested in a
  * longer one is content. An unclosed fence runs to the end of the file.
+ *
+ * An HTML comment that starts a line outside a fence runs through the first
+ * line holding `-->`, its own included, and GitHub shows none of it, so a fence
+ * there opens nothing. A `<!--` inside a fence is code.
  */
 function mermaidBlocks(text) {
   const blocks = [];
   let open = null;
+  let comment = false;
   text.split(/\r?\n/).forEach((line, index) => {
     if (open) {
       const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
@@ -53,6 +63,10 @@ function mermaidBlocks(text) {
       } else {
         open.lines.push(line.replace(new RegExp(`^ {0,${open.indent}}`), ''));
       }
+      return;
+    }
+    if (comment || COMMENT_OPENER.test(line)) {
+      comment = !line.includes('-->');
       return;
     }
     const match = OPENER.exec(line);

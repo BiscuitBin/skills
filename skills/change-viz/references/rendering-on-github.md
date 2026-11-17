@@ -257,7 +257,7 @@ The commands the build script now runs, and how each ends (read from the code, n
 | `du -sh \| sort -h` | exit 0 |
 | `make thumbs` | exit 2 |
 
-The exit 2 comes from the missing `thumbs` target.
+The exit 2 comes from the missing `thumbs` target (read from the code, not run).
 ```
 
 - **Put a blank line before and after a table.** GitHub's docs ask for the blank line before it. After it, the GFM spec ends a table only at a blank line or another block, so a plain line straight after the last row becomes one more row. Wrong: the closing sentence above on the line straight after `| make thumbs | exit 2 |`.
@@ -301,14 +301,14 @@ GitHub's docs: in issues, pull requests and discussions, a newline inside a para
 Right, on one line:
 
 ```text
-- Thumbnails are now cached by key, so a second upload of the same image returns at once.
+- Thumbnails are now cached by key, so a second upload of the same image returns at once (read from the code, not run).
 ```
 
 Wrong:
 
 ```text
 - Thumbnails are now cached by key, so a second upload of the
-  same image returns at once.
+  same image returns at once (read from the code, not run).
 ```
 
 ### Separate blocks with a blank line
@@ -318,9 +318,9 @@ A blank line renders the same in a `.md` file and in a pull request: put one bet
 Right:
 
 ```text
-- Thumbnails made before this change keep their old size until the image is uploaded again.
+- Thumbnails made before this change keep their old size until the image is uploaded again (read from the code, not run).
 
-The path an upload now takes: an image already resized returns from the cache.
+The path an upload now takes: an image already resized returns from the cache (read from the code, not run).
 ```
 
 Wrong: the same two lines with nothing between them. The GFM spec then reads the lead-in as a lazy continuation of the bullet, so the reader sees it inside the note.
@@ -346,7 +346,7 @@ GitHub acts on this text in a pull request description or comment, and code ofte
 
 - **Put any `@` word in backticks.** `@name` notifies that person or team, and GitHub's docs say text in backticks is not formatted. Right: `` `@cached` now wraps `resize()` ``. Wrong: `@cached now wraps resize()`, which notifies whoever owns the name `cached`.
 - **Write `#` and a number only for a real reference.** `#12`, `GH-12`, `owner/repo#12` and a full commit hash become links. Right: "the third retry". Wrong: "retry #3", which links issue or pull request 3.
-- **Put a closing word before an issue reference only when the branch closes it.** In a pull request description, `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves` and `resolved`, in any case and with or without a colon, close the issue they precede when the pull request merges into the default branch. Write one only when the branch's own commit messages already link that issue. Right: "Stretched thumbnails, reported in #12, now keep their shape". Wrong: "This fixes #12" when nothing in the branch says so.
+- **Put a closing word before an issue reference only when the branch closes it.** In a pull request description, `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves` and `resolved`, in any case and with or without a colon, close the issue they precede when the pull request merges into the default branch. Write one only when the branch's own commit messages already link that issue. Right: "Stretched thumbnails, reported in #12, now keep their shape (read from the code, not run)". Wrong: "This fixes #12" when nothing in the branch says so.
 
 ## Length
 

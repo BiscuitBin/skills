@@ -416,6 +416,12 @@ def test_python_not_run_fails_on_a_command_that_runs_an_interpreter(
         # A case arm's command, past its pattern, in a later arm too.
         "case $x in b) :;; a) /usr/bin/python3 x.py;; esac",
         "case $x in\n  b) :\n    ;;\n  a) /usr/bin/python3 x.py\n    ;;\nesac",
+        # A quoted or escaped ) is part of the pattern; the unquoted one closes it.
+        "case $x in a\\)|x) /usr/bin/python3 x.py;; esac",
+        'case $x in "a)"|x) /usr/bin/python3 x.py;; esac',
+        "case $x in 'a)'|x) /usr/bin/python3 x.py;; esac",
+        # Quotes in a comment are text, so they quote no ) after it.
+        "# it's\ncase $x in a) /usr/bin/python3 x.py;; esac # that's",
     ],
 )
 def test_python_not_run_finds_an_interpreter_after_a_keyword_or_in_a_group(
@@ -453,6 +459,8 @@ def test_python_not_run_finds_an_interpreter_after_a_keyword_or_in_a_group(
         '/bin/zsh -c "PATH=/usr/bin python3 x.py"',
         "sh -c \"bash -c '/usr/bin/python3 x.py'\"",
         "env -i sh -c 'exec /usr/bin/python3 x.py'",
+        # Each ) in the string is quoted outside it, and closes its pattern inside it.
+        "sh -c 'case $x in a) /usr/bin/python3 x.py;; esac'",
     ],
 )
 def test_python_not_run_reads_the_string_a_shell_runs(tmp_path: Path, command: str) -> None:
@@ -528,6 +536,9 @@ def test_python_not_run_fails_closed_on_a_command_the_lexer_cannot_split(
         # A coprocess named like an interpreter runs only its group.
         "coproc python3 { cat /dev/null; }",
         "case $x in a) git status;; esac",
+        # A quoted or escaped ) does not close a pattern, so *.py is an alternative.
+        "case $x in a\\)|*.py|x) echo ok;; esac",
+        'case $x in "a)"|*.py|x) git status;; esac',
         # A case pattern is not a command, though the lexer splits its alternatives at |.
         (
             'git diff --name-only main | while read -r f; do case "$f" in'

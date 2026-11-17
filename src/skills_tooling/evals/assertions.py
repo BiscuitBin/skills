@@ -41,6 +41,8 @@ SHELL_FILE_OPTIONS = {"--rcfile", "--init-file", "-rcfile", "-init-file"}
 # An interpreter's name in text that cannot be split into commands: PYTHON, bare or
 # ending a path, but not part of a longer name such as cpython-314 or .python-version.
 PYTHON_WORD = re.compile(r"(?<![\w.-])python(?:3(?:\.\d+)?)?(?![\w.-])")
+# Stands in for a quoted or escaped `)` while the lexer splits, so it closes no case pattern.
+QUOTED_PAREN = "\ue000"
 # Seconds the shipped script may take to produce the expected output.
 SCRIPT_TIMEOUT = 30.0
 # The interpreter's single-letter flags that take no value and still run the script.
@@ -279,8 +281,41 @@ def _named_coprocess(rest: list[str]) -> bool:
     )
 
 
+def _mark_quoted_parens(command: str) -> str:
+    """The command with each quoted or escaped `)` as QUOTED_PAREN, by the lexer's own rules.
+
+    A backslash escapes the next character outside single quotes, and an unquoted `#`
+    starts a comment to the end of the line, even inside a word, whose quotes are text.
+    A quote or escape left open leaves the command as it was, for the lexer to reject.
+    """
+    marked: list[str] = []
+    quote = ""  # the open quote, or "" outside one
+    chars = iter(command)
+    for char in chars:
+        if char == "\\" and quote != "'":
+            escaped = next(chars, None)
+            if escaped is None:
+                return command
+            marked += [char, QUOTED_PAREN if escaped == ")" else escaped]
+        elif char == "#" and not quote:
+            marked.append(char)
+            for skipped in chars:
+                marked.append(skipped)
+                if skipped == "\n":
+                    break
+        elif char in "'\"" and quote in ("", char):
+            quote = "" if quote else char
+            marked.append(char)
+        else:
+            marked.append(QUOTED_PAREN if char == ")" and quote else char)
+    return command if quote else "".join(marked)
+
+
 def _past_pattern(words: list[str]) -> list[str] | None:
-    """The words after the `)` that closes a case pattern, or None when the pattern goes on."""
+    """The words after the `)` that closes a case pattern, or None when the pattern goes on.
+
+    A quoted or escaped `)` arrives as QUOTED_PAREN, so it closes nothing.
+    """
     end = next((i for i, word in enumerate(words) if ")" in word), None)
     if end is None:
         return None
@@ -293,7 +328,8 @@ def _programs(found: list[tuple[list[str], str]]) -> Iterator[list[str]]:
 
     After `case WORD in`, and after `;;` while a case is open, the words through the
     one holding the pattern's closing `)` are the pattern, which the lexer may have split
-    at `|` or a newline; the rest is the arm's command. `esac` closes the case.
+    at `|` or a newline; the rest is the arm's command. `esac` closes the case. Each
+    QUOTED_PAREN is a `)` again in the words yielded.
     """
     pattern = False  # in a case pattern, before its closing )
     cases = 0  # open cases: a ;; outside one, as in a here-doc body, starts no pattern
@@ -319,7 +355,7 @@ def _programs(found: list[tuple[list[str], str]]) -> Iterator[list[str]]:
                 pattern, program = arm is None, _program(arm or [])
         if operator == ";;" and cases:
             pattern = True
-        yield program
+        yield [word.replace(QUOTED_PAREN, ")") for word in program]
 
 
 def _shell_string(shell: str, options: list[str]) -> str | None:
@@ -364,7 +400,7 @@ def _runs_python(command: str, depth: int = 0) -> str | None:
     # A backslash-newline continues the line, as in the shell; the lexer would end it there.
     # An escaped backslash before the newline ends the line, so only an odd run joins.
     command = re.sub(r"(?<!\\)((?:\\\\)*)\\\n", r"\1", command)
-    found = command_list(command, whole_words=True)
+    found = command_list(_mark_quoted_parens(command), whole_words=True)
     if not found and command.strip():
         # Unbalanced quotes, as in a here-doc body with an apostrophe: fail closed.
         return _names_python(command)

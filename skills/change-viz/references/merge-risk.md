@@ -77,7 +77,7 @@ Both are for the shipping tool above, and each is the risk call alone; in a desc
 ```markdown
 **Risk: 🟢 Low** · **Door: two-way** · **Blast radius: people who run the new track command**
 
-- Why low: only the new `track` command reaches the new code, and every existing command behaves as before.
+- Why low: only the new `track` command reaches the new code, and every existing command behaves as before (read from the code, not run).
 - Walk it back: a revert is enough, because the command only reads the scan log and nothing ships when the base changes.
 ```
 
@@ -86,6 +86,6 @@ Second, a change to the nightly job, which runs whatever is on the base, so that
 ```markdown
 **Risk: 🔴 High** · **Door: one-way** · **Blast radius: every customer with a parcel in transit**
 
-- Why high: the nightly job in `jobs/schedule.toml` runs `notify_delays()` from the base, and the change makes that function pick every parcel in transit, so the job's first run after the merge emails customers who were never emailed before, and a sent email cannot be recalled.
-- Walk it back: a revert returns the nightly job to emailing only customers whose parcel is late, from its next run on, but cannot recall the emails already sent; nothing in the project recalls them, so the nearest recovery is a correction sent to the same customers.
+- Why high: the nightly job in `jobs/schedule.toml` runs `notify_delays()` from the base, and the change makes that function pick every parcel in transit, so the job's first run after the merge emails customers who were never emailed before (read from the code, not run), and a sent email cannot be recalled.
+- Walk it back: a revert returns the nightly job to emailing only customers whose parcel is late, from its next run on (read from the code, not run), but cannot recall the emails already sent; nothing in the project recalls them, so the nearest recovery is a correction sent to the same customers.
 ```

@@ -228,3 +228,7 @@ Written fifth, on ticket 21's `6da1c53`. The running log is `ai_tmp/stage4/progr
   - **Stopped at three rounds,** with E1, which the design calls a guard, failing on a strict read only; a lenient grader would likely pass it. The graded final run settles it.
   - In every round: every scope line is right in every field, no left-out work reaches a message, every `git diff` carries the `-c` prefix (closing that residual for Codex), nothing writes and no interpreter runs. The "nothing to describe" cases (C, G) answer with the scope line alone.
   - **False or loose claims recorded:** A (r2) says a malformed `--year` gives zero hikes, wrong for `2025-04` and for an empty value; A (r3) says `--year 202` includes every 2020s record, but the filter matches nothing; E's flowchart, in every round, prints before the unit choice, against the code; both call the binary a "GPS track", inferred from the README, beside "nothing here says what it contains".
+
+### Stage 4 implementation review (2026-11-17)
+
+Recorded in full in [ticket 25](25-review-with-the-maintainer-then-ship.md), **Stage 4 implementation review, for tickets 19 to 24**: Codex `gpt-6-astra` over `741510e..01b3817`, triaged separately. The rows that touch this ticket: 2, high (`local-changes.md:88` would have dropped committed work against `<fork>`), fixed, and 3 (this ticket's reads recorded a flowchart whose order contradicted the code), fixed in `views.md`.

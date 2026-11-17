@@ -62,7 +62,7 @@ service/
 
 Pseudocode gives logic in the order it runs, in the code's own names, with what does not bear on the point left out.
 
-The loop that sends each queued delivery, step by step: a reply of 410 Gone now turns the endpoint off, where it used to be retried like any other failure.
+The loop that sends each queued delivery, step by step: a reply of 410 Gone now turns the endpoint off, where it used to be retried like any other failure (read from the code, not run).
 
 ```text
 for each queued delivery
@@ -91,7 +91,7 @@ flush_queue()
 
 A flowchart fits a path that branches: the reader follows one input through it and sees which way it goes at each decision.
 
-Where a delivery goes after each reply: a 410 is now a branch of its own, which ends with the endpoint turned off rather than another retry.
+Where a delivery goes after each reply: a 410 is now a branch of its own, which ends with the endpoint turned off rather than another retry (read from the code, not run).
 
 ```mermaid
 flowchart LR
@@ -127,7 +127,7 @@ sequenceDiagram
 
 A state diagram fits something that passes through states: each box is a state, and each arrow is labelled with what moves it on. Use it when a change adds a state or a transition, or changes what triggers one.
 
-The states a delivery passes through, and what moves it from each to the next: `Expired` is new, so a delivery still failing a day after its event stops there instead of retrying without end.
+The states a delivery passes through, and what moves it from each to the next: `Expired` is new, so a delivery still failing a day after its event stops there instead of retrying without end (read from the code, not run).
 
 ```mermaid
 stateDiagram-v2
@@ -145,7 +145,7 @@ stateDiagram-v2
 
 A whole block is the code itself, for a part that is mostly new or whose order matters more than what changed.
 
-`disable_endpoint()`, which is all new, in full: it empties the endpoint's queue before it emails the owner, so no webhook goes out after the email says they have stopped.
+`disable_endpoint()`, which is all new, in full: it empties the endpoint's queue before it emails the owner, so no webhook goes out after the email says they have stopped (read from the code, not run).
 
 ```python
 def disable_endpoint(endpoint, reason):
@@ -169,6 +169,19 @@ What the sender does with each kind of reply, before and after: only a 410 is ha
 ## Keep each view small
 
 Keep only the calls, files, states and boundaries the point needs. Name things as the code names them, so a reader can find them, and leave out what does not bear on the point. A sketch that tries to show everything shows nothing in particular.
+
+## Draw only what the code does
+
+A reader trusts a picture more than a sentence and checks it less, so a wrong mark in a view misleads further than a wrong word in a note. Every mark in a view is a claim about the two versions you compared, and each must hold for them. Before you answer, check each view against the code in both versions, mark by mark:
+
+- **A line marked `+` or `-` is, or stands for, code the diff adds or removes.** A line that is in both versions takes neither mark, however much it matters to the point.
+- **A line with a leading space is in both versions.** Write it as the code writes it, or in plain words that cannot pass for code, such as `for each queued delivery`. Never write it as code the project does not contain: a context line `def flush_queue(batch_size=100):`, when `flush_queue()` takes no argument, tells the reader that the signature is real.
+- **Steps run in the order drawn.** `disable_endpoint()` empties the queue before it emails the owner, so every view of it does too. A step that runs only under a condition is drawn under that condition: the flowchart above hangs turning the endpoint off from the 410 branch, not from the path every reply takes.
+- **Every arrow, edge and end is one the code has, for the input it names.** The state diagram above ends at `[*]` from `Sent` and `Expired`, where the code is done with a delivery. An arrow from `Sent` back to `Retrying` would say that a delivery already sent can go out again, and nothing in the code sends one twice.
+- **Leaving out keeps the rest true.** A view may drop a step that does not bear on the point, but never reorder what is left, join two paths into one, or add a path the code lacks.
+- **Pseudocode reads as pseudocode,** a block as a whole: plain words around the code's own names, as in the loop above, so the reader never takes a paraphrase for a line they will find in a file.
+
+Cut a part you cannot check against the code rather than guess it: a missing arrow leaves the reader a question, and a wrong one gives them a wrong answer.
 
 ## When a second view earns its place
 

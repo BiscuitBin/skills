@@ -234,3 +234,7 @@ Written first of the six, on `31f13ac`. The plan is `ai_tmp/stage4/plan.md`; the
 - **Live run (D2):** run `20261116T225422Z-047b`, Codex, skill arm, no grader, one trial per case, tree dirty (the text was uncommitted). Both cases pass all five pattern assertions. A fresh reader, who did not read the skill text, read F-E1, F-E2, S-E1 and S-E2 by hand: all four pass (`ai_tmp/stage4/t24/r1/read.md`). F-E2 is the closest: its fact spans five flowchart nodes. Both diagrams render on the pinned Mermaid with every label whole, and undoing their entities fails PF3 and PS2. No false claim about the fixture, no write and no interpreter run. One round.
   - **Unscored:** both lead-ins describe less than their diagram draws, and the sequence case's notes hold no warning, though the flowchart case's caught a real one (a bad count still raises an uncaught `ValueError`). These are ticket 20's and 18's behaviours, carried to their texts.
 - **Carried:** the reference's risk-line example must match ticket 19's canonical block when 19 lands.
+
+### Stage 4 implementation review (2026-11-17)
+
+Recorded in full in [ticket 25](25-review-with-the-maintainer-then-ship.md), **Stage 4 implementation review, for tickets 19 to 24**: Codex `gpt-6-astra` over `741510e..01b3817`, triaged separately. The rows that touch this ticket: 5 (the Mermaid checker read an HTML comment's fences), fixed test first, and question 1 (PS2 left frozen: defensible, with its limit disclosed), answered.

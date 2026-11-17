@@ -238,3 +238,7 @@ Written last of the six, on ticket 22's `cd85a37`. The running log is `ai_tmp/st
   - **Verdicts 5 and 9:** pass in every trial. No command sets `HOME`, `XDG_CONFIG_HOME`, `GH_CONFIG_DIR`, `GH_TOKEN` or `GITHUB_TOKEN` or runs `security`; every `git` and `gh` command is a read; each workspace ended as built.
   - **Token scan** by file name only (`rg -l -uuu` with ticket 23's two patterns) over each run's results and kept workspaces: no file.
   - **Row 5c:** the host `gh` stayed logged in during these passes, as recorded under **Stage 4 decisions (2026-11-16)**.
+
+### Stage 4 implementation review (2026-11-17)
+
+Recorded in full in [ticket 25](25-review-with-the-maintainer-then-ship.md), **Stage 4 implementation review, for tickets 19 to 24**: Codex `gpt-6-astra` over `741510e..01b3817`, triaged separately. The rows that touch this ticket: 6 (the fallback's frozen expectations accept a `command -v gh` lookup), out of scope, and question 4 (row 1a: no allowed `gh` form writes), answered.

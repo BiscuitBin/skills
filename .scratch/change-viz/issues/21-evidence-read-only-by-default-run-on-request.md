@@ -247,3 +247,7 @@ Written fourth, on ticket 19's `e1f79e5`, after ticket 24's one-line rule (cross
   - `behaviour-describe-and-run-check`: it ran only the requested `python3 fingerprint.py --check fingerprints.txt`, once, then a read-only `git status`; it installed, edited and wrote nothing. Both run reports carry `` (observed: ran `…`) `` inline, with exit status 1, and the output is quoted whole in a `text` fence.
   - No label sits in a fence or on the risk line.
   - **Recorded, no expectation covers them:** several runtime claims carry no label (three in each message); the unasked message says whitespace-only changes "pass `--check`", labelled as read, which is wrong because the recorded fingerprints are not re-recorded on the branch, so the check now fails for one file; the asked message says "changing recorded values", which is false; both overstate "formatting-only". These go to the Stage 4 review.
+
+### Stage 4 implementation review (2026-11-17)
+
+Recorded in full in [ticket 25](25-review-with-the-maintainer-then-ship.md), **Stage 4 implementation review, for tickets 19 to 24**: Codex `gpt-6-astra` over `741510e..01b3817`, triaged separately. The rows that touch this ticket: 1 (`python_not_run`'s case-context reading, question 3: an escaped or quoted `)` ended a pattern), fixed test first, and 4 (examples that broke this ticket's label contract), fixed.

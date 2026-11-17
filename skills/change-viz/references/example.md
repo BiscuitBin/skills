@@ -8,12 +8,12 @@ An invented change, to show the whole shape: a static site builder that now rebu
 
 ## Why the change
 
-Writers can preview an edit to one page without rebuilding the whole site, because the builder now renders only the pages whose source changed since the last build.
+Writers can preview an edit to one page without rebuilding the whole site, because the builder now renders only the pages whose source changed since the last build (read from the code, not run).
 
 **Risk: 🟡 Medium** · **Door: two-way** · **Blast radius: anyone who builds after a layout edit**
 
 - Why medium: the new hash check in the build loop skips unchanged pages, so a build after a layout edit now produces different pages for every existing site (read from the code, not run), but nothing the change writes outlives a revert.
-- Walk it back: a revert is enough, because the old builder renders every page again and ignores `.build-record.json`, the only new file, which stays out of the repository.
+- Walk it back: a revert is enough, because `.build-record.json`, the only new file, stays out of the repository, and the old builder ignores it and renders every page again (read from the code, not run).
 
 ## Special things to note
 
@@ -22,7 +22,7 @@ Writers can preview an edit to one page without rebuilding the whole site, becau
 
 ## Change outline
 
-The path each page now takes through a build: only a page whose source does not match the record from the last build is rendered.
+The path each page now takes through a build: only a page whose source does not match the record from the last build is rendered (read from the code, not run).
 
 ```mermaid
 flowchart LR

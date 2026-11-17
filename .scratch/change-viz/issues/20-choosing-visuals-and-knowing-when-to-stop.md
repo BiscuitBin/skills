@@ -223,3 +223,7 @@ Written second, on ticket 24's `deb129f` (plan Phase 2; the order put 24 first s
 
   - **Close calls, passed and recorded:** B3: the note says "only the member named on the hold may lend it", with the verb backwards, while the diagram's edge `Held --> OnLoan: lend to held member` gives the right direction. R1: the file tree marks the unchanged `main()` as added. F1: one `diff` fence also holds the new test's hunk, from a second file. A strict grader could fail B3.
   - **Unscored:** the holds lead-in claims reporting the diagram does not draw; three `--> [*]` edges match nothing in the code, and `return` out of `Held` is missing; the first note of the fix and of the holds restates the why rather than warning. No trial ran an interpreter or wrote anything.
+
+### Stage 4 implementation review (2026-11-17)
+
+Recorded in full in [ticket 25](25-review-with-the-maintainer-then-ship.md), **Stage 4 implementation review, for tickets 19 to 24**: Codex `gpt-6-astra` over `741510e..01b3817`, triaged separately. The rows that touch this ticket: 3 (no rule that a visual agrees with the code; this ticket's reads recorded unchanged lines marked `+`), fixed in `views.md`, and 4 (unlabelled runtime claims in `views.md`'s examples), fixed.

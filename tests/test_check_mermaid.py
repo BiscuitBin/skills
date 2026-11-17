@@ -79,6 +79,38 @@ def test_a_block_inside_a_longer_outer_fence_is_not_checked(tmp_path: Path) -> N
         assert result.stdout.splitlines()[-1] == "check-mermaid: 0 blocks in 1 file, 0 failed."
 
 
+def test_a_fence_inside_an_html_comment_opens_nothing(tmp_path: Path) -> None:
+    # CommonMark ends the comment at the first line holding -->, so the block after it is real.
+    result = check(tmp_path, {"hidden.md": f"<!--\n````text\n-->\n\n{BAD}"})
+    assert result.returncode == 1, result.stdout + result.stderr
+    named = [
+        line.split(":")[1] for line in result.stdout.splitlines() if line.startswith("hidden")
+    ]
+    assert named == ["5"]
+
+
+def test_a_block_inside_an_html_comment_is_not_checked(tmp_path: Path) -> None:
+    # GitHub drops the comment, so a block in it is never rendered; `; two` would not parse.
+    block = f"{FENCE}mermaid\nsequenceDiagram\n    A->>B: one; two\n{FENCE}\n"
+    result = check(tmp_path, {"comment.md": f"<!--\n{block}-->\n"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.splitlines()[-1] == "check-mermaid: 0 blocks in 1 file, 0 failed."
+
+
+def test_a_flowchart_arrow_ends_an_html_comment(tmp_path: Path) -> None:
+    # BAD's arrow line holds -->, which ends the comment; the fence after it has no info string.
+    result = check(tmp_path, {"arrow.md": f"<!--\n{BAD}-->\n"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.splitlines()[-1] == "check-mermaid: 0 blocks in 1 file, 0 failed."
+
+
+def test_a_comment_opener_inside_a_fence_starts_nothing(tmp_path: Path) -> None:
+    result = check(tmp_path, {"code.md": f"{FENCE}text\n<!--\n{FENCE}\n\n{BAD}"})
+    assert result.returncode == 1, result.stdout + result.stderr
+    named = [line.split(":")[1] for line in result.stdout.splitlines() if line.startswith("code")]
+    assert named == ["5"]
+
+
 def test_scanning_resumes_after_an_outer_fence_closes(tmp_path: Path) -> None:
     text = f"````markdown\n{BAD}````\n\n{BAD}"
     result = check(tmp_path, {"after.md": text})

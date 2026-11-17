@@ -77,3 +77,24 @@ From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**. The plan 
   - [29](29-codex-says-which-way-a-count-moves.md): the Codex E7 gap. The benchmark is recorded with Codex's E7 shown as it is.
 - **D7:** the agent may push `change-viz`, edit PR #19's title and description, and take it out of draft at the end. The merge stays with the maintainer (**Out of scope**).
 - **D8:** the whole-skill cross-model review runs before the session, on the full Stage 4 text. Only the feedback's changes are reviewed in the session. This relaxes the maintainer checkpoint's ordering for the review, not for the benchmark.
+
+### Stage 4 implementation review, for tickets 19 to 24 (2026-11-17)
+
+The plan's one cross-model review of the six tickets' text, after all six had landed and before the version bump (plan Phase 2, "Once the six are in", item 2). The whole-skill review of D8 follows separately.
+
+- **Implementer:** Claude Code running `claude-opus-5-5`.
+- **Reviewer:** Codex `gpt-6-astra`, through `review.py run --implementer claude-code`, no fallback, exit 0.
+- **Reviewed:** `741510e..01b3817` (the Mermaid checker, the six tickets' text and the consolidation), with `package-lock.json` and the tickets left out of the pasted diff, every file under `skills/change-viz/` pasted whole, and seven named questions. The brief is `ai_tmp/brief-stage4.md`.
+- **Findings:** `ai_tmp/review-20261117T041521Z-codex.md` · **Triage:** `ai_tmp/stage4/triage-s4.md`, by a separate agent, which reproduced findings 1, 2 and 5.
+
+| # | Severity | Finding | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| 1 | medium | `python_not_run`'s case-pattern reading takes an escaped or quoted `)` as the pattern's end, so it can miss a run (`case x in a\)\|x) /usr/bin/python3 …`) or falsely fail a read (`a\)\|*.py\|x) echo ok`) | valid | Fixed test first: a quote-state pass marks every quoted or escaped `)` before the lexer splits, following its rules and its `#` comments, and fails closed when quoting does not resolve. Five new cases failed before the fix; a differential check against `shlex` found 0 differences over 121 pinned and 200,000 fuzzed commands. `docs/reference/evals.md` says so. |
+| 2 | high | `local-changes.md:88`: "a file a diff lists and `status` does not is unchanged" is false for the diff against `<fork>`, so committed work would be dropped | valid | `local-changes.md`: the changed files come from `--stat`; `status` settles a file whose only change is its timestamp only against `HEAD` or the staged version, never against `<fork>`, since it never sees the commits. |
+| 3 | medium | No rule makes a visual's marks, order, paths and context lines agree with the code; the Stage 4 reads recorded invented signatures, unchanged lines marked `+` and reversed order | valid | `views.md` gains **Draw only what the code does**, with its reason: each mark is a claim about the two versions compared; context lines are never code the project lacks; steps in the order they run, under their conditions; no arrow the code lacks; leaving out never reorders. `SKILL.md`'s outline "Done when" checks it at the point of answering. |
+| 4 | medium | Examples the agent is told to follow carry unlabelled runtime claims | valid | Labels added inline to every runtime claim in `example.md`, `views.md`, `merge-risk.md`, `rendering-on-github.md` and `local-changes.md`, and to `SKILL.md`'s good-note example. |
+| 5 | medium (triage: low) | The Mermaid checker reads an HTML comment's fence-looking lines as fences, so it can hide a real block or check one GitHub never renders | valid | Fixed test first: a comment that starts a line outside a fence runs through the first line holding `-->`, and is skipped. Four new tests, three failing before the fix. The other HTML block kinds are named as a limit in the script and in ADR 0018. |
+| 6 | low | The pull request fallback's transcript expectations accept `command -v gh` without a `gh` read | out of scope | The fix would change frozen expectations, and the rubric is not wrong: design 23 records a lookup that finds no path as proof that `gh` was tried (`design-23.md:427-428`, `:467`). |
+
+- **The named questions:** PS2 left frozen is "defensible under the recorded, bounded probe decision", provided a PS2 pass is never shown as proof a label renders faithfully (question 1); no allowed `gh` form writes GitHub content or repository state (question 4); no rule was lost in the consolidation (question 5); no install or cache escapes the project (question 7). Question 2 became finding 3, question 3 finding 1.
+- **Not re-reviewed on its own:** the fixes go to the whole-skill review (D8), which reads the skill as it then stands.

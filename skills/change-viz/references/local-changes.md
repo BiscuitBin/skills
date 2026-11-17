@@ -66,7 +66,7 @@ Housekeeping files that the system or an editor drops, such as `.DS_Store` or a 
 
 ## Reading each kind
 
-Start from `git --no-optional-locks status --porcelain --untracked-files=all`, the record of what changed. Each line gives two status columns, then the path. The first column compares the staged version with `HEAD`, the second compares the working tree with the staged version, and `??` marks a file Git does not track:
+Start from `git --no-optional-locks status --porcelain --untracked-files=all`, the record of what changed since the last commit. Each line gives two status columns, then the path. The first column compares the staged version with `HEAD`, the second compares the working tree with the staged version, and `??` marks a file Git does not track:
 
 ```text
 M  staged edit
@@ -85,7 +85,7 @@ Then read each kind the scope includes, and only those. Give every `diff` `-c di
 - Staged and unstaged edits together, against `HEAD`: the same without `--cached`, with `HEAD` at the end.
 - The commits and the uncommitted edits as one diff: `<fork>` in place of `HEAD`, with `--cached` too when the unstaged edits are left out.
 
-Add `--stat` for a summary first. Trust `status` for which files changed. `--name-only`, `--name-status` and `--raw` can list a file whose content is unchanged and only its timestamp moved, while `-p`, `--stat` and `--numstat` leave such a file out. A file a diff lists and `status` does not is unchanged.
+Add `--stat` for a summary first, and take the changed files from it: `--name-only`, `--name-status` and `--raw` can list a file whose content is unchanged and only its timestamp moved, while `-p`, `--stat` and `--numstat` leave such a file out. Against `HEAD` or the staged version, `status` can settle it: a file such a diff lists and `status` does not is unchanged. Against `<fork>` it cannot, because `status` compares only `HEAD`, the staged version and the files on disk, and never sees the commits: a file a commit changed and nothing has touched since is in that diff and not in `status`, and it is part of the change.
 
 The version before the change is the one the diff compares with: `HEAD`, or the staged version for unstaged edits alone. When the scope leaves the commits out, read the old version there wherever the main instructions say `<fork>`.
 
@@ -95,7 +95,7 @@ A read of the working tree, `status` among them, runs any clean filter the repos
 
 ## New files
 
-An untracked file is a new file, and it is in no diff the reader can open, so they learn it is new, and which file it is, only from the description. Name each one as new, by its path, in the sentence that says what it does when someone uses it: what it runs, and what it prints, writes or changes. For example: "`bin/export-links` is a new script: it reads the link table and writes each short link and its target to `links.csv`." A label in another place, such as "a handy export helper" in the why, leaves the reader to guess which file it is and what it does.
+An untracked file is a new file, and it is in no diff the reader can open, so they learn it is new, and which file it is, only from the description. Name each one as new, by its path, in the sentence that says what it does when someone uses it: what it runs, and what it prints, writes or changes. For example: "`bin/export-links` is a new script: it reads the link table and writes each short link and its target to `links.csv` (read from the code, not run)." A label in another place, such as "a handy export helper" in the why, leaves the reader to guess which file it is and what it does.
 
 `git diff` never shows a new file, so read each one the scope includes itself, after two checks:
 

@@ -103,7 +103,7 @@ The risk call is the template's risk line and its two bullets. The reader decide
 
 One to three bullets, and nothing else in the section, so a reader who has scanned the bullets has seen every note. A note is a warning of what could catch the reader out. A note that only says what the branch adds, or that it is safe, sends the reader looking for a catch that is not there, so leave that to the why or the outline. Choose what a reviewer would regret missing:
 
-- A change to existing behaviour, said as a warning to someone who relies on the old one: what moves, which way, for what input, and which part of the change causes it, so the reader can tell whether their own input is affected. A different default, a slower start, a stricter check, a field that is no longer sent. Name what the reader gets and say which way it moves, such as up or down, or from the old value to the new, even when the cause implies it. You have worked the effect out from the code, and they have not. "Timeouts change, because retries now draw on one time budget" leaves the reader to work out whether anything they depend on breaks; "requests that retry now give up sooner, after 5 seconds instead of 30, because every retry now shares one deadline" does not.
+- A change to existing behaviour, said as a warning to someone who relies on the old one: what moves, which way, for what input, and which part of the change causes it, so the reader can tell whether their own input is affected. A different default, a slower start, a stricter check, a field that is no longer sent. Name what the reader gets and say which way it moves, such as up or down, or from the old value to the new, even when the cause implies it. You have worked the effect out from the code, and they have not. "Timeouts change, because retries now draw on one time budget" leaves the reader to work out whether anything they depend on breaks; "requests that retry now give up sooner, after 5 seconds instead of 30, because every retry now shares one deadline (read from the code, not run)" does not.
 - A migration, or a limit on compatibility.
 - A deliberate omission, or a decision that will surprise.
 
@@ -138,7 +138,7 @@ Put a lead-in just above each block: one line, of one to three sentences, that o
 
 Keep the whole message, every line counted, within its shape's ceiling in characters: 1,500 for a small change, 2,500 for a restructure, 3,500 for a behaviour change, and 5,000 for several changes at once. They are limits, not targets: most descriptions need well under them. Each line past what the change needs buries what matters most; a larger change gets more room only because it has more to show. At a ceiling, drop the least important view whole rather than trim every part, since a view cut to fit shows less than it seems to. For a small change the outline shrinks, and the headings stay.
 
-Done when each section keeps to its limit, every visual has its own lead-in and shows something no other does, and the message is within its ceiling.
+Done when each section keeps to its limit, every visual has its own lead-in, shows something no other does and agrees with the code at every mark and arrow, and the message is within its ceiling.
 
 ## 4. Answer
 

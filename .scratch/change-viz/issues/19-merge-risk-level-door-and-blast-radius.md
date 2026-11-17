@@ -216,3 +216,7 @@ Written third, on ticket 20's `562c630`. The running log is `ai_tmp/stage4/progr
   Reads: `ai_tmp/stage4/t19/r<n>/read.md`. Round 3, verbatim radii: "users of the new `--weekdays` flag", B's in the read, "people installing daygap 1.4.0". C1 names the mechanism ("the release workflow publishes it to PyPI on every push to `main`"). C4 is the closest call: its walk-back says the published 1.4.0 cannot be removed, without naming the index.
   - **False or loose claims recorded** (none fails an item): B's flowchart draws the backup and the drop on every run, after the migrations, where the code copies the log first and only when it exists; B's note says the drop happens "only when" an existing log is opened; C's walk-back credits `skip-existing` with preventing a republish; A's diff sketch shows an invented `main(start, end, --weekdays)` on a context line (rounds 2 and 3).
 - **D1:** the predictions under **RED predictions** for the baseline arm are read against the final `--baseline` run.
+
+### Stage 4 implementation review (2026-11-17)
+
+Recorded in full in [ticket 25](25-review-with-the-maintainer-then-ship.md), **Stage 4 implementation review, for tickets 19 to 24**: Codex `gpt-6-astra` over `741510e..01b3817`, triaged separately. The rows that touch this ticket: 3 (no rule that a visual agrees with the code; this ticket's reads recorded an invented signature) and 4 (unlabelled runtime claims in `merge-risk.md`'s two calls and `example.md`'s risk call): both fixed.
