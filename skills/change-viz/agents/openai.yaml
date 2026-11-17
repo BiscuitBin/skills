@@ -1,5 +1,5 @@
 interface:
   display_name: 'Change Viz'
-  short_description: 'Describe a branch or local changes as a visual outline'
+  short_description: 'Describe a branch, local changes or a PR as a visual outline'
 policy:
   allow_implicit_invocation: false

@@ -1,6 +1,6 @@
 ---
 name: change-viz
-description: Describes a change in this checkout, the current branch's commits, its uncommitted work (staged, unstaged and untracked) or both, as Markdown for a pull request description or comment, with a line saying what it covers, one sentence on why, a merge-risk call, one to three notes and a change outline built from small visuals such as Mermaid diagrams, diff sketches and file trees. Runs only when invoked by name, never on its own. It reads the checkout, running nothing and writing no file unless asked.
+description: Describes a change, the current branch's commits, its uncommitted work (staged, unstaged and untracked) or both, or a named pull request, as Markdown for a pull request description or comment, with a line saying what it covers, one sentence on why, a merge-risk call, one to three notes and a change outline built from small visuals such as Mermaid diagrams, diff sketches and file trees. Runs only when invoked by name, never on its own. It reads the checkout, or the pull request through gh, running nothing and writing no file unless asked, and never posts to GitHub.
 license: MIT
 disable-model-invocation: true
 metadata:
@@ -9,13 +9,13 @@ metadata:
 
 # Change Viz
 
-Describe the current branch's commits, uncommitted work or both, for the person who will review or merge it. Your final message is the description: GitHub Markdown that can be pasted, as it stands, into a pull request description or comment.
+Describe the current branch's commits, uncommitted work or both, or a named pull request, for whoever will review or merge it. Your final message is the description: GitHub Markdown to paste, as it stands, into a pull request description or comment.
 
 The reader wants three things, in this order: why the branch exists, what could catch them out, and the shape of the change. Visuals carry the shape. Prose is there to clear up what a visual leaves open, and no more, because every extra line competes with the parts that matter.
 
 ## Leave the repository as you found it
 
-The person asking may have work in progress here, and a description should never change what it describes. So use git only to read: `log`, `diff`, `show`, `status`, `ls-files`, `grep … HEAD`, `rev-parse`, `rev-list`, `merge-base`, `for-each-ref`, `ls-tree`, `config --get`, `remote` on its own, and `symbolic-ref --quiet --short` with a single ref, which prints where it points. Put `--no-optional-locks` straight after `git` every time. Without it, `git status` may rewrite `.git/index` to refresh it, which is a write nobody asked for. A `diff` that reads the working tree can rewrite it even with the flag, so put `-c diff.autoRefreshIndex=false` before every `diff`: it sets that for one command and writes no config. Give every command that prints or searches a diff `--no-ext-diff --no-textconv` too: `diff`, `show` of a commit, and `log` with `-p`, `-S` or `-G`. The reader sees the plain diff on the pull request, not what a program set up on this machine makes of it, and such a program can write: text conversion with caching on stores its output under a ref. `status -v` prints a diff as well but takes neither flag, so leave `-v` off.
+The person asking may have work in progress here, and a description should never change what it describes. So use git only to read: `log`, `diff`, `show`, `status`, `ls-files`, `grep … HEAD`, `rev-parse`, `rev-list`, `merge-base`, `for-each-ref`, `ls-tree`, `config --get`, `remote` on its own, and `symbolic-ref --quiet --short` with a single ref. Put `--no-optional-locks` straight after `git` every time. Without it, `git status` may rewrite `.git/index` to refresh it, which is a write nobody asked for. A `diff` that reads the working tree can rewrite it even with the flag, so put `-c diff.autoRefreshIndex=false` before every `diff`: it sets that for one command and writes no config. Give every command that prints or searches a diff `--no-ext-diff --no-textconv` too: `diff`, `show` of a commit, and `log` with `-p`, `-S` or `-G`. The reader sees the plain diff on the pull request, not what a program set up on this machine makes of it, and such a program can write: text conversion with caching on stores its output under a ref. `status -v` prints a diff as well but takes neither flag, so leave `-v` off.
 
 Commands that move a ref, the index or the working tree, or that send anything to a remote, are out of bounds, however handy: `checkout`, `switch`, `stash`, `commit`, `reset`, `restore`, `add`, `add -N`, `update-index`, `clean`, `merge`, `rebase`, `worktree add`, `branch` or `tag` with a name, `fetch`, `pull` and `push`. None of them is needed here: the reads in step 2 reach every version of a file you need, the one before the branch included. If something can only be read with one of these commands, say what you could not read instead.
 
@@ -97,7 +97,7 @@ One sentence, on its own line under the heading, then a blank line and the risk 
 
 ### Writing the risk call
 
-The risk call is the template's risk line and its two bullets. The reader decides how closely to review before any diagram, so the call comes first, in one fixed shape they can find in every description. Rate what the scope line includes as if it alone were merged, by two questions: is the door one-way, because merging sets off something a revert cannot undo, and does anything that already exists behave differently, as written? Two-way and no is Low; two-way and yes, or one-way and no, is Medium; one-way and yes is High. What merging sets off often sits outside the diff, such as a job that runs when the base changes, so read [merge risk](references/merge-risk.md) before you make the call.
+The risk call is the template's risk line and its two bullets. The reader decides how closely to review before any diagram, so the call comes first, in one fixed shape they can find in every description. Rate what the scope line includes as if it alone were merged, by two questions: is the door one-way, because merging sets off something a revert cannot undo, and does anything that already exists behave differently, as written? What merging sets off often sits outside the diff, such as a job that runs when the base changes, so read [merge risk](references/merge-risk.md) before you make the call: it gives the level.
 
 ### Writing the notes
 
@@ -115,34 +115,34 @@ Three is about as many as a reader keeps in mind at once. Give each bullet one c
 
 Show the shape of the change: how the parts fit together after it, and what each changed part does when used, what it runs and prints or changes, naming a new file as new, by its path: a label leaves the reader guessing. The diff lists the files and commits; listing them repeats it and hides the shape. Tell it in the easiest order, such as data or entry point first.
 
-Build it from small visuals, at least one in a fenced block whose language names what it holds: `mermaid`, `diff`, `text`, or the code's own language, so a raw reader knows what kind of sketch follows. Prefer views of the structure you read to samples of output: the structure holds for every input and can be checked against the code, where a sample shows one input. So an outcome table, of inputs against results, sits beside a fenced view, never in its place.
+Build it from small visuals, at least one in a fenced block whose language names what it holds: `mermaid`, `diff`, `text`, or the code's own language, so a raw reader knows what kind of sketch follows. Prefer views of the structure you read, which holds for every input, to samples of output, which show one: an outcome table sits beside a fenced view, never in its place.
 
 Draw the smallest set of views that makes the point, and choose each by the kind of structure the change alters, which is what the diff does not show at a glance. [The views](references/views.md) has an example of each: read it before you pick.
 
 - **A small change**, a few lines in one place: a diff sketch of the lines in their function. Old and new side by side are the whole change, even when it alters behaviour, such as a new default, and a larger view draws mostly what stayed the same.
 - **A restructure**, code or files moved, split or renamed that behave as before: a file tree drawn as a diff sketch, since where each part went is all that changed.
-- **A behaviour change**, a path, an interaction or a set of states that differs: the Mermaid diagram built for it, a flowchart for a branching path, a sequence diagram for messages between parts, or a state diagram (`stateDiagram-v2`) for states and their transitions. Add the diff sketch behind it when the diagram hides what changed in the code.
+- **A behaviour change**, a path, an interaction or a set of states that differs: the Mermaid diagram built for it, a flowchart, a sequence diagram or a state diagram (`stateDiagram-v2`). Add the diff sketch behind it when the diagram hides what changed in the code.
 - **Several changes at once**: a view for each change the why or a note rests on, at most four.
 
-For any other change, pick the view built for what the reader most needs to see. A diff sketch goes in a `diff` fence: a `text` fence shows its marks without colour.
+For any other change, pick the view built for what the reader most needs to see. A diff sketch goes in a `diff` fence.
 
 Draw a view the request names, such as a sequence diagram, first, whatever the shape of the change: the person asking has said what they need to see. Otherwise spend the first visual on the change the why is about. Whatever the request asks for, a view or an output such as a command's result, is never cut, by the rules below or by the length ceilings: it has earned its place.
 
-Then stop once each change the why or a note rests on is drawn. A further visual costs attention, so it must show a structure the others leave out, such as the code behind a flow. Cut a view that repeats another, such as a flow that retells a pseudocode sketch. Never end on a catalogue that lists the files the diff lists or retells the whole change: it repeats the diff, and as the last block it gets the least care. A tree that draws a move or places new files is a view, not a catalogue. Put one sketch in each block, under its own lead-in, so each lead-in speaks to one thing.
+Then stop once each change the why or a note rests on is drawn. A further visual costs attention, so it must show a structure the others leave out; cut a view that repeats another. Never end on a catalogue that lists the files the diff lists or retells the whole change: it repeats the diff, and as the last block it gets the least care. Put one sketch in each block, under its own lead-in, so each lead-in speaks to one thing.
 
-Before you draw a Mermaid diagram or a table, read [rendering on GitHub](references/rendering-on-github.md). GitHub draws a diagram only when the whole block parses: a block it cannot parse shows an error where the diagram should be, and some characters quietly cut a label short, so the reader loses the very part they came to look at. It also covers `diff` fences, line breaks, and what GitHub does with `@` names and `#` numbers in the same text.
+Before you draw a Mermaid diagram or a table, read [rendering on GitHub](references/rendering-on-github.md). GitHub shows an error in place of a diagram whose block does not parse, and some characters quietly cut a label short, so the reader loses the very part they came to look at. It also covers `diff` fences, line breaks, and what GitHub does with `@` names and `#` numbers in the same text.
 
-Put a lead-in just above each block: one line, of one to three sentences, that opens with what the whole visual draws and then says what to notice, such as "What `fetch()` calls when a retry times out: every retry now shares one deadline". Without a lead-in the reader has to decode a visual before knowing what it draws and why it is there. A pair of blocks, such as a flow and the diff behind it, gets a lead-in each.
+Put a lead-in just above each block: one line, of one to three sentences, that opens with what the whole visual draws and then says what to notice. Without a lead-in the reader has to decode a visual before knowing what it draws and why it is there.
 
 ### Fitting the length to the change
 
-Keep the whole message, every line counted, within its shape's ceiling in characters: 1,500 for a small change, 2,500 for a restructure, 3,500 for a behaviour change, and 5,000 for several changes at once. They are limits, not targets: most descriptions need well under them. The reader comes to a description for what matters most, and each line past what the change needs buries it; a larger change gets more room only because it has more to show. At a ceiling, drop the least important view whole rather than trim every part, since a view cut to fit shows less than it seems to. For a small change the outline shrinks, and the headings stay.
+Keep the whole message, every line counted, within its shape's ceiling in characters: 1,500 for a small change, 2,500 for a restructure, 3,500 for a behaviour change, and 5,000 for several changes at once. They are limits, not targets: most descriptions need well under them. Each line past what the change needs buries what matters most; a larger change gets more room only because it has more to show. At a ceiling, drop the least important view whole rather than trim every part, since a view cut to fit shows less than it seems to. For a small change the outline shrinks, and the headings stay.
 
 Done when each section keeps to its limit, every visual has its own lead-in and shows something no other does, and the message is within its ceiling.
 
 ## 4. Answer
 
-Your final message is the description itself, starting with the scope line, ready to paste. If the scope is empty, the message is the scope line alone; if finding the base ended in a one-line ask, the ask is. An answer that is not a description, such as these, has no headings, no risk call and no length ceiling: headings and a call would promise a description that is not there. Keep the description out of a code fence: a fenced description pastes as raw text, and the reader loses the headings and the diagrams.
+Your final message is the description itself, starting with the scope line. If the scope is empty, the message is the scope line alone; if finding the base ended in a one-line ask, the ask is. An answer that is not a description, such as these, has no headings, no risk call and no length ceiling: headings and a call would promise a description that is not there. Keep the description out of a code fence: a fenced description pastes as raw text, and the reader loses the headings and the diagrams.
 
 Write as one person to another, in plain words and short sentences. Write about the branch, not about this request or the instructions you are following: the description reaches people who never saw this conversation.
 

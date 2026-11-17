@@ -18,7 +18,7 @@ Every example below is invented: a different change to a service that sends webh
 
 ## Diff sketch
 
-Use a diff sketch when the point is what changes and the surrounding shape already exists. Match its shape to the topic: the changed lines inside their function for a small change, a file tree for moved files, a call tree for a new call, pseudocode for changed logic. Mark added lines with `+` and removed lines with `-`, and start every other line with a space, as a real diff does, so a reader who knows the notation reads it at a glance. The rendering-on-GitHub reference that the main instructions link says which other line starts a `diff` fence colours, and why the marks show no colour in a `text` fence.
+Use a diff sketch when the point is what changes and the surrounding shape already exists. Match its shape to the topic: the changed lines inside their function for a small change, a file tree for moved files, a call tree for a new call, pseudocode for changed logic. Mark added lines with `+` and removed lines with `-`, and start every other line with a space, as a real diff does, so a reader who knows the notation reads it at a glance. Put it in a `diff` fence: a `text` fence shows the marks without colour. The rendering-on-GitHub reference that the main instructions link says which other line starts a `diff` fence colours.
 
 `retry_after()`, which sets the wait before each retry, old and new: the wait now doubles with each attempt, so the fifth retry waits 32 seconds where it waited 10 (read from the code, not run).
 
