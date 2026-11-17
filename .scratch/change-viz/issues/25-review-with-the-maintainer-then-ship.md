@@ -112,7 +112,7 @@ Ticket 25's implementation checkpoint, run before the maintainer's session as D8
 | --- | --- | --- | --- | --- |
 | 1 | medium | The risk call's search for what merging sets off misses automation the base gained after the fork, which no read of the branch sees and the merge runs | valid | `merge-risk.md`: the merged tree keeps the base's version of every file the branch leaves alone, so list what the base changed since the fork (`diff --name-status HEAD...<base>`) and read the files that decide what merging sets off at `<base>`; stated as the one exception to reading in the scope's state. |
 | 2 | medium | The `@`, `#` and closing-word rules apply to every description but sit only in the rendering reference, read before a diagram or table | valid | `SKILL.md` gains one paragraph with the three rules and their reasons; the full form stays in `rendering-on-github.md`. |
-| 3 | medium (triage: low) | `pull-requests.md` forbids any run on a pull request, even one that is checked out, contradicting `evidence.md` | valid | Only code read from a pull request that is not checked out is never run (D6); a checked-out pull request is the checkout, so a requested run follows the evidence rules. The closing session confirms this reading with the maintainer. |
+| 3 | medium (triage: low) | `pull-requests.md` forbids any run on a pull request, even one that is checked out, contradicting `evidence.md` | valid | Only code read from a pull request that is not checked out is never run (D6); a checked-out pull request is the checkout, so a requested run follows the evidence rules. The maintainer confirmed this reading on 2026-11-17 (**The maintainer's confirmations**). |
 | 4 | low | The pull request scope line's hard 250 characters cannot hold its mandatory fields with a long base name | valid | "About 250", as for a branch: only the checks shorten, every field stays, and the line may run longer. |
 | 5 | low | PF1 and PS1 fail a tilde-fenced diagram the skill allows | out of scope | A known limit of the frozen rubric, recorded in ticket 24's residuals and `follow-ups.md`. |
 
@@ -150,5 +150,18 @@ Everything the first acceptance criterion asks that needs no Claude token, made 
   - `behaviour-describe-uncommitted`'s flowchart puts the `--miles` choice after printing, but the code chooses the unit inside each print (`hikes.py:38`, `:41`).
   - `retire-wishlist` says every `readlog` invocation applies migration 003, but `wish X` exits 2 before opening the log. It also says a revert restores the commands, but on a migrated log `wishes` then fails with `no such table: wishlist`.
   - `with-sequence` says in `f47c` that malformed records get a numbered error, but `rice|two` still raises an uncaught `ValueError`. The rerun drops the claim.
-  - These are the kinds of fault that **Draw only what the code does** and the evidence rules address. No text round was opened for them: a text change now would make both reviews, this pass and the four real outputs stale. They go to the session, beside the maintainer's own points.
-- **Left for the session:** Claude Code's four outputs, the maintainer's read, the graded final runs on both agents and the benchmark, and what to do with the misses above. The runbook is `ai_tmp/release/SESSION.md`.
+  - `behaviour-branch-and-uncommitted`'s sketch shows `hikes = read_hikes(args.file)` as an unchanged line, but on `main` it was `read_hikes(argv[1])` (`start/hikes.py:21`).
+  - The `diff` blocks of `behaviour-describe-staged` and `behaviour-describe-changes-try-ideas` turn a hunk header's `def main(argv):` into a context line, then drop the lines between it and the hunk with no mark.
+  - The sketches of `behaviour-describe-add-weekdays`, `behaviour-describe-add-weekdays-2` and `behaviour-describe-add-holds` keep the old line as unchanged context beside its `+` replacement.
+  - These are the kinds of fault that **Draw only what the code does** and the evidence rules address. No text round was opened for them: a text change now would make both reviews, this pass and the four real outputs stale. They join the session's feedback round (**The maintainer's confirmations**, 5).
+- **Left for the session:** Claude Code's four outputs, the maintainer's read, the feedback round with the misses above, the graded final runs on both agents and the benchmark. The runbook is `ai_tmp/release/SESSION.md`.
+
+### The maintainer's confirmations (2026-11-17)
+
+Before the closing session, the maintainer answered the runbook's five questions, choosing the recommended option each time:
+
+1. **PS2 stays frozen** (ticket 24, **Stage 4: skill text**): its entity exemption passes `#42;` and `#word;`, but no recorded output writes either, and `evals_sha256` stays `d3890efe…`.
+2. **The lead ran the Codex evals under D2**, including the reruns `3d49` and `7a96`: fine.
+3. **rove runs with its plugin setting as it is,** and the `/tmp/cc-socks/<pid>.sock` write recorded above is accepted.
+4. **The D6 reading stands:** a run the request asks for, on a pull request that is checked out, follows the evidence rules, and a fork's pull request the person checked out counts as checked out (whole-skill review, finding 3).
+5. **The strict misses and false claims join step 4's feedback round:** `add-weekdays-2`'s C1 and C4, `branch-and-uncommitted`'s E1 and the false claims above. Each is fixed by its general reason, with the maintainer's own points, under one short Codex review. Each affected eval case is then rerun on Codex with `--no-grader` and read strictly before the graded final runs. The tracer's E7 stays with ticket 29 (D5).

@@ -224,7 +224,7 @@ Written first of the six, on `31f13ac`. The plan is `ai_tmp/stage4/plan.md`; the
   - `github-rules-24.md` gains §7: A.2a, B.2a and the A.2 and B.2 corrections, with their grammar lines.
   - No version bump (D4) and no `compatibility` change (no bundled checker).
 - **The probe** (`ai_tmp/stage4/mermaid/probe-result.md`), through `just check-mermaid --labels` on Mermaid 12.2.0: all 13 blocks agree with PF2, PF3 and PS2's grammar reading, in both directions. The heads never probed (`opt`, `par_over`, `rect`) agree too. No pattern is re-frozen, and `evals_sha256` stays `d3890efe…`.
-  - **A limit found beyond the 13:** PS2 exempts any `#[A-Za-z0-9]+;` as an entity, and Mermaid decodes every such run, so PS2 passes `#42;` (shown as another character) and `#word;` (shown as `&word;`). It needs a `;` straight after an issue number or a name, which no recorded output has. The lead left PS2 frozen, since none of the 13 blocks contradicts it, and the reference now teaches the rule.
+  - **A limit found beyond the 13:** PS2 exempts any `#[A-Za-z0-9]+;` as an entity, and Mermaid decodes every such run, so PS2 passes `#42;` (shown as another character) and `#word;` (shown as `&word;`). It needs a `;` straight after an issue number or a name, which no recorded output has. The lead left PS2 frozen, since none of the 13 blocks contradicts it, and the reference now teaches the rule. The maintainer confirmed keeping it frozen on 2026-11-17 (ticket 25, **The maintainer's confirmations**).
   - Two forms PS2 rejects render whole (`;` joining two statements, a `#` after a `rect` colour). Both were already listed as false flags.
 - **Checks:**
   - ban scan: 0 hard hits; the `hand` hits in the new reference are five uses of "blank line" (21-x) in its layout sense;
