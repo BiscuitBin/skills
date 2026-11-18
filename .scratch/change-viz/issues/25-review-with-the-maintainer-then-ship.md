@@ -197,4 +197,4 @@ The maintainer decided to release `0.2.0` before the closing session. Their word
   - The alert was opened on `main` on 2026-11-09, before this work.
   - The flagged line prints `results.scrub(…, secrets)`, which redacts every secret first.
   - `main` has no branch rules, so the alert does not block the merge.
-  - Dismissing it is the maintainer's call.
+  - The maintainer chose to dismiss it as a false positive. The agent dismissed it with the reason that `results.scrub` replaces every secret before printing (`src/skills_tooling/evals/results.py:29-33`), and PR #19's CodeQL check on `04f6ddf` then read "No new alerts in code changed by this pull request".
