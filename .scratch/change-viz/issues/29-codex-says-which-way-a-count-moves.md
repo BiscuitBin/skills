@@ -2,7 +2,7 @@
 
 **What to build:** find the general reason Codex's descriptions leave out which way a changed count moves, change what the skill explains, and show ticket 18's E7 passing on Codex.
 
-Why: a reader who relies on the old output needs to know whether the numbers they get go up or down. On Codex, the skill names the new rule and leaves that to the reader. The maintainer made it a follow-up, not a release blocker: the release benchmark records E7 as it is (D5, `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**).
+Why: a reader who relies on the old output needs to know whether the numbers they get go up or down. On Codex, the skill names the new rule and leaves that to the reader. The maintainer made it a follow-up, not a release blocker (D5, `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**). `0.2.0` shipped with E7 as it is, and with no benchmark (D9); ticket 30's graded runs record it as it is.
 
 **Blocked by:** 25 (Review with the maintainer, then ship).
 
@@ -30,7 +30,8 @@ As of 2026-11-16. From ticket 18: **E7 (Codex)**, **Codex trials, and the E7 fix
 - **Still held:** a clause for a change framed as a gain ("even when the new behaviour is the better one"). No `c5be` note framed the change that way.
 - **When E7 counts as closed on Codex** (ticket 18): on three Codex trials, 3 of 3 closes it, 2 of 3 is improved but not closed, and one or none means the fix failed.
 - **Ticket 20's 350-character note cap** fails two of Claude Code's three recorded E7 passes, 357 characters at `11b6` and 412 at `3958` (ticket 20, **Residual risk**).
-- **Stage 4 rewrites `SKILL.md`,** so the cited lines move. The release benchmark (ticket 25) holds the latest Codex E7 result, on the released text.
+- **Stage 4 rewrites `SKILL.md`,** so the cited lines move.
+- **On the released `0.2.0` text:** the strict hand read failed E7 in both draws, `f47c` ("can report different word and distinct counts") and `7a96` ("can change"), with no grader (ticket 25, **Outputs before the maintainer's session**). Ticket 30's graded runs give the first graded result.
 
 ## Acceptance criteria
 

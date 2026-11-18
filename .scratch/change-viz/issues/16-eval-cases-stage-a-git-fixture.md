@@ -8,7 +8,7 @@ Why the installed skill needs care: once the workspace has history, `git status`
 
 Tickets 16 and 17 do not depend on each other, but both edit the case loader, `docs/reference/evals.md` and `GLOSSARY.md`. Whichever lands second rebases onto the first.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). No paid agent run is needed: the work is shown with unit tests and with the pinned CLIs against the local fake API, as the canary sweep does. Cross-model review is also required.
 

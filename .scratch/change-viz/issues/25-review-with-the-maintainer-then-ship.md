@@ -6,7 +6,7 @@ Why: every earlier ticket checks one behaviour against small fixtures. Whether t
 
 **Blocked by:** 19 (Merge risk), 20 (Choosing visuals), 21 (Evidence), 22 (Local changes), 23 (Pull requests as a source), 24 (Output renders on GitHub).
 
-**Status:** ready-for-agent
+**Status:** done, except Claude Code's outputs on the four real changes, the maintainer's read, the feedback round and the graded benchmark, which the maintainer carried to [ticket 30](30-maintainer-read-and-first-graded-benchmark.md) when releasing `0.2.0` as is (D9, 2026-11-17)
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). The maintainer reads the outputs and gives feedback, runs the live evals in their own terminal, with the token, and has the `gh` login the pull request runs need. Cross-model review of the whole skill is also required.
 
@@ -35,20 +35,25 @@ As of 2026-11-10.
     - Changed by D5 (2026-11-16): the pull request runs move to [ticket 26](26-pull-requests-read-live-with-a-read-only-token.md), so here each change is run only as a branch against its base, with `gh` stubbed.
   - The runs use the project's pinned agent CLIs through `just run`, with the skill installed into the clone as a user would install it. Nothing is written to the maintainer's own agent homes.
   - Each output is saved under `ai_tmp/`, beside the pull request's original description.
+  - Changed by D9 (2026-11-17): the Codex outputs and the fixture passes are done (**Outputs before the maintainer's session**); Claude Code's four outputs move to [ticket 30](30-maintainer-read-and-first-graded-benchmark.md).
 - [ ] The maintainer reads each output beside the original and gives feedback. Their words are recorded here, by output.
+  - Changed by D9 (2026-11-17): moves to [ticket 30](30-maintainer-read-and-first-graded-benchmark.md).
 - [ ] Each piece of feedback is applied by finding the general reason behind it and changing what the skill explains. No rule is added that only makes sense for one of the four. The notes say, for each, what changed and why it generalises, or why it was not applied.
+  - Changed by D9 (2026-11-17): moves to [ticket 30](30-maintainer-read-and-first-graded-benchmark.md), with the strict misses and false claims of **Outputs before the maintainer's session**.
 - [ ] After the changes, the outputs are regenerated and the maintainer confirms the result, or a second round is recorded.
+  - Changed by D9 (2026-11-17): moves to [ticket 30](30-maintainer-read-and-first-graded-benchmark.md).
 - [ ] The full suite passes on Claude Code and Codex with `--baseline`, and the two runs are recorded as a benchmark iteration with `just eval-record`. The file it writes is committed, and `just eval-report change-viz` builds.
   - Changed by D5 (2026-11-16): E7 on Codex need not pass, since the benchmark records it as it is and the gap is [ticket 29](29-codex-says-which-way-a-count-moves.md).
-- [ ] A cross-model review covers the whole skill as a user would install it: `SKILL.md`, every reference, any script, the eval suite and the fixtures. It is not limited to this ticket's diff.
-- [ ] The version is set for release, by semver, and agreed with the maintainer: whether this is `1.0.0` or stays below it.
+  - Changed by D9 (2026-11-17): `0.2.0` shipped with no graded run and no benchmark; both move to [ticket 30](30-maintainer-read-and-first-graded-benchmark.md).
+- [x] A cross-model review covers the whole skill as a user would install it: `SKILL.md`, every reference, any script, the eval suite and the fixtures. It is not limited to this ticket's diff.
+- [x] The version is set for release, by semver, and agreed with the maintainer: whether this is `1.0.0` or stays below it.
   - Changed by D4 (2026-11-16): the maintainer chose `0.2.0`, one bump for the whole pull request (`CONTRIBUTING.md:89-95`).
-- [ ] Docs are current: `README.md`, `docs/reference/distribution.md`, and anything the earlier tickets changed in `docs/reference/evals.md`, `GLOSSARY.md` and the ADRs. Each term the tickets added is used the same way everywhere.
-- [ ] Follow-ups are written to `.scratch/change-viz/follow-ups.md`, including:
+- [x] Docs are current: `README.md`, `docs/reference/distribution.md`, and anything the earlier tickets changed in `docs/reference/evals.md`, `GLOSSARY.md` and the ADRs. Each term the tickets added is used the same way everywhere.
+- [x] Follow-ups are written to `.scratch/change-viz/follow-ups.md`, including:
   - richer output formats (HTML, artifacts), as this skill's option or as a separate skill that composes with it
   - the skill that creates or updates a pull request description, built on this one
   - every residual the earlier tickets recorded, such as a "does not" outcome with no automated check
-- [ ] `just format` has run, the changes are committed, and `just check` passes.
+- [x] `just format` has run, the changes are committed, and `just check` passes.
 
 ## Out of scope
 
@@ -60,6 +65,7 @@ Use the `cross-model-review` dev skill.
 
 - **Maintainer checkpoint:** the review of the outputs, above. Do not record the benchmark iteration or start the whole-skill review until the maintainer has confirmed the regenerated outputs.
   - Changed by D8 (2026-11-16): the whole-skill review runs before the maintainer's session, on the full Stage 4 text, and only the feedback's changes are reviewed in the session; the benchmark still waits for the maintainer's confirmation.
+  - Changed by D9 (2026-11-17): `0.2.0` shipped before this checkpoint, which moves to [ticket 30](30-maintainer-read-and-first-graded-benchmark.md) with the benchmark.
 - **Implementation checkpoint:** before marking done, review the whole skill against the acceptance criteria of tickets 18 to 24 as well as this one. Pay particular attention to instructions added for one of the four pull requests, to rules that contradict each other across references, and to anything the skill tells an agent to do without saying why.
 
 ## Completion notes
@@ -155,6 +161,7 @@ Everything the first acceptance criterion asks that needs no Claude token, made 
   - The sketches of `behaviour-describe-add-weekdays`, `behaviour-describe-add-weekdays-2` and `behaviour-describe-add-holds` keep the old line as unchanged context beside its `+` replacement.
   - These are the kinds of fault that **Draw only what the code does** and the evidence rules address. No text round was opened for them: a text change now would make both reviews, this pass and the four real outputs stale. They join the session's feedback round (**The maintainer's confirmations**, 5).
 - **Left for the session:** Claude Code's four outputs, the maintainer's read, the feedback round with the misses above, the graded final runs on both agents and the benchmark. The runbook is `ai_tmp/release/SESSION.md`.
+  - Since D9 (2026-11-17), all of it is [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s, which keeps the runbook.
 
 ### The maintainer's confirmations (2026-11-17)
 
@@ -165,3 +172,29 @@ Before the closing session, the maintainer answered the runbook's five questions
 3. **rove runs with its plugin setting as it is,** and the `/tmp/cc-socks/<pid>.sock` write recorded above is accepted.
 4. **The D6 reading stands:** a run the request asks for, on a pull request that is checked out, follows the evidence rules, and a fork's pull request the person checked out counts as checked out (whole-skill review, finding 3).
 5. **The strict misses and false claims join step 4's feedback round:** `add-weekdays-2`'s C1 and C4, `branch-and-uncommitted`'s E1 and the false claims above. Each is fixed by its general reason, with the maintainer's own points, under one short Codex review. Each affected eval case is then rerun on Codex with `--no-grader` and read strictly before the graded final runs. The tracer's E7 stays with ticket 29 (D5).
+   - Since D9 (2026-11-17), this round is [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s.
+
+### Released as is (D9, 2026-11-17)
+
+The maintainer decided to release `0.2.0` before the closing session. Their words: "Lets save all that stuff in @ai_tmp/release/SESSION.md for later. Create a follow up ticket. Lets go ahead and release the skilll as is."
+
+- **What ships:** the skill text as of `5d4eff9` (`skill_sha256` `6d4d615a…`, `evals_sha256` `d3890efe…`). Every later commit changes only tickets.
+- **What backs it:**
+  - On Codex, every pattern assertion passed in all 21 cases (`f47c`).
+  - A strict hand read passed 17 of the 21 cases.
+  - Two cross-model reviews (the Stage 4 implementation review and the whole-skill review) were triaged and applied.
+  - Every Mermaid diagram in the skill's files passes the offline check that `just check` runs (ticket 24, ADR 0018).
+- **What it ships without:**
+  - Claude Code has not run the `0.2.0` text, only ticket 18's tracer text.
+  - No run of the `0.2.0` text was graded, and no benchmark is recorded.
+  - The maintainer has not read the outputs on the four real changes.
+- **Known faults that ship:** the three both-draw misses and the false claims listed under **Outputs before the maintainer's session**, and the Codex E7 gap of ticket 29.
+- **Carried to [ticket 30](30-maintainer-read-and-first-graded-benchmark.md):** Claude Code's outputs, the maintainer's read, the feedback round with those misses and false claims, the regenerated outputs, the graded runs on both agents, and the benchmark. Ticket 30 keeps the runbook and the local aids it needs. Those aids are git-ignored and exist only in the `change-viz` worktree.
+- **Unchanged:**
+  - D7: the maintainer merges PR #19.
+  - The confirmations above, which carry to ticket 30.
+- **PR #19's CodeQL check fails** on code-scanning alert #1 (`py/clear-text-logging-sensitive-data`, `src/skills_tooling/evals/runner.py:639`).
+  - The alert was opened on `main` on 2026-11-09, before this work.
+  - The flagged line prints `results.scrub(…, secrets)`, which redacts every secret first.
+  - `main` has no branch rules, so the alert does not block the merge.
+  - Dismissing it is the maintainer's call.

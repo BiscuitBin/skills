@@ -8,7 +8,7 @@ Why: the maintainer's prompt asks for "what the runtime outcomes are", and two o
 
 Tickets 19 to 24 do not depend on each other, but each edits the same `SKILL.md`, `evals/change-viz/evals.json` and version. Land them one at a time, and rebase onto the last one before a live run.
 
-**Status:** ready-for-agent
+**Status:** shipped in `0.2.0` (D9, 2026-11-17). Its boxes were not re-checked at the release, and the Claude Code and graded run ids are [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s.
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). The maintainer runs the live evals in their own terminal, with the token. Cross-model review is also required.
 
@@ -55,6 +55,7 @@ These repeat in tickets 18 to 24 so that each can be read alone.
 
 - [ ] Eval cases are written and baselined before the skill text changes (RED, then GREEN), and each rubric is frozen before its live run (`CONTRIBUTING.md` §2 and §3). The baseline and skill-arm run ids on Claude Code and Codex are recorded here.
   - Changed by D1 (2026-11-16): RED is folded into the final GREEN `--baseline` run, whose baseline arm shows the cases discriminate.
+  - Changed by D9 (2026-11-17): `0.2.0` shipped before any Claude Code or graded run of this ticket's cases, so those run ids are [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s. The Codex `--no-grader` run ids are under **Stage 4: skill text**.
 - [ ] Live evals are handed to the maintainer as absolute-path `just eval` commands. The agent reads `eval-results/` and never holds the token.
   - Changed by D2 (2026-11-16): the agent may now run Codex live evals with `--no-grader` on the project's Codex login and read the outputs against the expectations itself; Claude Code runs and the graded final runs stay with the maintainer.
 - [ ] Fixtures are a neutral project: no `skill` or `skills` wording anywhere in them, and none of Codex's sandbox-denial keywords (`operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock`, `failed to write file`) in output a failing command could print.

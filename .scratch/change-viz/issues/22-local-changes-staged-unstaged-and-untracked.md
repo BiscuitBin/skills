@@ -8,7 +8,7 @@ Why: the maintainer wants changes described whether they are "part of a Pull Req
 
 Tickets 19 to 24 do not depend on each other, but each edits the same `SKILL.md`, `evals/change-viz/evals.json` and version. Land them one at a time, and rebase onto the last one before a live run.
 
-**Status:** ready-for-agent
+**Status:** shipped in `0.2.0` (D9, 2026-11-17). Its boxes were not re-checked at the release, and the Claude Code and graded run ids are [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s.
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). The maintainer runs the live evals in their own terminal, with the token. Cross-model review is also required.
 
@@ -52,6 +52,7 @@ These repeat in tickets 18 to 24 so that each can be read alone.
 
 - [ ] Eval cases are written and baselined before the skill text changes (RED, then GREEN), and each rubric is frozen before its live run (`CONTRIBUTING.md` §2 and §3). The baseline and skill-arm run ids on Claude Code and Codex are recorded here.
   - Changed by D1 (2026-11-16): RED is folded into the final GREEN `--baseline` run, whose baseline arm shows the cases discriminate.
+  - Changed by D9 (2026-11-17): `0.2.0` shipped before any Claude Code or graded run of this ticket's cases, so those run ids are [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s. The Codex `--no-grader` run ids are under **Stage 4: skill text**.
 - [ ] Live evals are handed to the maintainer as absolute-path `just eval` commands. The agent reads `eval-results/` and never holds the token.
   - Changed by D2 (2026-11-16): the agent may now run Codex live evals with `--no-grader` on the project's Codex login and read the outputs against the expectations itself; Claude Code runs and the graded final runs stay with the maintainer.
 - [ ] Fixtures are a neutral project: no `skill` or `skills` wording anywhere in them, and none of Codex's sandbox-denial keywords (`operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock`, `failed to write file`) in output a failing command could print.
@@ -226,6 +227,7 @@ Written fifth, on ticket 21's `6da1c53`. The running log is `ai_tmp/stage4/progr
   | 3 | `20261117T021134Z-fd4c` | A, E | 2 of 2 | A passes; E fails E1 only: the node that says what `--longest` prints names the trail and the date, and the distance appears only in another note | None: the round limit. |
 
   - **Stopped at three rounds,** with E1, which the design calls a guard, failing on a strict read only; a lenient grader would likely pass it. The graded final run settles it.
+    - Since D9 (2026-11-17), `0.2.0` shipped with E1 unsettled, as one of ticket 25's both-draw misses. [Ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s feedback round fixes it, and its graded runs settle it.
   - In every round: every scope line is right in every field, no left-out work reaches a message, every `git diff` carries the `-c` prefix (closing that residual for Codex), nothing writes and no interpreter runs. The "nothing to describe" cases (C, G) answer with the scope line alone.
   - **False or loose claims recorded:** A (r2) says a malformed `--year` gives zero hikes, wrong for `2025-04` and for an empty value; A (r3) says `--year 202` includes every 2020s record, but the filter matches nothing; E's flowchart, in every round, prints before the unit choice, against the code; both call the binary a "GPS track", inferred from the README, beside "nothing here says what it contains".
 

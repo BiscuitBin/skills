@@ -10,6 +10,7 @@ What `change-viz` leaves for later. None of these blocks the release.
   - [27](issues/27-gh-without-a-login-on-a-linux-host.md): `gh` without a login, on a Linux host;
   - [28](issues/28-render-proof-in-a-github-post.md): the render proof in a GitHub post;
   - [29](issues/29-codex-says-which-way-a-count-moves.md): Codex says which way a changed count moves (E7).
+- **[30](issues/30-maintainer-read-and-first-graded-benchmark.md): the maintainer's read and the first graded benchmark,** carried from ticket 25 when `0.2.0` was released as is (D9, 2026-11-17): Claude Code's outputs on the four real changes, the maintainer's read, a feedback round with the strict misses and false claims found on Codex, and the graded runs on both agents.
 
 ## Residuals from tickets 18 to 24
 
@@ -18,7 +19,7 @@ What each ticket's completion notes record as still open at `01b3817`, under **R
 ### Measuring the skill
 
 - **One trial per case and arm.** The final runs use `--baseline --trials 1`, so no figure has a spread; three-trial reruns are left for later (ticket 20, **Stage 4 decisions**).
-- **A reader stood in for the grader.** Every Stage 4 round ran Codex with `--no-grader`, and one fresh reader judged each expectation by hand; only the final runs are graded (tickets 19 to 24, **Stage 4: skill text**).
+- **A reader stood in for the grader.** Every Stage 4 round ran Codex with `--no-grader`, and one fresh reader judged each expectation by hand (tickets 19 to 24, **Stage 4: skill text**). `0.2.0` shipped with no graded run; the first is ticket 30's.
 - **Grader leniency.** Some expectations pass on loose wording: ticket 19's A4 ("because"), C3 ("both") and C5 ("daygap users"), and ticket 20's E3, whose "what to notice" in a lead-in is a hand read (tickets 19 and 20).
 - **The 350-character note cap against E7.** The cap fails two of Claude Code's three recorded E7 passes, at 357 and 412 characters; a Claude Code E7 fail whose note the cap cut counts against the cap, never against E7 (ticket 20).
 - **LEN1500** is the likeliest final-run fail on Claude Code, because agents count characters poorly (ticket 20).
@@ -38,7 +39,7 @@ What each ticket's completion notes record as still open at `01b3817`, under **R
 - **Changes nothing, never writes.** No assertion shows that no command wrote to the index, the working tree, a ref or GitHub, so each live run's commands are listed and read by hand (tickets 22 and 23).
 - **Never runs code from a pull request that is not checked out.** No fixture can hold a pull request, so no run checks it until ticket 26's live path asks for one (ticket 21, **Stage 4 decisions**).
 - **An unclosed `mermaid` fence** followed by prose passes every pattern, so it is a hand read (ticket 24).
-- **No false or unlabelled runtime claim.** No expectation covers either: ticket 21's runs left several runtime claims unlabelled, and the Stage 4 reads record false claims about the fixtures that failed no item (tickets 19 to 22, **Stage 4: skill text**).
+- **No false or unlabelled runtime claim.** No expectation covers either: ticket 21's runs left several runtime claims unlabelled, and the Stage 4 reads record false claims about the fixtures that failed no item (tickets 19 to 22, **Stage 4: skill text**). The final text's list is in ticket 25, and ticket 30's feedback round takes it.
 - **No load in a quiet case.** A pass means the trace recorded no load, which is a lower bound, so the quiet case's transcripts are read by hand at each live run (ticket 17; `docs/reference/evals.md`, **Quiet cases**).
 - **The hand entries** in `.scratch/change-viz/bans.txt`, and ticket 24's "invent every example" read, stay by hand at every skill commit (tickets 19, 20, 21 and 24).
 
@@ -49,7 +50,7 @@ What each ticket's completion notes record as still open at `01b3817`, under **R
 - **Reads that run the person's own config.** In a partial clone, `diff` and `show` can fetch missing objects from the promisor remote; step 1's `status` runs a configured `core.fsmonitor` hook or daemon and a configured clean filter such as git-lfs's, and ticket 22's working-tree reads run that filter on every changed file (tickets 18 and 22).
 - **`-G` with `--no-textconv`** skips a binary file it would have read through a converter, and the text-conversion probes ran on Apple Git 2.50.1 only (ticket 18).
 - **`probe_reads.sh` has not run on Linux Git,** so the reads ticket 22 chose are shown to leave the index alone on Apple Git 2.50.1 only, and `grep … HEAD` was never probed (ticket 22, **Stage 4: skill text**).
-- **Untested forms:** a branch too large to read in full, the no-base and detached-`HEAD` scope lines, which ticket 25's real-change runs check by hand, and case B's account of `--year` (ticket 22).
+- **Untested forms:** a branch too large to read in full, the no-base and detached-`HEAD` scope lines, which no run has checked (each real-change run, in ticket 25 and in ticket 30, is a branch against its base), and case B's account of `--year` (ticket 22).
 - **Reading in full** makes a large branch slower and dearer (ticket 18, **Residual risks** of `c397d04`).
 - **`merge-risk.md`'s `git ls-tree -r --name-only HEAD`** lists the checkout's files, not those of a pull request that is not checked out, so a risk call on one can miss what merging it sets off. It belongs with ticket 26 (ticket 23, **Stage 4: skill text**).
 - **The pull request read path is unexercised** until ticket 26, and the cross-model review of design 23's §2, §3 and question 8's answer (row 1a) is owed no later than ticket 26's runs (ticket 23, **Stage 4 decisions**).

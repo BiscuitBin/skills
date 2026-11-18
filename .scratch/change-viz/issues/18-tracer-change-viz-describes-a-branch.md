@@ -6,7 +6,7 @@ Why: the maintainer describes a branch today by chaining two personal skills (`/
 
 **Blocked by:** 16 (Eval cases can stage a git fixture), 17 (Eval cases can invoke a skill by name).
 
-**Status:** ready-for-agent
+**Status:** shipped in `0.2.0` (D9, 2026-11-17). Its boxes were not re-checked at the release.
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). The maintainer runs the live evals in their own terminal, with the token, and reads the skill's output on one real branch before tickets 19 to 24 start. Cross-model review is also required.
 
@@ -92,7 +92,7 @@ These repeat in tickets 18 to 24 so that each can be read alone.
 
 ## Out of scope
 
-Each of these is its own ticket: the risk line (19), rules for choosing among visuals and for length (20), evidence labels and running commands (21), uncommitted changes (22), pull requests (23), and GitHub rendering rules (24). A benchmark iteration is recorded in ticket 25.
+Each of these is its own ticket: the risk line (19), rules for choosing among visuals and for length (20), evidence labels and running commands (21), uncommitted changes (22), pull requests (23), and GitHub rendering rules (24). A benchmark iteration is recorded in ticket 25 (since D9, in [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)).
 
 ## Review checkpoints
 
@@ -1602,6 +1602,7 @@ What follows from them:
 
 - **E7 stays an open gap on Codex.** The `c397d04` text is the text that goes into Stage 3. `CONTRIBUTING.md` §3 records a benchmark only once the skill passes on each agent, so ticket 25's `just eval-record` waits until E7 passes on Codex or the maintainer decides how to record it. Ticket 25's **What is known** says so.
   - Since D5 (2026-11-16), the gap is [ticket 29](29-codex-says-which-way-a-count-moves.md), and the release benchmark records E7 as it is.
+  - Since D9 (2026-11-17), `0.2.0` shipped with no benchmark; the first graded runs of the released text are [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s.
 - **Running code stays unaddressed by the text.** Ticket 21 (evidence) and ticket 22 (local changes) are where it comes up next: 21 labels what was run against what was read, and 22 reads a working tree that a test run would change.
 - **No ticket 18 box changes,** by the lead's decision of 2026-11-12 (`:1118`).
 

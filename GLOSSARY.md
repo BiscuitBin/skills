@@ -5,7 +5,7 @@ The vocabulary for developing, evaluating and distributing agent skills for Clau
 ## Skills
 
 **Skill**:
-A folder with a `SKILL.md` in the Agent Skills format, plus any bundled scripts, references or assets. It is shipped to users for an agent to load when its description matches the task.
+A folder with a `SKILL.md` in the Agent Skills format, plus any bundled scripts, references or assets. It is shipped to users for an agent to load when its description matches the task, or, for a by-name-only skill, when the user invokes it by name.
 _Avoid_: Plugin, prompt, command
 
 **Dev skill**:

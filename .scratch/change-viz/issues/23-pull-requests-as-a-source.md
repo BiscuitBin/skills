@@ -8,7 +8,7 @@ Why: a pull request is one of the three change sources the maintainer named, and
 
 Tickets 19 to 24 do not depend on each other, but each edits the same `SKILL.md`, `evals/change-viz/evals.json` and version. Land them one at a time, and rebase onto the last one before a live run.
 
-**Status:** ready-for-agent
+**Status:** shipped in `0.2.0` (D9, 2026-11-17). Its boxes were not re-checked at the release, and the Claude Code and graded run ids are [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s.
 
 **Agent requirements:** Any implementing agent (Claude Code or Codex). The live path needs a `gh` login, which a trial never has: the agent runs it by hand in a session where the maintainer's `gh` works, or hands the maintainer absolute-path commands. The maintainer also runs the live evals in their own terminal, with the token, and dispatches the live-eval job if the fallback case needs a Linux host. Cross-model review is also required.
 
@@ -59,6 +59,7 @@ These repeat in tickets 18 to 24 so that each can be read alone.
 
 - [ ] Eval cases are written and baselined before the skill text changes (RED, then GREEN), and each rubric is frozen before its live run (`CONTRIBUTING.md` §2 and §3). The baseline and skill-arm run ids on Claude Code and Codex are recorded here.
   - Changed by D1 (2026-11-16): RED is folded into the final GREEN `--baseline` run, whose baseline arm shows the cases discriminate.
+  - Changed by D9 (2026-11-17): `0.2.0` shipped before any Claude Code or graded run of this ticket's cases, so those run ids are [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s. The Codex `--no-grader` run ids are under **Stage 4: skill text**.
 - [ ] Live evals are handed to the maintainer as absolute-path `just eval` commands. The agent reads `eval-results/` and never holds the token.
   - Changed by D2 (2026-11-16): the agent may now run Codex live evals with `--no-grader` on the project's Codex login and read the outputs against the expectations itself; Claude Code runs and the graded final runs stay with the maintainer.
 - [ ] Fixtures are a neutral project: no `skill` or `skills` wording anywhere in them, and none of Codex's sandbox-denial keywords (`operation not permitted`, `permission denied`, `read-only file system`, `seccomp`, `sandbox`, `landlock`, `failed to write file`) in output a failing command could print.
@@ -216,6 +217,7 @@ From `ai_tmp/stage3/decisions.md`, **Stage 4 decisions (2026-11-16)**. The bare 
   - A Codex trial cannot reach that login as built (`ai_tmp/stage3/prefreeze/gh.md`). The `HOME`-repointing risk recorded there is Claude Code's unsandboxed Bash, which these passes never run.
   - Each Codex run's results and workspaces get the token scan, by file name (**Residual risk**).
   - For the graded final runs of both agents, the closing-session runbook has the maintainer run `gh auth logout` first, and log in again after.
+    - Since D9 (2026-11-17), the graded runs, and this step, are [ticket 30](30-maintainer-read-and-first-graded-benchmark.md)'s, and ticket 30 records here which was used.
 
 ### Stage 4: skill text (2026-11-17)
 
