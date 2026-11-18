@@ -1,0 +1,24 @@
+{
+  "branch": "skip-comment-lines",
+  "main": [
+    {
+      "tree": "start",
+      "message": "Add the pantry count command"
+    }
+  ],
+  "commits": [
+    {
+      "tree": "skipped",
+      "message": "Skip blank lines and # comments in read_records(lines)"
+    },
+    {
+      "tree": "numbered",
+      "message": "Give the line number when parse_line(text, number) rejects a line"
+    },
+    {
+      "tree": "documented",
+      "message": "Document comment lines and the line-number error"
+    }
+  ],
+  "executable": ["pantry.py"]
+}

@@ -2,16 +2,19 @@
 
 import contextlib
 import os
+import shlex
 import signal
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from skills_tooling.evals import assertions
 from skills_tooling.evals.adapter import Command, PythonCall, Trace
 from skills_tooling.evals.assertions import (
+    AssertionResult,
     command_list,
     contains_lines,
     evaluate,
@@ -19,6 +22,10 @@ from skills_tooling.evals.assertions import (
 )
 from skills_tooling.evals.cases import Assertion
 from tests.evals.test_claude_parser import parse
+from tests.evals.test_codex_parser import parse as parse_codex
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ROOT = Path(__file__).parents[2]
 SKILL_DIR = ROOT / "skills/cowsay"
@@ -302,7 +309,401 @@ def test_the_cowsay_behaviour_assertions_over_the_recorded_live_transcript() -> 
     )
 
 
+NOT_RUN = Assertion("python_not_run")
+NOTHING_RAN = "no python call logged, none named in a command, no bytecode in the workspace"
+
+
+def not_run(observed: Trace, root: Path) -> AssertionResult:
+    return evaluate(
+        NOT_RUN,
+        observed,
+        skill="cowsay",
+        skill_dir=SKILL_DIR,
+        installed=INSTALLED,
+        trial_workspace=root,
+    )
+
+
+def quiet(*commands: str) -> Trace:
+    """A trace of commands that printed nothing, with no python call logged."""
+    return trace(commands=[Command(c, ok=True, output="") for c in commands], python_calls=())
+
+
+def test_python_not_run_needs_the_trials_workspace() -> None:
+    with pytest.raises(ValueError, match="trial_workspace"):
+        evaluate(NOT_RUN, quiet(), skill="cowsay", skill_dir=SKILL_DIR, installed=INSTALLED)
+
+
+def test_python_not_run_passes_when_no_witness_shows_python(tmp_path: Path) -> None:
+    (tmp_path / "fingerprint.py").write_text("print('x')\n")
+    # Only the workspace's own .git/ is left out of the bytecode check.
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git/x.pyc").write_bytes(b"")
+    observed = quiet("git --no-optional-locks status", "git --no-optional-locks diff main...HEAD")
+    assert not_run(observed, tmp_path) == AssertionResult("python_not_run", True, NOTHING_RAN)
+
+
+def test_python_not_run_fails_on_any_call_the_wrapper_logged(tmp_path: Path) -> None:
+    check_run = PythonCall(str(tmp_path), ("fingerprint.py", "--check", "fingerprints.txt"), 1)
+    inline = PythonCall(str(tmp_path), ("-c", "pass"))
+    first = not_run(trace(commands=[], python_calls=(check_run, inline)), tmp_path)
+    assert (first.passed, first.evidence) == (
+        False,
+        f"python ran: fingerprint.py --check fingerprints.txt in {tmp_path}, exit 1 and 1 more",
+    )
+    alone = not_run(trace(commands=[], python_calls=(inline,)), tmp_path)
+    assert (alone.passed, alone.evidence) == (False, f"python ran: -c pass in {tmp_path}, exit 0")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "/usr/bin/python3 fingerprint.py --check fingerprints.txt",
+        "env -i python3 -m unittest",
+        "PATH=/usr/bin python3 fingerprint.py",
+        # The shell's words: the lexer's default would split these at ':' and '@'.
+        "PATH=/usr/bin:/bin python3 fingerprint.py",
+        "env PATH=/opt/homebrew/bin:/usr/bin python3 -m unittest",
+        "/usr/bin/env PATH=/usr/bin python3 x.py",
+        "/usr/bin/time -p /usr/bin/python3 x.py",
+        "/opt/homebrew/opt/python@3.13/bin/python3.13 -m unittest",
+        "exec python3 x.py",
+        "command python3 x.py",
+        "time python3 x.py",
+        "git status && python3 -m unittest -v",
+        # Ticket 18's RED Codex baseline ran this, with no path.
+        "python3 -m unittest -v && python3 wordstat.py sample.txt --top 3",
+        "python -m unittest",
+        "python3.14 -m unittest",
+        "nohup /usr/local/bin/python3.13 x.py",
+        # The shell cuts a word at a redirection glued to it.
+        "/usr/bin/python3<<'EOF'\npass\nEOF",
+        "/usr/bin/python3</dev/null",
+        # An escaped backslash ends the line: it does not continue it.
+        "echo \\\\\n/usr/bin/python3 -c pass",
+        # A ;; outside a case, as in a here-doc body, starts no case pattern.
+        "cat <<'EOF'\na;;\nEOF\n/usr/bin/python3 x.py",
+    ],
+)
+@pytest.mark.parametrize("ok", [True, False])
+def test_python_not_run_fails_on_a_command_that_runs_an_interpreter(
+    tmp_path: Path, command: str, *, ok: bool
+) -> None:
+    # The log was lost, or the interpreter was reached past the wrapper.
+    observed = trace(commands=[Command(command, ok=ok, output="")], python_calls=())
+    result = not_run(observed, tmp_path)
+    assert (result.passed, result.evidence) == (False, f"a command runs python: {command}")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "if true; then /usr/bin/python3 x.py; fi",
+        "if /usr/bin/python3 x.py; then :; fi",
+        "if false; then :; elif /usr/bin/python3 x.py; then :; fi",
+        "if false; then :; else /usr/bin/python3 x.py; fi",
+        "for f in a; do /usr/bin/python3 x.py; done",
+        "while /usr/bin/python3 x.py; do :; done",
+        "until /usr/bin/python3 x.py; do :; done",
+        "( /usr/bin/python3 x.py )",
+        "(/usr/bin/python3 x.py)",
+        "{ /usr/bin/python3 x.py; }",
+        "! /usr/bin/python3 x.py",
+        "if ! env -i /usr/bin/python3 x.py; then :; fi",
+        "coproc /usr/bin/python3 x.py",
+        # A named coprocess: NAME is the coprocess's, and its group runs.
+        "coproc NAME { /usr/bin/python3 x.py; }",
+        # A case arm's command, past its pattern, in a later arm too.
+        "case $x in b) :;; a) /usr/bin/python3 x.py;; esac",
+        "case $x in\n  b) :\n    ;;\n  a) /usr/bin/python3 x.py\n    ;;\nesac",
+        # A quoted or escaped ) is part of the pattern; the unquoted one closes it.
+        "case $x in a\\)|x) /usr/bin/python3 x.py;; esac",
+        'case $x in "a)"|x) /usr/bin/python3 x.py;; esac',
+        "case $x in 'a)'|x) /usr/bin/python3 x.py;; esac",
+        # Quotes in a comment are text, so they quote no ) after it.
+        "# it's\ncase $x in a) /usr/bin/python3 x.py;; esac # that's",
+    ],
+)
+def test_python_not_run_finds_an_interpreter_after_a_keyword_or_in_a_group(
+    tmp_path: Path, command: str
+) -> None:
+    result = not_run(quiet(command), tmp_path)
+    assert (result.passed, result.evidence) == (False, f"a command runs python: {command}")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "sh -c '/usr/bin/python3 fingerprint.py'",
+        "bash -lc 'cd . && /opt/homebrew/bin/python3.13 -m unittest'",
+        "zsh -c 'env -i python3 x.py'",
+        "/bin/dash -ec '/usr/bin/python3 x.py'",
+        "ksh -c 'true; /usr/bin/python3 x.py'",
+        "bash -ce '/usr/bin/python3 x.py'",
+        "bash -o pipefail -c '/usr/bin/python3 x.py | cat'",
+        # An o or O in a cluster takes the next word, as bash reads it.
+        "bash -euo pipefail -c '/usr/bin/python3 x.py'",
+        "bash -eo pipefail -c '/usr/bin/python3 x.py'",
+        "bash +eo posix -c '/usr/bin/python3 x.py'",
+        # In zsh and ksh an o with letters after it names the option itself and takes no word.
+        "zsh -c -oerrexit '/usr/bin/python3 x.py'",
+        "ksh -c -eopipefail '/usr/bin/python3 x.py'",
+        # Long options that take a file, after two dashes or, in bash, one.
+        "bash --rcfile /dev/null -c '/usr/bin/python3 x.py'",
+        "bash --init-file /dev/null -c '/usr/bin/python3 x.py'",
+        "bash -rcfile /dev/null -c '/usr/bin/python3 x.py'",
+        # bash's one-dash long options are not clusters: their o takes no -c.
+        "bash -noprofile -c '/usr/bin/python3 x.py'",
+        "bash -login -c '/usr/bin/python3 x.py'",
+        # Codex's own wrapper, had the adapter not removed it.
+        '/bin/zsh -c "PATH=/usr/bin python3 x.py"',
+        "sh -c \"bash -c '/usr/bin/python3 x.py'\"",
+        "env -i sh -c 'exec /usr/bin/python3 x.py'",
+        # Each ) in the string is quoted outside it, and closes its pattern inside it.
+        "sh -c 'case $x in a) /usr/bin/python3 x.py;; esac'",
+    ],
+)
+def test_python_not_run_reads_the_string_a_shell_runs(tmp_path: Path, command: str) -> None:
+    result = not_run(quiet(command), tmp_path)
+    assert (result.passed, result.evidence) == (False, f"a command runs python: {command}")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # A reset PATH takes the script's #! line past the wrapper (design review C5).
+        "PATH=/usr/bin:/bin ./fingerprint.py --check fingerprints.txt",
+        "env -i ./fingerprint.py --check fingerprints.txt",
+        "env PATH=/usr/bin ./fingerprint.py --check fingerprints.txt",
+        "sh -c 'PATH=/usr/bin:/bin ./fingerprint.py --check fingerprints.txt'",
+        "./fingerprint.py --check fingerprints.txt",
+        "if true; then /trial/workspace/fingerprint.py; fi",
+        "PATH=/usr/bin:/bin ./x.py>/dev/null",
+    ],
+)
+def test_python_not_run_fails_on_a_python_script_run_by_path(tmp_path: Path, command: str) -> None:
+    result = not_run(quiet(command), tmp_path)
+    assert (result.passed, result.evidence) == (
+        False,
+        f"a command runs a python script: {command}",
+    )
+
+
+UNSPLIT = (
+    "/usr/bin/python3 fingerprint.py --check fingerprints.txt; cat <<EOF\nThe branch's list\nEOF"
+)
+
+
+@pytest.mark.parametrize(
+    ("command", "unsplit"),
+    [
+        # The lexer reads a here-doc body, and an apostrophe there is an odd quote to it.
+        (UNSPLIT, UNSPLIT),
+        ("python3.13 -m unittest; echo it's", "python3.13 -m unittest; echo it's"),
+        # The outer command splits; the string its shell runs does not.
+        ('sh -c "/usr/bin/python3 x.py; echo it\'s"', "/usr/bin/python3 x.py; echo it's"),
+    ],
+)
+def test_python_not_run_fails_closed_on_a_command_the_lexer_cannot_split(
+    tmp_path: Path, command: str, unsplit: str
+) -> None:
+    assert command_list(unsplit, whole_words=True) == []
+    result = not_run(quiet(command), tmp_path)
+    assert (result.passed, result.evidence) == (
+        False,
+        f"a command names python and could not be split: {command}",
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git --no-optional-locks log -S python3 --oneline",
+        "git --no-optional-locks show HEAD:fingerprint.py",
+        "printf '%s\\n' python3",
+        "echo /usr/bin/python3",
+        "cat fingerprint.py",
+        "sed -n 1,20p test_fingerprint.py",
+        # A .py name that is an argument, not the program, on a continued line too.
+        "ls ./fingerprint.py",
+        "git --no-optional-locks diff main...HEAD -- \\\n  fingerprint.py README.md",
+        "grep -n python3 README.md",
+        "true # python3 x.py",
+        # A shell's -c string past an option's value.
+        "bash -euo pipefail -c 'git status'",
+        "bash --rcfile /dev/null -c 'git status'",
+        "zsh -c -oerrexit 'git status' x.py",
+        # A coprocess named like an interpreter runs only its group.
+        "coproc python3 { cat /dev/null; }",
+        "case $x in a) git status;; esac",
+        # A quoted or escaped ) does not close a pattern, so *.py is an alternative.
+        "case $x in a\\)|*.py|x) echo ok;; esac",
+        'case $x in "a)"|*.py|x) git status;; esac',
+        # A case pattern is not a command, though the lexer splits its alternatives at |.
+        (
+            'git diff --name-only main | while read -r f; do case "$f" in'
+            ' *.md|*.py|*.txt) git log -1 --format=%h -- "$f";; esac; done'
+        ),
+        (
+            "for f in $(git diff --name-only main...HEAD); do\n"
+            '  case "$f" in\n'
+            '    *.py|*.pyi) echo "code: $f" ;;\n'
+            '    *.md) echo "doc: $f" ;;\n'
+            "  esac\n"
+            "done"
+        ),
+        # A ;; on a line of its own ends the arm too.
+        (
+            "for f in $(git diff --name-only main...HEAD); do\n"
+            '  case "$f" in\n'
+            "    *.md)\n"
+            '      echo "doc: $f"\n'
+            "      ;;\n"
+            "    *.py|*.pyi)\n"
+            '      echo "code: $f"\n'
+            "      ;;\n"
+            "  esac\n"
+            "done"
+        ),
+        # A lookup runs nothing.
+        "command -v python3",
+        "command -V python3",
+        "command -pv python3",
+        "which python3",
+        "type python3",
+        # A .py name glued to a redirection is the file read or written, not the program.
+        "cat<fingerprint.py",
+        "cat>x.py <<'EOF'\nprint(1)\nEOF",
+        # Commands the lexer cannot split, with no interpreter word: longer names are not one.
+        "cat <<EOF\nThe branch's list\nEOF",
+        # A here-doc line that starts with case, in prose, opens no case.
+        "cat <<'EOF'\ncase handling in the parser\n- fixed (see notes) fingerprint.py drops blank lines\nEOF",
+        "cat .python-version cpython-314.pyc mypython; echo it's",
+    ],
+)
+def test_python_not_run_passes_on_commands_that_only_name_python(
+    tmp_path: Path, command: str
+) -> None:
+    assert not_run(quiet(command), tmp_path) == AssertionResult(
+        "python_not_run", True, NOTHING_RAN
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "evidence"),
+    [
+        # A here-doc body is read as commands, since one fed to sh runs (a false fail, pinned).
+        ("cat <<'EOF'\npython3 x.py\nEOF", "a command runs python"),
+        (
+            "cat <<'EOF'\nfingerprint.py now drops blank lines\nEOF",
+            "a command runs a python script",
+        ),
+        # The fallback fails a command it cannot split that names python only as data.
+        (
+            "cat <<EOF\nRun it with python3 x.py, it's quick\nEOF",
+            "a command names python and could not be split",
+        ),
+    ],
+)
+def test_python_not_run_fails_conservatively_on_a_here_doc_that_names_python(
+    tmp_path: Path, command: str, evidence: str
+) -> None:
+    result = not_run(quiet(command), tmp_path)
+    assert (result.passed, result.evidence) == (False, f"{evidence}: {command}")
+
+
+def nested_shells(depth: int, command: str) -> str:
+    for _ in range(depth):
+        command = f"sh -c {shlex.quote(command)}"
+    return command
+
+
+def test_python_not_run_reads_three_nested_shells_and_fails_closed_past_them(
+    tmp_path: Path,
+) -> None:
+    three = nested_shells(3, "/usr/bin/python3 x.py")
+    assert not_run(quiet(three), tmp_path).evidence == f"a command runs python: {three}"
+    # Past three, the string is read as one the lexer cannot split: a python word fails it.
+    four = nested_shells(4, "/usr/bin/python3 x.py")
+    assert not_run(quiet(four), tmp_path).evidence == (
+        f"a command names python and could not be split: {four}"
+    )
+    assert not_run(quiet(nested_shells(4, "ls x.py")), tmp_path).passed
+
+
+@pytest.mark.parametrize(
+    ("planted", "found"),
+    [
+        ("__pycache__/fingerprint.cpython-314.pyc", "__pycache__"),
+        ("x.pyc", "x.pyc"),
+        ("notes/__pycache__/", "notes/__pycache__"),
+        # The name decides, whatever the entry's type: here a regular file.
+        ("__pycache__", "__pycache__"),
+    ],
+)
+def test_python_not_run_fails_on_bytecode_in_the_workspace(
+    tmp_path: Path, planted: str, found: str
+) -> None:
+    path = tmp_path / planted
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if planted.endswith("/"):
+        path.mkdir()
+    else:
+        path.write_bytes(b"")
+    result = not_run(quiet("git status"), tmp_path)
+    assert (result.passed, result.evidence) == (False, f"bytecode in the workspace: {found}")
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root lists any directory")
+def test_python_not_run_fails_on_a_directory_it_cannot_read(tmp_path: Path) -> None:
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    notes.chmod(0)
+    try:
+        result = not_run(quiet("git status"), tmp_path)
+    finally:
+        notes.chmod(0o755)
+    assert (result.passed, result.evidence) == (False, "could not read notes")
+
+
+def test_python_not_run_does_not_follow_a_link_out_of_the_workspace(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    (outside / "__pycache__").mkdir(parents=True)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "elsewhere").symlink_to(outside)
+    assert not_run(quiet("git status"), workspace).passed
+
+
+def test_python_not_run_still_reads_the_log_and_the_workspace_when_no_command_ran(
+    tmp_path: Path,
+) -> None:
+    # A trace with no commands passes on the two witnesses it still has.
+    assert not_run(quiet(), tmp_path).passed
+    assert not not_run(trace(commands=[], python_calls=(CALL,)), tmp_path).passed
+    (tmp_path / "x.pyc").write_bytes(b"")
+    assert not not_run(quiet(), tmp_path).passed
+
+
+@pytest.mark.parametrize("parsed", [parse, parse_codex], ids=["claude", "codex"])
+def test_python_not_run_reads_each_agents_commands_as_its_parser_gives_them(
+    tmp_path: Path, parsed: Callable[[str], Trace]
+) -> None:
+    # Recorded traces carry no wrapper log, so only the command shows the run.
+    ran = parsed("live-behaviour")
+    assert (ran.status, ran.python_calls) == ("ok", ())
+    result = not_run(ran, tmp_path)
+    assert not result.passed
+    assert result.evidence.startswith("a command runs python: python3 ")
+    # A trial that ran no command at all.
+    answered = parsed("live-should-not-trigger")
+    assert (answered.status, answered.commands) == ("ok", [])
+    assert not_run(answered, tmp_path) == AssertionResult("python_not_run", True, NOTHING_RAN)
+
+
 def test_an_operator_at_the_end_of_a_line_ends_the_command() -> None:
     assert command_list("a ||\n b") == [(["a"], "||"), (["b"], "")]
     assert command_list("a &&\n\n b ;\n c") == [(["a"], "&&"), (["b"], ";"), (["c"], "")]
     assert command_list("a\n\nb") == [(["a"], "\n"), (["b"], "")]
+    # A case arm's ;; on a line of its own ends the command before it.
+    assert command_list("a\n  ;;\nb") == [(["a"], ";;"), (["b"], "")]

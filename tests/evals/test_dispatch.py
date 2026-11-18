@@ -25,6 +25,9 @@ API_KEY = "sk-proj-fake-dispatch-test-api-key"
     [
         (["skills/cowsay/SKILL.md"], ["cowsay"]),
         (["evals/haiku/evals.json"], ["haiku"]),
+        # A fixture's files and its fixture.json select the suite they sit in.
+        (["evals/cowsay/fixtures/f/trees/t/a.py"], ["cowsay"]),
+        (["evals/haiku/fixtures/f/fixture.json"], ["haiku"]),
         (["skills/haiku/scripts/x.py", "skills/cowsay/README.md"], ["cowsay", "haiku"]),
         (["src/skills_tooling/evals/grader.py"], SUITES),
         (["src/skills_tooling/evals/codex.py"], SUITES),

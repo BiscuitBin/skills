@@ -105,7 +105,12 @@ def test_the_allow_scripts_key_names_the_installed_claude_code(
     package = json.loads((ROOT / "package.json").read_text())
     pinned = package["devDependencies"]["@anthropic-ai/claude-code"]
     assert by_dep["@anthropic-ai/claude-code"] == [pinned]
-    assert list(package["allowScripts"]) == [f"@anthropic-ai/claude-code@{pinned}"]
+    # Puppeteer's postinstall is denied by name, which covers every version, so
+    # a puppeteer bump needs no copy; `just install-browser` installs the browser.
+    assert package["allowScripts"] == {
+        f"@anthropic-ai/claude-code@{pinned}": True,
+        "puppeteer": False,
+    }
 
 
 def rules_for(**match: list[str]) -> list[dict[str, Any]]:
@@ -134,6 +139,31 @@ def test_uv_resolves_only_releases_as_old_as_renovate_proposes() -> None:
     # --upgrade` would take a transitive release published that morning.
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert pyproject["tool"]["uv"]["exclude-newer"] == CONFIG["minimumReleaseAge"]
+
+
+# What config:recommended's `:ignoreModulesAndTests` preset sets as ignorePaths
+# (renovatebot/renovate, lib/config/presets/internal/default.preset.ts).
+IGNORE_MODULES_AND_TESTS = [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/examples/**",
+    "**/__tests__/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/__fixtures__/**",
+]
+
+
+def test_renovate_skips_the_eval_fixtures_and_keeps_the_presets_skips() -> None:
+    # An eval fixture is a frozen project, workflows included, hashed into
+    # evals_sha256, and the github-actions manager reads .github/workflows/ at any
+    # depth, so its pinned actions would draw update PRs. ignorePaths is not
+    # mergeable: setting it replaces the preset's list, so it must list it again.
+    # tests/fixtures/ needs no entry of its own, since **/tests/** covers it.
+    ignored = CONFIG.get("ignorePaths", [])
+    expected = [*IGNORE_MODULES_AND_TESTS, "evals/*/fixtures/**"]
+    assert [glob for glob in expected if glob not in ignored] == []
 
 
 def walk(node: object) -> list[tuple[str, object]]:

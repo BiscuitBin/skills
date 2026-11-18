@@ -1,0 +1,24 @@
+{
+  "branch": "retire-wishlist",
+  "main": [
+    {
+      "tree": "books",
+      "message": "Log the books you finish"
+    },
+    {
+      "tree": "wishes",
+      "message": "Keep a wishlist of books to read"
+    }
+  ],
+  "commits": [
+    {
+      "tree": "no-commands",
+      "message": "Remove the wish and wishes commands"
+    },
+    {
+      "tree": "dropped",
+      "message": "Drop the wishlist table"
+    }
+  ],
+  "executable": ["readlog.py"]
+}

@@ -1,0 +1,4 @@
+rice|2
+flour|1
+rice|3
+beans|4

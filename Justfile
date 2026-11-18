@@ -20,6 +20,12 @@ export npm_config_cache := tools / "cache/npm"
 export npm_config_update_notifier := "false"
 export npm_config_fund := "false"
 export npm_config_audit := "false"
+# Puppeteer looks for its browser here, and `just install-browser` puts
+# chrome-headless-shell here, rather than in ~/.cache/puppeteer. package.json
+# allowScripts denies puppeteer's postinstall, which would download full Chrome
+# as well; the skip covers a postinstall run any other way.
+export PUPPETEER_CACHE_DIR := tools / "puppeteer"
+export PUPPETEER_SKIP_DOWNLOAD := "true"
 export PREK_HOME := tools / "cache/prek"
 # Node, uv and the agent CLIs put temporary files here rather than in the
 # system temporary directory. Node uses TMPDIR whether or not it exists, so
@@ -50,10 +56,18 @@ initialize:
 # lock-check first, because `npm ci` alone misses a dependency removed from
 # package.json.
 [doc('Install exactly what the lockfiles say. Fails rather than relocks on drift.')]
-sync: lock-check
+sync: lock-check && install-browser
     uv python install --no-bin
     uv sync --locked
     npm ci
+
+# The build is the one the locked puppeteer pins (puppeteer-core's
+# revisions.js), so it moves only with a puppeteer bump. Full Chrome is never
+# downloaded. A build already in .tools/puppeteer is not downloaded again. npm
+# links no bin for puppeteer here, so its CLI runs by path.
+[doc('Install the chrome-headless-shell build the pinned puppeteer names into .tools/puppeteer.')]
+install-browser:
+    node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome-headless-shell
 
 [doc('Rewrite both lockfiles from the manifests. Review the diff before committing.')]
 lock:
@@ -146,6 +160,14 @@ test:
 validate-skills:
     uv run --frozen python -m skills_tooling.validator
 
+# Offline: renders with the pinned Mermaid in the chrome-headless-shell that
+# `just install-browser` put in .tools/puppeteer, and the browser's requests
+# never reach the network. Quote a glob, so the script expands it, including
+# `**`.
+[doc("Render every Mermaid block in Markdown files with the pinned Mermaid: `just check-mermaid [--labels] '<file-or-glob>'...`.")]
+check-mermaid +args:
+    node scripts/check-mermaid.mjs "$@"
+
 # `--` keeps a name such as `-x` from reading as an option, so the scaffolder
 # rejects it with the name rule rather than a usage error.
 [doc('Scaffold a skill, its placeholder evals and its marketplace entry: `just new-skill <name>`.')]
@@ -207,4 +229,4 @@ just-version:
     [ "$found" = "$required" ] || { printf '%s\n' "$required is required; found $found." >&2; exit 1; }
 
 [doc('The full gate, as CI runs it. Stops at the first recipe that fails.')]
-check: just-version lock-check lint typecheck validate-distribution test validate-skills validate-evals agents-version
+check: just-version lock-check lint typecheck validate-distribution test validate-skills (check-mermaid 'skills/**/*.md') validate-evals agents-version

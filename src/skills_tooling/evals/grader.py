@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from skills_tooling.evals import results, workspace
 from skills_tooling.evals.adapter import RawRun
 from skills_tooling.evals.claude_code import BUDGET_USD, ClaudeCode, parse_stream
+from skills_tooling.evals.workspace import unchanged
 
 if TYPE_CHECKING:
     import random
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
 
     from skills_tooling.evals.adapter import Trace, TrialPaths
     from skills_tooling.evals.cases import Case, Expectation
+    from skills_tooling.evals.workspace import FixtureFiles
 
 REPLY_KEYS = {"expectations", "notes"}
 ITEM_KEYS = {"id", "passed", "evidence", "quote"}
@@ -195,20 +197,33 @@ def _scrubbed(text: str, *, trial_root: Path, skills_dir: str, skill: str) -> st
     return redact(text, trial_root=trial_root, skills_dir=skills_dir, skill=skill)
 
 
-def blinded_material(
-    final_message: str, workspace: Path, *, trial_root: Path, skills_dir: str, skill: str
+def blinded_material(  # noqa: PLR0913 -- the trial's paths and what it started with, by keyword
+    final_message: str,
+    workspace: Path,
+    *,
+    trial_root: Path,
+    skills_dir: str,
+    skill: str,
+    fixture_files: FixtureFiles | None = None,
 ) -> str:
     """The final message and every file written, redacted the same way in both arms.
 
-    .git and the skills_dir tree (only the skill arm has one) are left out.
-    Symlinks are listed, never followed, and so is anything the agent left unreadable.
+    .git and the skills_dir tree (only the skill arm has one) are left out, and
+    so is each fixture file still as the build wrote it, so the material is what
+    the agent made or changed. Symlinks are listed, never followed, and so is
+    anything the agent left unreadable.
     """
 
     def scrub(text: str) -> str:
         return _scrubbed(text, trial_root=trial_root, skills_dir=skills_dir, skill=skill)
 
     excluded = {workspace / ".git", workspace / skills_dir}
-    paths = _written(workspace, excluded)
+    built = fixture_files or {}
+    paths = [
+        path
+        for path in _written(workspace, excluded)
+        if not unchanged(path, built.get(path.relative_to(workspace).as_posix()))
+    ]
     entries: list[str] = []
     remaining = FILES_CAP
     for index, path in enumerate(paths):
@@ -342,15 +357,38 @@ def _written(directory: Path, excluded: set[Path]) -> list[Path]:
     return sorted(found, key=lambda path: path.relative_to(directory).as_posix())
 
 
-def disclosure_matches(material: str, skill_files: Iterable[str]) -> list[str]:
+def invocation_mentions(text: str, skill: str) -> list[str]:
+    """Each invocation of `skill` in the text, as written, ignoring case.
+
+    An invocation is `/` or `$`, an optional `<plugin>:`, then the skill's
+    name, as a whole token. Nothing that sits inside a path or a longer name
+    comes before it, and nothing that continues one comes after it, so
+    `src/<skill>/x.py`, `docs/<skill>.md`, `~/<skill>` and `$HOME` are not
+    invocations. The case loader keeps invocations out of a by_name prompt,
+    and the disclosure check flags an agent's echo of one.
+    """
+    pattern = re.compile(
+        rf"(?<![\w./:$~-])[/$](?:[\w.-]+:)?{re.escape(skill)}(?![\w/:-]|\.\w)", re.IGNORECASE
+    )
+    return [match.group(0) for match in pattern.finditer(text)]
+
+
+def disclosure_matches(
+    material: str, skill_files: Iterable[str], *, invocation_of: str | None = None
+) -> list[str]:
     """The distinct strings in the material that can tell the grader the arm.
 
     The leak runs both ways: "I used the skill" and "no skill is installed"
-    both match. skill_files are paths relative to skills/<skill>/.
+    both match. skill_files are paths relative to skills/<skill>/. In a
+    by_name case, invocation_of is the skill, and an echo of its invocation,
+    which only the skill arm was sent, matches too. An unmarked case's prompt
+    may hold one, so it passes None.
     """
     lowered = material.lower()
     found = {"skill"} if SKILL_WORD.search(material) else set()
     found |= {path for path in (*skill_files, *DISCLOSED_DIRS) if path.lower() in lowered}
+    if invocation_of is not None:
+        found |= set(invocation_mentions(material, invocation_of))
     return sorted(found)
 
 
@@ -510,6 +548,7 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
     skill_dir: Path,
     rng: random.Random | None = None,
     run_secrets: Sequence[str] = (),
+    fixture_files: FixtureFiles | None = None,
 ) -> dict[str, Any]:
     """Grade one trial's expectations: the grading.json content. Never raises for grader failures.
 
@@ -517,6 +556,7 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
     needs_transcript ones from the normalised trace, in a second call. Each
     material is scrubbed of run_secrets once it is built: redaction joins the
     text on either side of a path it removes, which can rebuild a split secret.
+    fixture_files is what the trial's fixture build wrote, if it had one.
     """
     started = time.monotonic()
     draw = rng or secrets.SystemRandom()
@@ -534,6 +574,7 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
                         trial_root=trial.root,
                         skills_dir=skills_dir,
                         skill=skill,
+                        fixture_files=fixture_files,
                     )
                     if blinded
                     else transcript_material(
@@ -559,7 +600,14 @@ def grade(  # noqa: PLR0913 -- everything one grading needs, by keyword
         for path in skill_dir.rglob("*")
         if path.is_file() and "__pycache__" not in path.relative_to(skill_dir).parts
     )
-    matches = sorted({m for _, material in groups for m in disclosure_matches(material, files)})
+    invocation_of = skill if case.by_name else None
+    matches = sorted(
+        {
+            m
+            for _, material in groups
+            for m in disclosure_matches(material, files, invocation_of=invocation_of)
+        }
+    )
     return _grading(
         settings,
         expectations=expectations,

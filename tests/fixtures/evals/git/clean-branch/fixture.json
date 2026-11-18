@@ -1,0 +1,5 @@
+{
+  "branch": "tidy-up",
+  "main": [{ "tree": "start", "message": "Add the greeting script" }],
+  "commits": []
+}

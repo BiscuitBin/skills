@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daygap"
+version = "1.4.0"
+description = "Print how many days lie between two dates."
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.scripts]
+daygap = "daygap:main"
+
+[tool.setuptools]
+py-modules = ["daygap"]

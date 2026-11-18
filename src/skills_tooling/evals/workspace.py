@@ -4,6 +4,8 @@ See docs/explanation/eval-isolation.md for what this isolates and what it does n
 """
 
 import contextlib
+import functools
+import hashlib
 import os
 import shlex
 import shutil
@@ -13,7 +15,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from skills_tooling.evals.adapter import PythonCall, TrialPaths
@@ -22,34 +24,72 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
     from types import FrameType
 
+# A fixture's working directory as the build wrote it: {path: (sha256, git mode)}.
+# A regular file's st_mode is its git mode, 0o100644 or 0o100755.
+type FixtureFiles = Mapping[str, tuple[str, int]]
+
 GRACE_SECONDS = 2.0
 # Signals that end a run. SIGKILL cannot be caught; that limit is documented.
 TERMINATING = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 # Git sees neither the user's nor the system's config, so no hooks, helpers or
-# templates reach the workspace.
+# templates reach the workspace, and no system attributes: Apple's git reads its
+# gitattributes even with GIT_CONFIG_NOSYSTEM set.
 GIT_ENV = {
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_ATTR_NOSYSTEM": "1",
     "GIT_AUTHOR_NAME": "Eval Harness",
     "GIT_AUTHOR_EMAIL": "eval@example.invalid",
     "GIT_COMMITTER_NAME": "Eval Harness",
     "GIT_COMMITTER_EMAIL": "eval@example.invalid",
 }
 SYSTEM_PATH = "/usr/bin:/bin"
+XCRUN = "/usr/bin/xcrun"
+# The top directories either adapter installs a skill under, which a fixture
+# trial's .git/info/exclude hides from git.
+HIDDEN_PARTS = {(".claude",), (".agents",)}
 RECORD_END = "\x1e"
 FIELD_END = "\x1f"
 
 
-def git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+def git(
+    *args: str, cwd: Path, env: Mapping[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run git with no user or system config; env, merged last, adds to or overrides that."""
     return subprocess.run(  # noqa: S603 -- arguments come from this module
         ["git", *args],  # noqa: S607 -- git is a documented host prerequisite
         cwd=cwd,
-        env={"PATH": SYSTEM_PATH, "HOME": os.devnull, **GIT_ENV},
+        env={"PATH": SYSTEM_PATH, "HOME": os.devnull, **GIT_ENV, **(env or {})},
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+def is_toplevel(root: Path) -> bool:
+    """Whether root is a repository's top level, not a directory inside some other repository."""
+    toplevel = git("rev-parse", "--show-toplevel", cwd=root)
+    return toplevel.returncode == 0 and Path(toplevel.stdout.strip()).resolve() == root.resolve()
+
+
+def global_excludes() -> tuple[str, ...]:
+    """Options that make git() read the user's global ignore file; none if there is none.
+
+    git() reads no user config, but the user's own git leaves out what that file
+    ignores: such a file is in no commit and no checkout, and is not a change.
+    """
+    configured = subprocess.run(
+        ["git", "config", "--global", "--path", "core.excludesFile"],  # noqa: S607 -- as git()
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if found := configured.stdout.strip():
+        path = Path(found)
+    else:
+        path = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "git/ignore"
+    return ("-c", f"core.excludesFile={path}") if path.is_file() else ()
 
 
 def create_trial(base: Path, run_id: str, case_id: str) -> TrialPaths:
@@ -95,9 +135,43 @@ def _write_bin(trial: TrialPaths) -> None:
         path = trial.bin / name
         path.write_text(wrapper)
         path.chmod(0o755)
+    git = system_git()
+    if git is not None:
+        # Not a link: Apple's git finds its helpers relative to the path it was started by.
+        path = trial.bin / "git"
+        path.write_text(f'#!/bin/sh\nexec {shlex.quote(git)} "$@"\n')
+        path.chmod(0o755)
+
+
+@functools.cache
+def system_git() -> str | None:
+    """The git a trial runs: the system's, and on macOS the one xcrun's shim would start.
+
+    /usr/bin/git on macOS is xcrun's shim, which looks up the developer
+    directory each time it runs. With Xcode selected it can start xcodebuild,
+    which inside Codex's sandbox prints warnings into git's output and adds
+    half a second, long enough to change how Codex reports a denied command.
+    So the lookup runs once, here, with the system PATH and no DEVELOPER_DIR,
+    as the shim would see a trial's environment. If it fails, the shim it is.
+    """
     found = shutil.which("git", path=SYSTEM_PATH)
-    if found is not None:
-        (trial.bin / "git").symlink_to(found)
+    if found is None or sys.platform != "darwin":
+        return found
+    try:
+        lookup = subprocess.run(  # noqa: S603 -- a fixed command
+            [XCRUN, "--find", "git"],
+            env={"PATH": SYSTEM_PATH, "HOME": os.devnull},
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except OSError, subprocess.TimeoutExpired:
+        return found
+    real = lookup.stdout.strip()
+    if lookup.returncode != 0 or not Path(real).is_absolute() or not os.access(real, os.X_OK):
+        return found
+    return real
 
 
 @dataclass
@@ -289,13 +363,46 @@ def isolation_problems(trial: TrialPaths, repo_root: Path) -> list[str]:
     return problems
 
 
-def inventory_problems(workspace: Path, skills_dir: str, skill: str | None) -> list[str]:
-    """The workspace may hold its .git and the installed skill, and nothing else.
+def unchanged(path: Path, expected: tuple[str, int] | None) -> bool:
+    """Whether path is still the fixture file expected: its bytes and mode, and not a link.
+
+    A file that cannot be opened counts as changed. A link is never followed,
+    and anything but a regular file fails the mode before a byte is read.
+    """
+    if expected is None:
+        return False
+    sha256, mode = expected
+    try:
+        # O_NONBLOCK: a pipe opens at once, and then fails the mode.
+        opened = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return False
+    try:
+        # On the raw descriptor: a directory opens, but cannot be wrapped as a file.
+        if os.fstat(opened).st_mode != mode:
+            return False
+        with os.fdopen(opened, "rb", closefd=False) as file:
+            return hashlib.file_digest(file, "sha256").hexdigest() == sha256
+    except OSError:
+        return False
+    finally:
+        os.close(opened)
+
+
+def inventory_problems(
+    workspace: Path, skills_dir: str, skill: str | None, expected: FixtureFiles | None = None
+) -> list[str]:
+    """The workspace may hold its .git, the installed skill and the fixture as built, nothing else.
 
     Anything more could carry expected outputs, other cases, or a nested skills
-    directory the agent would discover mid-run.
+    directory the agent would discover mid-run. With a fixture, every file the
+    build wrote must still be there with its bytes and mode.
     """
     allowed = [*Path(skills_dir).parts, skill] if skill is not None else []
+    files = expected or {}
+    # The directories that hold a fixture file, which the walk enters.
+    holding = {str(parent) for path in files for parent in PurePosixPath(path).parents}
+    seen: set[str] = set()
     problems: list[str] = []
 
     def walk(directory: Path, remaining: list[str]) -> None:
@@ -306,10 +413,55 @@ def inventory_problems(workspace: Path, skills_dir: str, skill: str | None) -> l
                 if len(remaining) > 1:
                     walk(entry, remaining[1:])
                 continue
-            problems.append(f"unexpected in workspace: {entry.relative_to(workspace)}")
+            relative = entry.relative_to(workspace).as_posix()
+            if relative in files:
+                seen.add(relative)
+                if not unchanged(entry, files[relative]):
+                    problems.append(f"changed in workspace: {relative}")
+            elif relative in holding and not entry.is_symlink() and entry.is_dir():
+                walk(entry, [])
+            else:
+                problems.append(f"unexpected in workspace: {relative}")
 
     walk(workspace, allowed)
+    problems += [f"missing from workspace: {path}" for path in sorted(files.keys() - seen)]
+    if expected is not None:
+        problems += _status_problems(workspace)
     return problems
+
+
+def _status_problems(workspace: Path) -> list[str]:
+    """Whether git status lists the installed skill, which a fixture's .git/info/exclude hides.
+
+    A fixture trial's agent sees git status, and Claude Code puts it in its
+    system prompt, so a skill listed there names the arm. Not run without a
+    fixture: an empty workspace has no exclude, and lists `?? .claude/` today.
+    """
+    # No optional lock, so the check leaves the index as the build left it, in both arms.
+    status = git(
+        "status",
+        "--porcelain",
+        "-z",
+        "--untracked-files=all",
+        cwd=workspace,
+        env={"GIT_OPTIONAL_LOCKS": "0"},
+    )
+    if status.returncode != 0:
+        return [f"git status failed in the workspace: {status.stderr.strip()}"]
+    # -z: each entry is "XY <path>", unquoted, and a rename or copy's source follows it.
+    entries = iter(status.stdout.split("\0"))
+    listed = []
+    for entry in entries:
+        named = [entry[3:]]
+        if {"R", "C"} & set(entry[:2]):
+            named.append(next(entries, ""))
+        if any(PurePosixPath(path).parts[:1] in HIDDEN_PARTS for path in named if path):
+            listed.append(entry)
+    if not listed:
+        return []
+    more = f" and {len(listed) - 1} more" if len(listed) > 1 else ""
+    shown = f"{listed[0]}{more}"
+    return [f"git status lists paths under .claude/ or .agents/, which must be hidden: {shown}"]
 
 
 def child_path(trial: TrialPaths) -> str:

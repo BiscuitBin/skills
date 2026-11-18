@@ -1,0 +1,25 @@
+# Reading the branch
+
+The cases that finding the base leaves open, and how to read a large branch. Every command here only reads, and each starts `git --no-optional-locks`, as the main instructions say. `<base>` is the base you found.
+
+## The candidates in full
+
+- Local `main` and `master`, and the same two on `origin` and `upstream`, when they exist.
+- The branch that `git --no-optional-locks config --get init.defaultBranch` names, when a branch of that name exists here. It is the default this machine gives new repositories, which is often what a repository with no remote uses. `git --no-optional-locks rev-parse --verify --quiet refs/heads/<name>` prints a commit only when that branch exists, not for a tag of the same name, so it tells you whether the name is real here without an error message.
+- For each remote that `git --no-optional-locks remote` lists, the branch its `HEAD` points at: `git --no-optional-locks symbolic-ref --quiet --short refs/remotes/origin/HEAD` prints `origin/main`, for example. A clone has one. A repository made with `git init` has none, and the command then prints nothing and exits 1.
+
+## When there is no clear base
+
+A base matters only for the commits. When none is found, uncommitted work can still be described: if the request names only uncommitted work, or names no scope while uncommitted work exists, describe it against `HEAD`. The scope line's source is then `` `<branch>` at `<short commit>` ``, from `git --no-optional-locks rev-parse --short HEAD`, and its commits field reads `none`, since no commits are counted against a base. The asks below are for when the request wants the commits, or there is nothing else to describe.
+
+Each ask is one line, with no scope line, headings or risk call: nothing has been described yet, so there is no scope to report.
+
+- **No candidate exists.** There is no default branch to compare with. Say so in one line that also lists the local branches (`git --no-optional-locks for-each-ref --format='%(refname:short)' refs/heads`) and asks which one is the base. A guessed base describes the wrong commits.
+- **The current branch was itself a candidate, or is the default branch.** It cannot be its own base. A remote's default branch, such as `origin/main`, is still a candidate, and the description then covers the commits not yet pushed. With no remote there is no base, even beside a local `main` or `master`, since either could be the default: say so in one line and ask for one.
+- **`HEAD` is detached.** `rev-parse --abbrev-ref HEAD` prints `HEAD`. Find the base as usual. There is no branch name to give, so the scope line's source is `` detached `HEAD` at `<short commit>` against `<base>` ``, with the short commit from `git --no-optional-locks rev-parse --short HEAD`.
+- **The base you took is `upstream`'s, and `origin`'s counts more.** That is the usual fork, whose own `main` lags the project it was made from, so keep the base. But if `git --no-optional-locks rev-list --count upstream/main..origin/main` (or `master`) is above 0, the fork has commits of its own, and a pull request to it, such as a branch that merges `upstream` in, carries what `origin`'s count shows. Then say so in one line with both counts, and ask which base to describe against.
+- **Nothing is ahead.** The count is 0, so there are no commits to describe, and the commits field reads `none`. With no scope named, the main instructions then take all uncommitted work, and a scope with uncommitted work in it is described as usual. If the scope is empty, the answer is the scope line alone, and you stop. Three headings over an empty change send the reader looking for something that is not there. But if the 0 is a local branch's, such as `main`, and a remote's branch, such as `origin/main`, counts more, the commits are in the local copy, often through a merge not yet pushed, and a pull request would still carry them. Likewise if the branch a remote's `HEAD` points at, such as `origin/develop`, counts more: it is the remote's default, where a pull request goes unless told otherwise, and the commits reached another branch, such as `origin/main`, but not it. Then say so in one line with both counts, and ask which base to describe against: either one alone is a guess at what the reader is about to merge.
+
+## A large branch
+
+Start from `git --no-optional-locks -c diff.autoRefreshIndex=false diff --no-ext-diff --no-textconv --stat <base>...HEAD` and the commit messages, which show where the weight of the change is. Read in full the files that carry the change. When the whole diff is too long to read at once, read it a path at a time with `git --no-optional-locks -c diff.autoRefreshIndex=false diff --no-ext-diff --no-textconv <base>...HEAD -- path/to/file`, rather than saving it to a file. Give a renamed file both its paths, from `--name-status`, or its diff shows a new file and hides the edit. Name generated files, lockfiles and vendored code in passing, if at all: they rarely change what a reader needs to know.

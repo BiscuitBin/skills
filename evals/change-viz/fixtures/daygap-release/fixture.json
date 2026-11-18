@@ -1,0 +1,28 @@
+{
+  "branch": "add-weekdays",
+  "main": [
+    {
+      "tree": "start",
+      "message": "Count the days between two dates"
+    },
+    {
+      "tree": "released",
+      "message": "Add the release workflow"
+    }
+  ],
+  "commits": [
+    {
+      "tree": "weekdays",
+      "message": "Add --weekdays to count Monday to Friday"
+    },
+    {
+      "tree": "documented",
+      "message": "Document --weekdays"
+    },
+    {
+      "tree": "bumped",
+      "message": "Bump the version to 1.4.0"
+    }
+  ],
+  "executable": ["daygap.py", "test_daygap.py"]
+}

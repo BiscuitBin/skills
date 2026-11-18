@@ -19,7 +19,7 @@ cd skills
 just initialize
 ```
 
-This downloads the pinned Python into `.tools/python`, installs the Python tools into `.venv/` and the Node tools and agent CLIs into `node_modules/`, and installs the pre-commit hooks. Everything it writes is inside the project directory and ignored by Git. It ends with:
+This downloads the pinned Python into `.tools/python`, installs the Python tools into `.venv/` and the Node tools and agent CLIs into `node_modules/`, downloads the headless Chrome the Mermaid check renders in, about 200 MB, into `.tools/puppeteer`, and installs the pre-commit hooks. Everything it writes is inside the project directory and ignored by Git. It ends with:
 
 ```text
 Ready. Next: just check.
@@ -32,7 +32,7 @@ Nothing has been staged, committed, tagged, or pushed.
 just check
 ```
 
-This checks the lockfiles, runs every lint and format check, then mypy, pytest, and prints the version of each pinned agent CLI. When every step passes, your setup matches CI's. pytest reports 2 skipped tests on a developer machine, which is expected: the contamination canaries plant files in `/etc/claude-code`, so they run only in CI. `ai_tmp/pytest.xml` gives the reason for each skip.
+This checks the lockfiles, runs every lint and format check, then mypy and pytest, validates the skills, renders every Mermaid diagram in the shipped skills, validates the eval cases, and prints the version of each pinned agent CLI. When every step passes, your setup matches CI's. pytest reports 2 skipped tests on a developer machine, which is expected: the contamination canaries plant files in `/etc/claude-code`, so they run only in CI. On a file system that ignores case, as macOS's does by default, it reports 4: two fixture tests need two paths that differ only in case. `ai_tmp/pytest.xml` gives the reason for each skip.
 
 ## Next
 

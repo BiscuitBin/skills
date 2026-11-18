@@ -11,3 +11,7 @@ uv.lock
 # Benchmark history is written by `just eval-record`, never by hand, so the
 # recorded bytes stay exactly what the tool wrote.
 benchmarks/
+
+# Git fixture trees are data an eval trial commits byte for byte.
+evals/*/fixtures/*/trees/**
+tests/fixtures/evals/git/*/trees/**

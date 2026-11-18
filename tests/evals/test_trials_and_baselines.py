@@ -3,6 +3,7 @@
 import contextlib
 import json
 import os
+import subprocess
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -18,11 +19,24 @@ from skills_tooling.evals.grader import GraderSettings
 from skills_tooling.evals.runner import describe_plan, run_suite
 from tests.evals.fake_anthropic import Turn, serve, text, tool
 from tests.evals.test_grader import FakeGrader, fake_grader
-from tests.evals.test_runner import ROOT, TOKEN, fake_root, results, run_cli, settings
+from tests.evals.test_runner import (
+    AGENT_GIT_ENV,
+    AVERAGE,
+    ROOT,
+    SKILL,
+    SMALL_TALLY_HEAD,
+    TOKEN,
+    fake_root,
+    fixture_root,
+    results,
+    run_cli,
+    settings,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from skills_tooling.evals.adapter import Homes, RawRun, TrialPaths
     from skills_tooling.evals.runner import RunSettings
 
 NO_TRIGGER = "Tell me three facts about cows."
@@ -589,6 +603,73 @@ def test_no_grader_runs_a_codex_suite_with_expectations_without_the_graders_toke
     assert exited.value.code == 0
     (settings,) = started
     assert (settings.grader, settings.grading_skipped) == (None, True)
+
+
+def test_a_fixture_trial_starts_in_the_fixture_in_both_arms_and_no_other_trial_does(
+    tmp_path: Path,
+) -> None:
+    seen: dict[str, tuple[dict[str, str], str, str]] = {}
+
+    class Recording(ClaudeCode):
+        def run(self, prompt: str, trial: TrialPaths, homes: Homes, **kwargs: Any) -> RawRun:  # noqa: ANN401
+            def agent_git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", *args],  # noqa: S607 -- the trial's PATH finds its git
+                    cwd=trial.workspace,
+                    env=dict(homes.env),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+
+            git_env = {k: v for k, v in homes.env.items() if k.startswith("GIT_")}
+            head = agent_git("rev-parse", "HEAD") if prompt == AVERAGE else ""
+            key = trial.root.relative_to(trial.root.parents[1]).as_posix()
+            seen[key] = git_env, agent_git("status", "--porcelain"), head
+            return super().run(prompt, trial, homes, **kwargs)
+
+    root = fixture_root(tmp_path)
+    script = {AVERAGE: [SKILL, text("The average is 2.5.")], **SCRIPT}
+    with serve(script) as server:
+        adapter = Recording(ROOT / "node_modules/.bin/claude", api_base_url=server.url)
+        run = settings(root, server.url, adapter=adapter, baseline=True, grading_skipped=True)
+        exit_code = run_suite(run)
+    data = results(root)
+    assert exit_code == 0, json.dumps(data, indent=2)
+    built = (AGENT_GIT_ENV, "M  README.md\n M tally.py\n?? notes.txt\n", f"{SMALL_TALLY_HEAD}\n")
+    assert seen == {
+        "behaviour-average/skill-1": built,
+        "behaviour-average/baseline-1": built,
+        # No fixture: an empty git init, no git variables, and the skill untracked, as before.
+        "no-trigger-facts/skill-1": ({}, "?? .claude/\n", ""),
+    }
+    for trial in data["trials"]:
+        assert (trial["status"], trial["contamination"]["passed"]) == ("ok", True), trial
+
+
+def test_a_fixture_trial_sends_the_grader_only_what_the_agent_made_or_changed(
+    tmp_path: Path,
+) -> None:
+    save = tool("Bash", {"command": "echo 2.5 > average.txt", "description": "Save"}, "toolu_2")
+    script = {AVERAGE: [SKILL, save, text("The average is 2.5.")]}
+    fake = fake_grader(tmp_path / "grader")
+    grader = GraderSettings(
+        executable=fake.executable,
+        model="claude-opus-5-5",
+        credentials={"CLAUDE_CODE_OAUTH_TOKEN": TOKEN},
+    )
+    root = fixture_root(tmp_path)
+    with serve(script) as server:
+        run = settings(
+            root, server.url, grader=grader, baseline=True, case_ids=("behaviour-average",)
+        )
+        run_suite(run)
+    prompts = fake.prompts()
+    assert len(prompts) == 2
+    for prompt in prompts:
+        assert [line for line in prompt.splitlines() if line.startswith("### ")] == [
+            "### average.txt"
+        ]
 
 
 def test_the_dry_run_without_the_grader_plans_no_grader_calls() -> None:

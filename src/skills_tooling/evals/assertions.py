@@ -1,11 +1,14 @@
 """Deterministic assertions over a trace. See docs/reference/evals.md."""
 
 import functools
+import itertools
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import tempfile
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -24,6 +27,22 @@ OPERATOR_PIECE = re.compile(r"&&|\|\||;;|\|&|[;&|\n]")
 # Words that run the command after them; leading NAME=value assignments are skipped too.
 PREFIXES = {"env", "exec", "command", "time", "nohup"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+# A shell NAME, as a named coprocess's: coproc NAME { …; }.
+SHELL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# Shell words that can come before a command's program, which python_not_run looks past.
+KEYWORDS = {"if", "then", "elif", "else", "while", "until", "do", "!", "{", "coproc"}
+# Shells whose -c string python_not_run reads as commands, this many shells deep.
+SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
+# Shells in which an o with letters after it names the option in the rest of its word.
+ATTACHED_OPTION_SHELLS = {"zsh", "ksh"}
+SHELL_DEPTH = 3
+# A shell's long options that take a file; bash reads them after one dash too.
+SHELL_FILE_OPTIONS = {"--rcfile", "--init-file", "-rcfile", "-init-file"}
+# An interpreter's name in text that cannot be split into commands: PYTHON, bare or
+# ending a path, but not part of a longer name such as cpython-314 or .python-version.
+PYTHON_WORD = re.compile(r"(?<![\w.-])python(?:3(?:\.\d+)?)?(?![\w.-])")
+# Stands in for a quoted or escaped `)` while the lexer splits, so it closes no case pattern.
+QUOTED_PAREN = "\ue000"
 # Seconds the shipped script may take to produce the expected output.
 SCRIPT_TIMEOUT = 30.0
 # The interpreter's single-letter flags that take no value and still run the script.
@@ -85,10 +104,16 @@ def _operator(token: str) -> str | None:
     return next((piece for piece in pieces if piece != "\n"), "\n")
 
 
-def command_list(command: str) -> list[tuple[list[str], str]]:
-    """Each simple command with the operator that follows it ("" for the last)."""
+def command_list(command: str, *, whole_words: bool = False) -> list[tuple[list[str], str]]:
+    """Each simple command with the operator that follows it ("" for the last).
+
+    By default the lexer also splits a word at characters such as `:`, `@` and `(`.
+    whole_words splits only at blanks and operators, as the shell does, so
+    `PATH=/usr/bin:/bin` stays one word, and so does a `(` that opens a word.
+    """
     lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
     lexer.whitespace = " \t\r"
+    lexer.whitespace_split = whole_words
     found: list[tuple[list[str], str]] = []
     current: list[str] = []
     try:
@@ -96,6 +121,9 @@ def command_list(command: str) -> list[tuple[list[str], str]]:
             if (operator := _operator(token)) is not None:
                 if current:
                     found.append((current, operator))
+                elif operator == ";;" and found:
+                    # A case arm's ;; on a line of its own ends the command before it.
+                    found[-1] = (found[-1][0], operator)
                 current = []
             else:
                 current.append(token)
@@ -207,13 +235,256 @@ def _script_ran(
     return AssertionResult("script_ran", passed=True, evidence=good[0].command)
 
 
-def evaluate(
+def _logged_call(calls: tuple[PythonCall, ...]) -> str | None:
+    """The first call the trial's wrapper logged, and how many more, or None."""
+    if not calls:
+        return None
+    first = calls[0]
+    more = f" and {len(calls) - 1} more" if len(calls) > 1 else ""
+    return f"python ran: {' '.join(first.argv)} in {first.cwd}, exit {first.exit_code}{more}"
+
+
+def _program(words: list[str]) -> list[str]:
+    """A simple command from its program on, past keywords, prefix words and assignments.
+
+    [] when there is no program, or when `command -v` or `-V` only looks a name up.
+    A subshell's `(` may open the program's word.
+    """
+    while words:
+        word, rest = words[0], words[1:]
+        name = Path(word).name  # /usr/bin/env is env
+        if word.startswith("("):
+            words = [word[1:], *rest] if word != "(" else rest
+        elif word == "coproc" and _named_coprocess(rest):
+            words = rest[1:]  # NAME is the coprocess's, not a program
+        elif word in KEYWORDS:
+            words = rest
+        elif name in PREFIXES or ASSIGNMENT.fullmatch(word):
+            options = list(itertools.takewhile(lambda w: w.startswith("-"), rest))
+            if name == "command" and any(set(o) & {"v", "V"} for o in options):
+                return []
+            words = rest[len(options) :]  # options of env, command, time…
+        else:
+            break
+    return words
+
+
+def _named_coprocess(rest: list[str]) -> bool:
+    """Whether coproc's words name the coprocess: NAME, then a bare `{` or a subshell's `(`.
+
+    A `{` that opens a longer word is brace expansion, as in `coproc python3 {a,b}`.
+    """
+    return (
+        len(rest) > 1
+        and SHELL_NAME.fullmatch(rest[0]) is not None
+        and (rest[1] == "{" or rest[1].startswith("("))
+    )
+
+
+def _mark_quoted_parens(command: str) -> str:
+    """The command with each quoted or escaped `)` as QUOTED_PAREN, by the lexer's own rules.
+
+    A backslash escapes the next character outside single quotes, and an unquoted `#`
+    starts a comment to the end of the line, even inside a word, whose quotes are text.
+    A quote or escape left open leaves the command as it was, for the lexer to reject.
+    """
+    marked: list[str] = []
+    quote = ""  # the open quote, or "" outside one
+    chars = iter(command)
+    for char in chars:
+        if char == "\\" and quote != "'":
+            escaped = next(chars, None)
+            if escaped is None:
+                return command
+            marked += [char, QUOTED_PAREN if escaped == ")" else escaped]
+        elif char == "#" and not quote:
+            marked.append(char)
+            for skipped in chars:
+                marked.append(skipped)
+                if skipped == "\n":
+                    break
+        elif char in "'\"" and quote in ("", char):
+            quote = "" if quote else char
+            marked.append(char)
+        else:
+            marked.append(QUOTED_PAREN if char == ")" and quote else char)
+    return command if quote else "".join(marked)
+
+
+def _past_pattern(words: list[str]) -> list[str] | None:
+    """The words after the `)` that closes a case pattern, or None when the pattern goes on.
+
+    A quoted or escaped `)` arrives as QUOTED_PAREN, so it closes nothing.
+    """
+    end = next((i for i, word in enumerate(words) if ")" in word), None)
+    if end is None:
+        return None
+    tail = words[end].split(")", 1)[1]  # an arm's command may be glued to it: a)cmd
+    return ([tail] if tail else []) + words[end + 1 :]
+
+
+def _programs(found: list[tuple[list[str], str]]) -> Iterator[list[str]]:
+    """Each simple command from its program on, as _program gives it, past case patterns.
+
+    After `case WORD in`, and after `;;` while a case is open, the words through the
+    one holding the pattern's closing `)` are the pattern, which the lexer may have split
+    at `|` or a newline; the rest is the arm's command. `esac` closes the case. Each
+    QUOTED_PAREN is a `)` again in the words yielded.
+    """
+    pattern = False  # in a case pattern, before its closing )
+    cases = 0  # open cases: a ;; outside one, as in a here-doc body, starts no pattern
+    for words, operator in found:
+        command = words
+        if pattern and words[0] == "esac":
+            pattern, cases, command = False, max(cases - 1, 0), words[1:]
+        elif pattern:
+            arm = _past_pattern(words)
+            if arm is None:
+                continue  # an alternative split off at |, or a pattern on its own line
+            pattern, command = False, arm
+        program = _program(command)
+        if program[:1] == ["esac"]:
+            cases = max(cases - 1, 0)
+        elif program[:1] == ["case"] and "in" in program[2:]:
+            after = program[program.index("in", 2) + 1 :]
+            arm = _past_pattern(after)
+            # A pattern follows `in`: on the next line, closed by a ), or split off at |.
+            # Otherwise the line is not a case, such as prose in a here-doc body.
+            if not after or arm is not None or operator == "|":
+                cases += 1
+                pattern, program = arm is None, _program(arm or [])
+        if operator == ";;" and cases:
+            pattern = True
+        yield [word.replace(QUOTED_PAREN, ")") for word in program]
+
+
+def _shell_string(shell: str, options: list[str]) -> str | None:
+    """For a shell's words after its name, the string its -c runs; None when it has none.
+
+    The c may sit in a cluster (-lc, -ce), and the string is the first word past the options.
+    """
+    reads = False
+    while options and options[0][:1] in ("-", "+") and options[0] not in ("-", "--"):
+        word, options = options[0], options[1:]
+        if word in ("-o", "+o", "-O", "+O") or word in SHELL_FILE_OPTIONS:  # these take a value
+            options = options[1:]
+        elif not word.startswith("--"):
+            flags = word[1:]
+            if shell in ATTACHED_OPTION_SHELLS and "o" in flags[:-1]:
+                # zsh and ksh: -oerrexit names the option itself, so it takes no word,
+                # and the letters after the o are its name, not flags.
+                flags, takes = flags[: flags.index("o")], 0
+            else:
+                # In a cluster each o or O takes the next word (-euo pipefail).
+                takes = sum(flag in "oO" for flag in flags)
+            # Unless that word is an option, as after bash's one-dash long options (-noprofile -c).
+            for _ in range(takes):
+                if options and options[0][:1] not in ("-", "+"):
+                    options = options[1:]
+            if word.startswith("-") and "c" in flags:
+                reads = True
+    if options[:1] == ["--"]:
+        options = options[1:]
+    return options[0] if reads and options else None
+
+
+def _names_python(text: str) -> str | None:
+    """For text rule 2 cannot read as commands: whether it holds an interpreter's name."""
+    if PYTHON_WORD.search(text) is None:
+        return None
+    return "a command names python and could not be split"
+
+
+def _runs_python(command: str, depth: int = 0) -> str | None:
+    """How the command's text starts python, as the evidence's opening; None if it does not."""
+    # A backslash-newline continues the line, as in the shell; the lexer would end it there.
+    # An escaped backslash before the newline ends the line, so only an odd run joins.
+    command = re.sub(r"(?<!\\)((?:\\\\)*)\\\n", r"\1", command)
+    found = command_list(_mark_quoted_parens(command), whole_words=True)
+    if not found and command.strip():
+        # Unbalanced quotes, as in a here-doc body with an apostrophe: fail closed.
+        return _names_python(command)
+    for program in _programs(found):
+        if not program:
+            continue
+        # A redirection may be glued to the program's word: python3<<EOF, ./x.py>out.
+        name = Path(re.split(r"[<>]", program[0], maxsplit=1)[0]).name
+        if PYTHON.fullmatch(name):
+            return "a command runs python"
+        # Its #! line starts the interpreter, past the wrapper once PATH is reset.
+        # A Command has no cwd, so this goes by name.
+        if name.endswith(".py"):
+            return "a command runs a python script"
+        string = _shell_string(name, program[1:]) if name in SHELLS else None
+        if string is not None:
+            # Past SHELL_DEPTH shells, the string is read like one the lexer cannot split.
+            how = _runs_python(string, depth + 1) if depth < SHELL_DEPTH else _names_python(string)
+            if how is not None:
+                return how
+    return None
+
+
+def _named_in_command(commands: list[Command]) -> str | None:
+    """The first command, ok or not, whose text starts python, or None."""
+    for command in commands:
+        if (how := _runs_python(command.command)) is not None:
+            return f"{how}: {command.command}"
+    return None
+
+
+def _bytecode(root: Path) -> str | None:
+    """Bytecode under root, outside its .git/, or a path the walk cannot read; None for neither.
+
+    The walk never follows a link. It fails closed, because scoring runs before the
+    runner restores access, so a directory the agent locked could hide bytecode.
+    """
+    pending = deque([root])
+    while pending:
+        directory = pending.popleft()
+        try:
+            entries = sorted(directory.iterdir())
+        except OSError:
+            return f"could not read {directory.relative_to(root).as_posix()}"
+        for entry in entries:
+            if directory == root and entry.name == ".git":
+                continue
+            relative = entry.relative_to(root).as_posix()
+            if entry.name == "__pycache__" or entry.name.endswith(".pyc"):
+                return f"bytecode in the workspace: {relative}"
+            try:
+                mode = entry.lstat().st_mode
+            except OSError:
+                return f"could not read {relative}"
+            if stat.S_ISDIR(mode):
+                pending.append(entry)
+    return None
+
+
+def _python_not_run(trace: Trace, root: Path) -> AssertionResult:
+    """No witness shows python ran: the wrapper's log, the commands, the workspace's bytecode.
+
+    A pass is a lower bound: no recorded run, by these witnesses. See docs/reference/evals.md.
+    """
+    found = (
+        _logged_call(trace.python_calls) or _named_in_command(trace.commands) or _bytecode(root)
+    )
+    if found is not None:
+        return AssertionResult("python_not_run", passed=False, evidence=found)
+    return AssertionResult(
+        "python_not_run",
+        passed=True,
+        evidence="no python call logged, none named in a command, no bytecode in the workspace",
+    )
+
+
+def evaluate(  # noqa: PLR0913 -- one keyword per part of the trial an assertion reads
     assertion: Assertion,
     trace: Trace,
     *,
     skill: str,
     skill_dir: Path,
     installed: Path | None,
+    trial_workspace: Path | None = None,
 ) -> AssertionResult:
     final = trace.final_message
     kind = assertion.type
@@ -222,6 +493,12 @@ def evaluate(
         return AssertionResult(kind, passed, f"triggered: {trace.skills_triggered}")
     if kind == "script_ran":
         return _script_ran(assertion, trace, skill_dir, installed)
+    if kind == "python_not_run":
+        # Required, so no caller can skip the bytecode check by leaving it out.
+        if trial_workspace is None:
+            msg = "python_not_run needs the trial's workspace (trial_workspace)"
+            raise ValueError(msg)
+        return _python_not_run(trace, trial_workspace)
     if kind == "final_contains_script_output":
         expected = expected_script_output(skill_dir, assertion.script or "", assertion.args or ())
         passed = contains_lines(final, expected)

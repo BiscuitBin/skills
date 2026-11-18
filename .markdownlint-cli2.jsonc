@@ -12,6 +12,9 @@
   "gitignore": true,
   "ignores": [
     // CLAUDE.md is a bare `@AGENTS.md` import and has no heading by design.
-    "CLAUDE.md"
+    "CLAUDE.md",
+    // Git fixture trees are data an eval trial commits byte for byte.
+    "evals/*/fixtures/*/trees/**",
+    "tests/fixtures/evals/git/*/trees/**"
   ]
 }

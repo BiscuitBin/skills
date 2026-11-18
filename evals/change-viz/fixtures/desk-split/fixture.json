@@ -1,0 +1,24 @@
+{
+  "branch": "split-modules",
+  "main": [
+    {
+      "tree": "start",
+      "message": "Add the lending desk report"
+    },
+    {
+      "tree": "tested",
+      "message": "Test the replay, the overdue check and the report"
+    }
+  ],
+  "commits": [
+    {
+      "tree": "events-moved",
+      "message": "Move parsing and replay into lending/events.py"
+    },
+    {
+      "tree": "split",
+      "message": "Move the overdue check and the report into the lending package"
+    }
+  ],
+  "executable": ["desk.py", "test_desk.py"]
+}

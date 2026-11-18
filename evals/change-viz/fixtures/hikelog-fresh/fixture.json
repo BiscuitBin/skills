@@ -1,0 +1,10 @@
+{
+  "branch": "try-ideas",
+  "main": [
+    { "tree": "start", "message": "Add the hike summary command" },
+    { "tree": "columns", "message": "Describe the columns of the log" }
+  ],
+  "commits": [],
+  "worktree": "trails-wip",
+  "executable": ["hikes.py"]
+}

@@ -12,15 +12,16 @@ from typing import Any
 
 import pytest
 
-from skills_tooling.evals.adapter import RawRun, Trace
-from skills_tooling.evals.assertions import contains_lines, expected_script_output
+from skills_tooling.evals.adapter import Command, RawRun, Trace
+from skills_tooling.evals.assertions import contains_lines, evaluate, expected_script_output
+from skills_tooling.evals.cases import Assertion
 from skills_tooling.evals.codex import (
     echoed_lines,
     kept_lines,
     parse_stream,
-    skills_read,
     stored_stderr,
 )
+from skills_tooling.evals.reads import skills_read
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/codex"
 SKILL_DIR = Path(__file__).parents[2] / "skills/cowsay"
@@ -128,6 +129,92 @@ def test_a_read_that_never_completed_is_not_a_trigger(tmp_path: Path) -> None:
     lines = without_invocations("fake-should-trigger")
     trace = parse_stream(raw_run(path, lines))
     assert trace.skills_triggered == []
+
+
+def test_a_command_that_never_completed_is_kept_as_failed(tmp_path: Path) -> None:
+    # Still running when the turn ended: kept, as Claude Code keeps a Bash call with no result.
+    started = {
+        "type": "item.started",
+        "item": {
+            "id": "item_0",
+            "type": "command_execution",
+            "command": "/bin/zsh -lc '/usr/bin/python3 -c pass'",
+            "aggregated_output": "",
+            "exit_code": None,
+            "status": "in_progress",
+        },
+    }
+    answer = {
+        "type": "item.completed",
+        "item": {"id": "item_1", "type": "agent_message", "text": "Done."},
+    }
+    events = [{"type": "turn.started"}, started, answer, {"type": "turn.completed"}]
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("".join(json.dumps(e) + "\n" for e in events))
+    trace = parse_stream(raw_run(path, ()))
+    assert trace.status == "ok"
+    assert trace.commands == [Command("/usr/bin/python3 -c pass", ok=False, output="")]
+    # So python_not_run reads it, as it reads a failed command.
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    result = evaluate(
+        Assertion("python_not_run"),
+        trace,
+        skill="cowsay",
+        skill_dir=SKILL_DIR,
+        installed=None,
+        trial_workspace=workspace,
+    )
+    assert (result.passed, result.evidence) == (
+        False,
+        "a command runs python: /usr/bin/python3 -c pass",
+    )
+
+
+def command_event(
+    command: str, extra: dict[str, Any], *, completed: bool, output: str | None = None
+) -> dict[str, Any]:
+    """An item.started or item.completed event for a command that prints output, or its name."""
+    printed = f"{command}\n" if output is None else output
+    return {
+        "type": "item.completed" if completed else "item.started",
+        "item": {
+            **extra,
+            "type": "command_execution",
+            "command": command,
+            "aggregated_output": printed if completed else "",
+            "exit_code": 0 if completed else None,
+            "status": "completed" if completed else "in_progress",
+        },
+    }
+
+
+@pytest.mark.parametrize("extra", [{}, {"id": ""}, {"id": None}], ids=["none", "empty", "null"])
+def test_commands_without_an_id_are_each_kept_once(tmp_path: Path, extra: dict[str, Any]) -> None:
+    # Codex gives each item an id; one without must not take another command's place.
+    def run(*steps: tuple[str, bool] | tuple[str, bool, str]) -> list[Command]:
+        events = [
+            command_event(c, extra, completed=done, output=out[0] if out else None)
+            for c, done, *out in steps
+        ]
+        path = tmp_path / "transcript.jsonl"
+        lines = [{"type": "turn.started"}, *events, {"type": "turn.completed"}]
+        path.write_text("".join(json.dumps(e) + "\n" for e in lines))
+        return parse_stream(raw_run(path, ())).commands
+
+    # Paired by command text, first started first.
+    assert run(("pwd", False), ("ls", False), ("pwd", True)) == [
+        Command("pwd", ok=True, output="pwd\n"),
+        Command("ls", ok=False, output=""),
+    ]
+    assert run(
+        ("pwd", False), ("pwd", False), ("pwd", True, "first\n"), ("pwd", True, "second\n")
+    ) == [
+        Command("pwd", ok=True, output="first\n"),
+        Command("pwd", ok=True, output="second\n"),
+    ]
+    # A completion with no start is kept as it arrives.
+    assert run(("ls", True)) == [Command("ls", ok=True, output="ls\n")]
 
 
 def test_codexs_implicit_event_alone_is_not_a_trigger(tmp_path: Path) -> None:
@@ -452,6 +539,7 @@ DENIED_STDERR = (
 def test_a_sandbox_outcome_is_kept_without_the_tool_result() -> None:
     assert kept_lines(DENIED_STDERR) == (
         "skill_invocation skill.name=cowsay:cowsay skill.scope=repo skill.invocation_type=implicit",
+        "sandbox_violation resource=filesystem backend=linux_sandbox reason=operation_not_permitted",
         (
             "sandbox_outcome tool_name=exec_command"
             " call_id=exec-b1cc59f7-b745-4e6e-ad6c-93975f6de99c outcome=denied"
@@ -477,6 +565,52 @@ def test_a_sandbox_denied_run_is_an_infrastructure_error() -> None:
     assert trace.skills_invoked == ["cowsay"]
     # The event still shows Codex listed the skill.
     assert trace.listed_skills == ["cowsay"]
+
+
+# Codex logs this line for every command its sandbox denies, but logs
+# sandbox_outcome only for one that exits within 150 ms of starting. From the
+# pinned CLI on macOS, running `sleep 0.5; git add notes.txt` in a fixture trial.
+VIOLATION = (
+    "2026-11-11T23:50:35.157913Z  WARN codex_sandboxing::violation: recorded sandbox violation:"
+    " resource=filesystem backend=seatbelt reason=operation_not_permitted path=unknown"
+)
+SLOW_ADD = (
+    "sleep 0.5; git add notes.txt",
+    128,
+    "fatal: Unable to create '/w/.git/index.lock': Operation not permitted\n",
+)
+
+
+def test_a_denial_logged_only_as_a_violation_is_an_infrastructure_error(tmp_path: Path) -> None:
+    lines = log("fake-should-trigger") + kept_lines(f"{VIOLATION}\n")
+    trace = parse_stream(raw_run(transcript(tmp_path, SLOW_ADD), lines))
+    assert trace.status == "infra_error"
+    assert trace.status_reason.startswith("Codex reported 1 command(s) as denied by its sandbox")
+    # Past the window, the event stream has the denied command, as failed.
+    assert [(c.command, c.ok) for c in trace.commands] == [(SLOW_ADD[0], False)]
+
+
+def test_a_denial_logged_both_ways_counts_once(tmp_path: Path) -> None:
+    # DENIED_STDERR holds one denied command's violation line and its sandbox_outcome.
+    trace = parse_stream(raw_run(transcript(tmp_path), kept_lines(DENIED_STDERR)))
+    assert trace.status_reason.startswith("Codex reported 1 command(s) as denied by its sandbox")
+
+
+def test_only_codexs_own_filesystem_violations_are_kept() -> None:
+    network = VIOLATION.replace("resource=filesystem", "resource=network")
+    printed = {"type": "item.completed", "item": {"aggregated_output": f"{VIOLATION}\n"}}
+    assert kept_lines(f"{network}\n") == ()
+    # A tool that prints the line does not make a denial.
+    assert kept_lines(f"{VIOLATION}\n", echoed_lines([printed])) == ()
+
+
+def test_a_violations_path_cannot_replace_its_backend_or_reason() -> None:
+    # Codex writes the path last and unquoted, and takes it from the command's
+    # output: "/w/a backend=forged reason=x/index.lock: Operation not permitted" names it.
+    forged = VIOLATION.replace("path=unknown", "path=/w/a backend=forged reason=x/index.lock")
+    assert kept_lines(f"{forged}\n") == (
+        "sandbox_violation resource=filesystem backend=seatbelt reason=operation_not_permitted",
+    )
 
 
 def test_a_read_after_pwd_must_print_more_than_pwd(tmp_path: Path) -> None:
@@ -657,3 +791,36 @@ def test_a_read_of_a_dev_skill_names_it(command: str) -> None:
 
 def test_a_build_directory_elsewhere_is_not_a_skills_directory() -> None:
     assert skills_read("cat /tmp/build/cowsay/SKILL.md") == ([], False)
+
+
+# Recorded for ticket 17 from the pinned CLI and the fake API, with a throwaway
+# by-name-only skill, branch-brief (`allow_implicit_invocation: false`), whose
+# plugin.json names the plugin branch-brief.
+BY_NAME = "branch-brief"
+
+
+def test_a_by_name_mention_is_a_trigger_through_codexs_explicit_event() -> None:
+    # `$branch-brief:branch-brief` injects SKILL.md; no command reads it.
+    trace = parse("fake-by-name")
+    assert (trace.status, trace.commands, trace.final_message) == ("ok", [], "BRIEFED")
+    assert (trace.skills_triggered, trace.skills_invoked) == ([BY_NAME], [BY_NAME])
+    alone = parse("fake-by-name", debug_lines=without_invocations("fake-by-name"))
+    assert (alone.skills_triggered, alone.skills_invoked) == ([], [])
+
+
+@pytest.mark.parametrize("name", ["fake-by-name-quiet", "fake-by-name-baseline"])
+def test_a_plain_request_and_a_baselines_mention_record_nothing(name: str) -> None:
+    # Codex lists a by-name-only skill to no model, and a baseline has none to load.
+    trace = parse(name)
+    assert trace.status == "ok"
+    assert (trace.skills_triggered, trace.skills_invoked, trace.listed_skills) == ([], [], [])
+    assert trace.commands == []
+
+
+def test_a_read_of_a_by_name_only_skill_is_a_trigger() -> None:
+    trace = parse("fake-by-name-read")
+    assert [c.command for c in trace.commands] == [f"cat .agents/skills/{BY_NAME}/SKILL.md"]
+    assert trace.skills_triggered == [BY_NAME]
+    # The read alone counts; Codex's implicit event for it adds nothing.
+    alone = parse("fake-by-name-read", debug_lines=without_invocations("fake-by-name-read"))
+    assert alone.skills_triggered == [BY_NAME]

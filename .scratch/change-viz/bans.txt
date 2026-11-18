@@ -1,0 +1,116 @@
+(?i)\bdaygap\b
+(?i)\bdayspan\b
+(?i)weekday
+(?i)\b(?:monday|friday)\b
+(?i)readlog
+(?i)wishlist
+(?i)\bwish(?:es)?\b
+(?i)\.bak\b
+(?:^|[^0-9])003(?:[^0-9]|$)
+(?i)drop\s+table
+(?i)\bpypi\b
+(?i)package\s+index
+(?i)\byank
+(?:^|[^0-9.])1\.[34]\.0(?:[^0-9]|$)
+(?i)release\.ya?ml
+(?i)skip-existing
+(?i)changelog
+(?i)nothing changes for anyone who does not pass
+(?i)added to its name
+(?i)\btake\b[^.\n]{0,40}\bback off\b
+(?i)receive the published
+(?i)not only the people who pass
+(?i)both that merging publishes
+(?i)\bdesk\b
+(?i)\blending\b
+events\.txt
+is_overdue
+(?i)\breplay
+(?i)\boverdue\b
+(?i)\bdue dates?\b
+(?i)\bloans?\b
+(?i)\blends?\b
+(?i)\bheld\b
+(?i)\bholds?\b
+(?i)\bcop(?:y|ies)\b
+(?i)\bmembers?\b
+(?i)\blibrar(?:y|ies)\b
+>=
+(?i)first diagram or code block
+(?i)can no longer be imported
+test_desk
+events\.py
+\b(?:rules|report)\.py\b
+(?i)fingerprint
+notes/|plan\.txt|todo\.txt
+(?i)\bnormali[sz]
+ignore-blank-lines
+--check(?:[^\w-]|$)
+\bFAILED\b
+(?i)\b(?:ignor\w*|skip\w*|leav\w*(?: out)?|drop\w*|strip\w*|without)(?: the| any)? blank lines?\b|\bblank lines? (?:are|is|get|gets) (?:left out|ignored|skipped|dropped|stripped)\b
+(?i)\btrailing (?:whitespace|spaces?)\b
+(?i)\brecorded\b
+1e27ebc4400f|9f15e51fe9f9|50b361652ca2|7e18f737311b|911169ddaaf1|9f2e813b5986|13815a1f0f7a
+(?i)left out before the text is hashed
+(?i)whitespace at the end of a line
+(?i)the words of that same sentence
+(?i)comes from reading the code and was not run
+(?i)a remark elsewhere in the description
+(?i)no longer matches its recorded fingerprint
+(?i)failed when run on this branch
+(?i)outside any code block
+(?i)\b(?:tests?|test suite|checks?) (?:all |still |now )?(?:pass(?:es|ed)?|succeed(?:s|ed)?)\b
+(?i)\bblank lines?\b
+(?i)\bhik
+(?i)\btrails?\b
+(?i)\bmiles?\b
+(?i)\bkm\b
+(?i)\bkilomet
+--year\b
+--longest\b
+(?i)\bridge\b
+\.fit\b
+\bFIT\b
+\bGPS\b
+(?i)\bsummary\.sh\b
+(?i)\btracks/
+(?i)\blakeshore\b|\bfern hollow\b|\bmill brook\b
+1\.609344
+\b2025\b
+\b352\b
+(?i)\bplan-routes\b|\btry-ideas\b
+(?i)\bcontents are not (?:shown|described)\b|\bcounted once\b
+(?i)\bhaven'?t committed yet\b|\bonly what i have staged\b|\bdescribe the changes\b
+(?i)add\-top\-words
+(?i)wordstat
+--top\b
+\b4817\b
+(?i)could not be read
+(?i)one cause it met
+(?i)in a single sentence
+(?i)leaves the choice
+(?i)what to reply
+(?i)finds no path
+(?i)\b(?:can't|cannot|can not) read pull request\b
+(?i)\bpantry
+(?i)\bskip-comment-lines\b
+\b(?:read_records|parse_line|sum_counts|RecordError)\b
+(?i)\b(?:rice|flour|beans|restocked)\b
+(?:name|item)\|count
+(?i)\bwordstat
+(?i)\badd-top-words\b
+\bwords\(|\bmost_common\b|\bCounter\b|\b(?:Words|MostCommon)Test\b|\bsample\.txt\b
+--top\b
+(?i)\bskips a line of the input\b
+(?i)\bline's number\b
+(?i)\bblank or is a comment\b
+(?i)\bas well as its text\b
+(?i)\bskip(?:s|ped|ping)?\b[^\n.]{0,40}\b(?:blank\b|empty[- ]lines?\b)
+(?i)\b(?:blank\b|empty[- ]lines?\b)[^\n.]{0,30}\b(?:skipped|ignored|left out)\b
+(?i)\bignor(?:e|es|ed|ing)\b[^\n.]{0,20}\b(?:blank|empty)[- ]lines?\b
+(?i)\bnumber(?:s|ed|ing)? (?:each|every) lines?\b|\bcounting from 1\b|\bline (?:\d+|N): expected\b
+(?i)\bmalformed\b
+(?i)\bcomment lines?\b
+(?i)(?:#|\bcomments?\b)[^\n.]{0,30}\b(?:skipped|ignored|left out)\b
+(?i)\bsplit\w*\b[^\n.]{0,20}(?:\||\bpipe\b)
+(?i)\bskip(?:s|ped|ping)?\b[^\n.]{0,40}\bcomments?\b

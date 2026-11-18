@@ -12,6 +12,12 @@
       "description": "Render a talking ASCII cow with a bundled Python script.",
       "source": "./skills/cowsay",
       "version": "0.1.0"
+    },
+    {
+      "name": "change-viz",
+      "description": "Describe a branch, uncommitted work or a named pull request, as a short Markdown outline with visuals and a merge-risk call for a pull request. Invoked by name only.",
+      "source": "./skills/change-viz",
+      "version": "0.2.0"
     }
   ]
 }

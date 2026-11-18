@@ -1,0 +1,9 @@
+{
+  "branch": "plan-routes",
+  "main": [
+    { "tree": "start", "message": "Add the hike summary command" },
+    { "tree": "columns", "message": "Describe the columns of the log" }
+  ],
+  "commits": [],
+  "executable": ["hikes.py"]
+}

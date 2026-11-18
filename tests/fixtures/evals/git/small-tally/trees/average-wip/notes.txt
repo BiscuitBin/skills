@@ -1,0 +1,1 @@
+Next: read the numbers from standard input when no file is given.

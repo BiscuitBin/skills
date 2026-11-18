@@ -1,0 +1,11 @@
+{
+  "branch": "add-average",
+  "main": [
+    { "tree": "start", "message": "Add the tally command" },
+    { "tree": "tested", "message": "Test the totals" }
+  ],
+  "commits": [{ "tree": "average", "message": "Print the average after the total" }],
+  "staged": "average-staged",
+  "worktree": "average-wip",
+  "executable": ["tally.py"]
+}

@@ -23,7 +23,7 @@ Create a Claude Code token, if you do not have one. This opens a browser and pri
 just run ./node_modules/.bin/claude setup-token
 ```
 
-Put the token in your shell's environment. `read -rs` keeps it out of your shell history and off the screen: run the first line, paste the token and press Enter. `just` passes the variable on to the recipe. Both agents need it, because rubric expectations are graded by Claude whichever agent ran.
+Put the token in your shell's environment. `read -rs` keeps it out of your shell history and off the screen: run the first line, paste the token and press Enter. `just` passes the variable on to the recipe. Both agents need it, because rubric expectations are graded by Claude whichever agent ran. Only `--no-grader` changes that: it skips the grading and reads no Claude token, so a Codex run needs only the Codex login, and a case with expectations rests on its assertions alone, with no graded or outcome pass rate.
 
 ```sh
 read -rs CLAUDE_CODE_OAUTH_TOKEN

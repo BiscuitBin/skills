@@ -1,0 +1,14 @@
+{
+  "branch": "longest-hike",
+  "main": [
+    { "tree": "start", "message": "Add the hike summary command" },
+    { "tree": "columns", "message": "Describe the columns of the log" }
+  ],
+  "commits": [
+    { "tree": "longest", "message": "Add --longest to name the longest hike" },
+    { "tree": "longest-doc", "message": "Document the --longest option" }
+  ],
+  "staged": "year-staged",
+  "worktree": "year-miles-wip",
+  "executable": ["hikes.py", "summary.sh"]
+}

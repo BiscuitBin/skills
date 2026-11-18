@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from skills_tooling.evals.adapter import Adapter, Homes, Trace, TrialPaths
+    from skills_tooling.evals.workspace import FixtureFiles
 
 # The user's own skills, by agent. Only directory names are read, never contents.
 USER_SKILL_DIRS = (
@@ -83,10 +84,19 @@ def default_never_appear(repo_root: Path, skill: str) -> NeverAppear:
     return never_appear(repo_root, skill, user_home=Path.home(), agent_homes=homes)
 
 
-def preflight(
-    adapter: Adapter, trial: TrialPaths, homes: Homes, repo_root: Path, skill: str | None
+def preflight(  # noqa: PLR0913 -- the trial, and what it was given
+    adapter: Adapter,
+    trial: TrialPaths,
+    homes: Homes,
+    repo_root: Path,
+    skill: str | None,
+    *,
+    expected: FixtureFiles | None = None,
 ) -> list[str]:
-    """Problems that must stop the trial before the agent starts. Empty when isolated."""
+    """Problems that must stop the trial before the agent starts. Empty when isolated.
+
+    expected is the working directory a fixture build wrote, when the trial has one.
+    """
     problems = workspace.isolation_problems(trial, repo_root)
     for name in ("HOME", "TMPDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"):
         value = homes.env.get(name)
@@ -100,7 +110,7 @@ def preflight(
         if value is None or Path(value).resolve() != homes.agent_home.resolve():
             problems.append(f"{name}={value!r} does not point at the trial's agent home")
     problems += adapter.context_isolation(homes.env)
-    problems += workspace.inventory_problems(trial.workspace, adapter.skills_dir, skill)
+    problems += workspace.inventory_problems(trial.workspace, adapter.skills_dir, skill, expected)
     problems += [
         f"discovery location {location.name} ({location.path}) has no mitigation; failing closed"
         for location in adapter.discovery_locations(trial)

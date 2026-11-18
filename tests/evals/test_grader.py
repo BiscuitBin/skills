@@ -8,15 +8,15 @@ import shlex
 import shutil
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from string import Template
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from skills_tooling.evals import fixture, workspace
 from skills_tooling.evals import grader as grader_module
-from skills_tooling.evals import workspace
 from skills_tooling.evals.adapter import Command, Trace
 from skills_tooling.evals.cases import Case, Expectation
 from skills_tooling.evals.grader import (
@@ -32,9 +32,11 @@ from skills_tooling.evals.grader import (
     transcript_material,
 )
 from tests.evals.fake_anthropic import serve, text
+from tests.evals.test_fixture import load
 
 if TYPE_CHECKING:
     from skills_tooling.evals.adapter import TrialPaths
+    from skills_tooling.evals.workspace import FixtureFiles
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/evals/grading"
 MATERIAL = (FIXTURES / "material.txt").read_text()
@@ -284,13 +286,45 @@ def test_the_disclosure_check_flags_material_that_names_the_arm(
     assert disclosure_matches(material, SKILL_FILES) == matches
 
 
+@pytest.mark.parametrize(
+    ("material", "by_name", "unmarked"),
+    [
+        ("As you asked with /cowsay, here is the cow.", ["/cowsay"], []),
+        ("Invoked as `$cowsay:cowsay`, the cow says moo.", ["$cowsay:cowsay"], []),
+        ("Next time try $COWSAY.", ["$COWSAY"], []),
+        ("/cowsay drew it, as $cowsay:cowsay would.", ["$cowsay:cowsay", "/cowsay"], []),
+        (
+            "I ran python3 scripts/cowsay.py -- 'Ship it, team!'",
+            ["scripts/cowsay.py"],
+            ["scripts/cowsay.py"],
+        ),
+        ("Saved to ~/cowsay and docs/cowsay.md under $HOME.", [], []),
+        (CLEAN_COW, [], []),
+    ],
+)
+def test_in_a_by_name_case_the_disclosure_check_flags_an_invocation_of_the_skill(
+    material: str, by_name: list[str], unmarked: list[str]
+) -> None:
+    assert disclosure_matches(material, SKILL_FILES, invocation_of="cowsay") == by_name
+    # An unmarked case's prompt may hold an invocation, so its echo is not flagged.
+    assert disclosure_matches(material, SKILL_FILES) == unmarked
+
+
 def agent_trial(tmp_path: Path, key: str = "behaviour-ship-it/skill-1") -> TrialPaths:
     trial = workspace.create_trial(tmp_path / ".eval-workspaces", "run-1", key)
     workspace.teardown(trial)
     return trial
 
 
-def test_blinded_material_is_the_final_message_and_the_files_written(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "fixture_files",
+    [{}, {"fixture_files": {}}],
+    ids=["as-before-fixtures", "no-fixture"],
+)
+def test_blinded_material_is_the_final_message_and_the_files_written(
+    tmp_path: Path, fixture_files: dict[str, Any]
+) -> None:
+    # A trial with no fixture is graded on exactly the material it was before fixtures.
     trial = agent_trial(tmp_path)
     ws = trial.workspace
     (ws / ".claude/skills/cowsay/scripts").mkdir(parents=True)
@@ -310,6 +344,7 @@ def test_blinded_material_is_the_final_message_and_the_files_written(tmp_path: P
         trial_root=trial.root,
         skills_dir=".claude/skills",
         skill="cowsay",
+        **fixture_files,
     )
     assert material == (
         "## Final message\n\n"
@@ -322,6 +357,63 @@ def test_blinded_material_is_the_final_message_and_the_files_written(tmp_path: P
         "### linked-dir (symlink, not followed)\n\n"
         "### sub/notes.md\n\n# Notes\n"
     )
+
+
+def fixture_trial(
+    tmp_path: Path, key: str = "behaviour-ship-it/skill-1"
+) -> tuple[TrialPaths, FixtureFiles]:
+    """An agent's trial that started in small-tally, and the working directory the build wrote."""
+    trial = workspace.create_trial(tmp_path / ".eval-workspaces", "run-1", key)
+    built = fixture.build(load(tmp_path, "small-tally"), trial)
+    workspace.teardown(trial)
+    return trial, built
+
+
+def headings(material: str) -> list[str]:
+    return [line for line in material.splitlines() if line.startswith("### ")]
+
+
+def test_only_files_the_agent_made_or_changed_reach_the_material(tmp_path: Path) -> None:
+    trial, built = fixture_trial(tmp_path)
+    ws = trial.workspace
+    (ws / "tally.py").write_text("print('the average')\n")
+    (ws / "README.md").chmod(0o755)
+    (ws / "average.txt").write_text("2.5\n")
+    (ws / "numbers.txt").unlink()
+    (ws / "test_tally.py").rename(trial.root / "test_tally.py")
+    (ws / "test_tally.py").symlink_to(trial.root / "test_tally.py")
+    try:
+        material = blinded_material(
+            "Done.",
+            ws,
+            trial_root=trial.root,
+            skills_dir=".claude/skills",
+            skill="cowsay",
+            fixture_files=built,
+        )
+    finally:
+        (ws / "README.md").chmod(0o644)
+    # notes.txt is left alone, and a deleted file is not shown (a stated limit).
+    assert headings(material) == [
+        "### README.md",
+        "### average.txt",
+        "### tally.py",
+        "### test_tally.py (symlink, not followed)",
+    ]
+    assert "### tally.py\n\nprint('the average')\n" in material
+
+
+def test_a_fixture_left_alone_leaves_no_files_in_the_material(tmp_path: Path) -> None:
+    trial, built = fixture_trial(tmp_path)
+    material = blinded_material(
+        "Moo.",
+        trial.workspace,
+        trial_root=trial.root,
+        skills_dir=".claude/skills",
+        skill="cowsay",
+        fixture_files=built,
+    )
+    assert material == "## Final message\n\nMoo.\n\n## Output files\n\nNo files were written."
 
 
 def test_blinded_material_says_when_no_files_were_written(tmp_path: Path) -> None:
@@ -560,6 +652,7 @@ def run_grade(  # noqa: PLR0913 -- the test's knobs, each with a default
     timeout: float = 30.0,
     rng: random.Random | None = None,
     run_secrets: tuple[str, ...] = (),
+    fixture_files: FixtureFiles | None = None,
 ) -> dict[str, Any]:
     trial = trial or agent_trial(tmp_path, key)
     settings = GraderSettings(
@@ -580,6 +673,7 @@ def run_grade(  # noqa: PLR0913 -- the test's knobs, each with a default
         skill_dir=ROOT / "skills/cowsay",
         rng=rng,
         run_secrets=run_secrets,
+        **({} if fixture_files is None else {"fixture_files": fixture_files}),
     )
 
 
@@ -615,6 +709,15 @@ def test_an_honest_reply_is_graded_ok(tmp_path: Path) -> None:
     }
     assert timing["grader_duration_seconds"] >= 0
     assert not (tmp_path / ".eval-workspaces/run-1/_grader").exists()
+
+
+def test_the_grader_is_sent_only_the_files_the_agent_made_or_changed(tmp_path: Path) -> None:
+    trial, built = fixture_trial(tmp_path)
+    (trial.workspace / "average.txt").write_text("2.5\n")
+    fake = fake_grader(tmp_path / "grader")
+    run_grade(tmp_path, fake, trial=trial, fixture_files=built)
+    [prompt] = fake.prompts()
+    assert headings(prompt) == ["### average.txt"]
 
 
 def assert_grader_gone(tmp_path: Path) -> None:
@@ -1091,6 +1194,30 @@ def test_a_grading_records_whether_its_material_named_the_arm(
     )
     assert (grading["arm_disclosed"], grading["disclosure_matches"]) == (bool(matches), matches)
     assert grading["grader"]["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    ("echo", "by_name", "matches"),
+    [
+        ("As /cowsay asked, here it is.", True, ["/cowsay"]),
+        ("As $cowsay:cowsay asked, here it is.", True, ["$cowsay:cowsay"]),
+        ("As you asked, here it is.", True, []),
+        ("As $cowsay:cowsay asked, here it is.", False, []),
+    ],
+    ids=["slash", "dollar", "no-name", "unmarked"],
+)
+def test_an_echoed_invocation_in_a_by_name_case_is_graded_unchanged_and_flagged(
+    tmp_path: Path, echo: str, *, by_name: bool, matches: list[str]
+) -> None:
+    final = f"{echo}\n{FINAL}"
+    fake = fake_grader(tmp_path)
+    case = replace(ship_it(), by_name=by_name)
+    grading = run_grade(tmp_path, fake, case=case, trace=a_trace(final))
+    assert (grading["arm_disclosed"], grading["disclosure_matches"]) == (bool(matches), matches)
+    [prompt] = fake.prompts()
+    # The bare request is the task, and the agent's own echo is not redacted.
+    assert f"<task>{SHIP_IT}</task>" in prompt
+    assert f"## Final message\n\n{final}\n" in prompt
 
 
 def test_the_grader_runs_without_tools_and_sees_only_the_task_and_the_material(

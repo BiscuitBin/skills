@@ -1,0 +1,13 @@
+{
+  "branch": "add-top-words",
+  "main": [
+    { "tree": "start", "message": "Add the word count command" },
+    { "tree": "distinct", "message": "Print the number of distinct words" }
+  ],
+  "commits": [
+    { "tree": "folded", "message": "Count words without case or surrounding punctuation" },
+    { "tree": "top", "message": "Add --top to list the most common words" },
+    { "tree": "documented", "message": "Document the --top option" }
+  ],
+  "executable": ["wordstat.py", "test_wordstat.py"]
+}
